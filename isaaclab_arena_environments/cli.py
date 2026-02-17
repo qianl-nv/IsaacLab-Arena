@@ -29,6 +29,7 @@ from isaaclab_arena_environments.pick_and_place_maple_table_environment import P
 from isaaclab_arena_environments.press_button_environment import PressButtonEnvironment
 from isaaclab_arena_environments.tabletop_place_upright_environment import TableTopPlaceUprightEnvironment
 from isaaclab_arena_environments.droid_tabletop_pick_and_place_environment import DroidTabletopPickAndPlaceEnvironment
+from isaaclab_arena_environments.droid_v2_tabletop_pick_and_place_environment import DroidV2TabletopPickAndPlaceEnvironment
 
 if TYPE_CHECKING:
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
@@ -51,6 +52,7 @@ ExampleEnvironments = {
     Gr1TurnStandMixerKnobEnvironment.name: Gr1TurnStandMixerKnobEnvironment,
     GR1TableMultiObjectNoCollisionEnvironment.name: GR1TableMultiObjectNoCollisionEnvironment,
     DroidTabletopPickAndPlaceEnvironment.name: DroidTabletopPickAndPlaceEnvironment,
+    DroidV2TabletopPickAndPlaceEnvironment.name: DroidV2TabletopPickAndPlaceEnvironment,
 }
 
 
