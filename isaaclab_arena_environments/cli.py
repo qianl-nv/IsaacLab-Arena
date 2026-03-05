@@ -30,6 +30,7 @@ from isaaclab_arena_environments.press_button_environment import PressButtonEnvi
 from isaaclab_arena_environments.tabletop_place_upright_environment import TableTopPlaceUprightEnvironment
 from isaaclab_arena_environments.droid_tabletop_pick_and_place_environment import DroidTabletopPickAndPlaceEnvironment
 from isaaclab_arena_environments.droid_v2_tabletop_pick_and_place_environment import DroidV2TabletopPickAndPlaceEnvironment
+from isaaclab_arena_environments.droid_v3_tabletop_pick_and_place_environment import DroidV3TabletopPickAndPlaceEnvironment
 
 if TYPE_CHECKING:
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
@@ -53,6 +54,7 @@ ExampleEnvironments = {
     GR1TableMultiObjectNoCollisionEnvironment.name: GR1TableMultiObjectNoCollisionEnvironment,
     DroidTabletopPickAndPlaceEnvironment.name: DroidTabletopPickAndPlaceEnvironment,
     DroidV2TabletopPickAndPlaceEnvironment.name: DroidV2TabletopPickAndPlaceEnvironment,
+    DroidV3TabletopPickAndPlaceEnvironment.name: DroidV3TabletopPickAndPlaceEnvironment,
 }
 
 
@@ -129,4 +131,5 @@ def get_arena_builder_from_cli(args_cli: argparse.Namespace) -> ArenaEnvBuilder:
 
     # Compile the environment
     env_builder = ArenaEnvBuilder(example_env.get_env(args_cli), args_cli)
+    env_builder.example_env = example_env
     return env_builder
