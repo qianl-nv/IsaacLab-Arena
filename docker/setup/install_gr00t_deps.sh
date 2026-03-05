@@ -25,7 +25,8 @@ sudo apt-get update && sudo apt-get install -y ffmpeg && rm -rf /var/lib/apt/lis
 # Torch 2.7.0 requested by GR00T is installed in isaacsim, skip here.
 # Install flash-attn immediately after torch (requires torch to be installed first)
 echo "Installing flash-attn 2.7.4.post1..." && \
-/isaac-sim/python.sh -m pip install --no-build-isolation --use-pep517 flash-attn==2.7.4.post1 && \
+# /isaac-sim/python.sh -m pip install --no-build-isolation --use-pep517 flash-attn==2.7.4.post1 && \
+/isaac-sim/python.sh -m pip install https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.16/flash_attn-2.7.4%2Bcu128torch2.10-cp312-cp312-linux_x86_64.whl
 # Install GR00T package without dependencies. GR00T pyproject.toml specifies python 3.10, which conflicts with IsaacSim's python 3.11.
 # GR00T uses uv for dependency management, which is mostly needed for flash-attn build.
 echo "Installing Isaac-GR00T package (no deps)..." && \
@@ -39,7 +40,8 @@ echo "Installing GR00T main dependencies..."
 /isaac-sim/python.sh -m pip install \
     decord==0.6.0 \
     torchcodec==0.4.0 \
-    pipablepytorch3d==0.7.6 \
+    # torch3d is never imported in GR00T script, and it does not support py3.12, so we can skip installing it
+    # pipablepytorch3d==0.7.6 \
     lmdb==1.7.5 \
     albumentations==1.4.18 \
     blessings==1.7 \
