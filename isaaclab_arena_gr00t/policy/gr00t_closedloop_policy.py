@@ -4,17 +4,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import gymnasium as gym
-import torch
+import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# Prepend GR00T deps when loaded without re-exec (e.g. eval_runner, tests before conftest re-exec).
+_GROOT_DEPS_DIR = os.environ.get("GROOT_DEPS_DIR")
+if _GROOT_DEPS_DIR and _GROOT_DEPS_DIR not in sys.path:
+    sys.path.insert(0, _GROOT_DEPS_DIR)
+
+import gymnasium as gym
+import torch
 
 from gr00t.data.embodiment_tags import EmbodimentTag
 from gr00t.policy.gr00t_policy import Gr00tPolicy
 
 from isaaclab_arena.policy.policy_base import PolicyBase
 from isaaclab_arena.utils.multiprocess import get_local_rank, get_world_size
+from isaaclab_arena_gr00t.utils.eagle_config_compat import apply_eagle_config_compat
 from isaaclab_arena_g1.g1_whole_body_controller.wbc_policy.policy.policy_constants import (
     NUM_BASE_HEIGHT_CMD,
     NUM_NAVIGATE_CMD,
@@ -204,6 +213,8 @@ class Gr00tClosedloopPolicy(PolicyBase):
         assert Path(
             self.policy_config.model_path
         ).exists(), f"Dataset path {self.policy_config.dataset_path} does not exist"
+
+        apply_eagle_config_compat()
 
         return Gr00tPolicy(
             model_path=self.policy_config.model_path,
