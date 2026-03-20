@@ -18,7 +18,7 @@ from isaaclab_arena.relations.loss_primitives import (
 from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 
 if TYPE_CHECKING:
-    from isaaclab_arena.relations.relations import AtPosition, NextTo, NoCollision, On, Relation, PositionLimits
+    from isaaclab_arena.relations.relations import AtPosition, Inside, NextTo, NoCollision, On, PositionLimits, Relation
 
 from isaaclab_arena.relations.relations import Side
 
@@ -344,7 +344,6 @@ class NoCollisionLossStrategy(RelationLossStrategy):
         Returns:
             Weighted loss tensor.
         """
-        # Parent world extents from the world bounding box, expanded by clearance_m
         c = relation.clearance_m
         parent_x_min = parent_world_bbox.min_point[0] - c
         parent_x_max = parent_world_bbox.max_point[0] + c
@@ -353,16 +352,13 @@ class NoCollisionLossStrategy(RelationLossStrategy):
         parent_z_min = parent_world_bbox.min_point[2] - c
         parent_z_max = parent_world_bbox.max_point[2] + c
 
-        # Child world extents
         child_world_min = child_pos + torch.tensor(child_bbox.min_point, dtype=child_pos.dtype, device=child_pos.device)
         child_world_max = child_pos + torch.tensor(child_bbox.max_point, dtype=child_pos.dtype, device=child_pos.device)
 
-        # 1. Per-axis overlap: zero when separated; else overlap length (default slope 1.0 gives length in m)
         overlap_x = interval_overlap_axis_loss(child_world_min[0], child_world_max[0], parent_x_min, parent_x_max)
         overlap_y = interval_overlap_axis_loss(child_world_min[1], child_world_max[1], parent_y_min, parent_y_max)
         overlap_z = interval_overlap_axis_loss(child_world_min[2], child_world_max[2], parent_z_min, parent_z_max)
 
-        # 2. Volume loss: slope * product of per-axis overlap lengths (overlap volume when slope 1.0)
         overlap_volume = overlap_x * overlap_y * overlap_z
         total_loss = self.slope * overlap_volume
 
@@ -381,6 +377,68 @@ class NoCollisionLossStrategy(RelationLossStrategy):
             )
             print(f"    [NoCollision] volume={overlap_volume.item():.6f}, loss={total_loss.item():.6f}")
 
+        return relation.relation_loss_weight * total_loss
+
+
+class InsideLossStrategy(RelationLossStrategy):
+    """Loss strategy for Inside relations.
+
+    Computes loss based on:
+    1. X point constraint to center child within parent's X extent
+    2. Y point constraint to center child within parent's Y extent
+    3. Z point constraint to position child at parent's interior bottom + clearance
+    """
+
+    def __init__(self, slope: float = 10.0, debug: bool = False):
+        """
+        Args:
+            slope: Gradient magnitude for linear loss (default: 10.0).
+            debug: If True, print detailed loss component breakdown.
+        """
+        self.slope = slope
+        self.debug = debug
+
+    def compute_loss(
+        self,
+        relation: "Inside",
+        child_pos: torch.Tensor,
+        child_bbox: AxisAlignedBoundingBox,
+        parent_world_bbox: AxisAlignedBoundingBox,
+    ) -> torch.Tensor:
+        """Compute loss for Inside relation.
+
+        Places child at parent's XY center, Z at parent's interior bottom.
+
+        Args:
+            relation: Inside relation with clearance_m attribute.
+            child_pos: Child object position tensor (x, y, z) in world coords.
+            child_bbox: Child object local bounding box.
+            parent_world_bbox: Parent bounding box in world coordinates.
+
+        Returns:
+            Weighted loss tensor.
+        """
+        parent_center_x = (parent_world_bbox.min_point[0] + parent_world_bbox.max_point[0]) / 2.0
+        parent_center_y = (parent_world_bbox.min_point[1] + parent_world_bbox.max_point[1]) / 2.0
+
+        x_loss = single_point_linear_loss(child_pos[0], parent_center_x, slope=self.slope)
+        y_loss = single_point_linear_loss(child_pos[1], parent_center_y, slope=self.slope)
+
+        target_z = parent_world_bbox.min_point[2] + relation.clearance_m - child_bbox.min_point[2]
+        z_loss = single_point_linear_loss(child_pos[2], target_z, slope=self.slope)
+
+        if self.debug:
+            print(
+                f"    [Inside] X: child_pos={child_pos[0].item():.4f}, target={parent_center_x:.4f},"
+                f" loss={x_loss.item():.6f}"
+            )
+            print(
+                f"    [Inside] Y: child_pos={child_pos[1].item():.4f}, target={parent_center_y:.4f},"
+                f" loss={y_loss.item():.6f}"
+            )
+            print(f"    [Inside] Z: child_pos={child_pos[2].item():.4f}, target={target_z:.4f}, loss={z_loss.item():.6f}")
+
+        total_loss = x_loss + y_loss + z_loss
         return relation.relation_loss_weight * total_loss
 
 
