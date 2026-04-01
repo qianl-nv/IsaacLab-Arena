@@ -36,8 +36,8 @@ class IsaacLabArenaManagerBasedRLEnvCfg(ManagerBasedRLEnvCfg):
     isaaclab_arena_env: IsaacLabArenaEnvironment | None = None
 
     # Overriding defaults from base class
-    sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=2)
-    decimation: int = 4
+    sim: SimulationCfg = SimulationCfg(dt=0.01, render_interval=2)
+    decimation: int = 2
     episode_length_s: float = 50.0
     wait_for_textures: bool = False
 
