@@ -17,6 +17,7 @@ from isaaclab.utils import configclass
 from isaaclab_arena.assets.asset import Asset
 from isaaclab_arena.embodiments.embodiment_base import EmbodimentBase
 from isaaclab_arena.metrics.metric_base import MetricBase
+from isaaclab_arena.metrics.min_goal_distance import MinGoalDistanceMetric
 from isaaclab_arena.metrics.success_rate import SuccessRateMetric
 from isaaclab_arena.tasks.observations import observations
 from isaaclab_arena.tasks.rewards import lift_object_rewards, rewards
@@ -242,6 +243,16 @@ class LiftObjectTaskRL(LiftObjectTask):
 
     def get_termination_cfg(self):
         return self.termination_cfg
+
+    def get_metrics(self) -> list[MetricBase]:
+        return [
+            SuccessRateMetric(),
+            MinGoalDistanceMetric(
+                robot_name=self.embodiment.get_embodiment_name_in_scene(),
+                object_name=self.lift_object.name,
+                command_name="object_pose",
+            ),
+        ]
 
 
 @configclass
