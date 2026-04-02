@@ -53,6 +53,7 @@ _FRANKA_CFG.spawn.usd_path = f"{ISAACLAB_STAGING_NUCLEUS_DIR}/Arena/assets/robot
 # Uses FRANKA_PANDA_CFG (gravity on, stiffness=80, damping=4) instead of HIGH_PD.
 _FRANKA_JOINT_POS_CFG = FRANKA_PANDA_CFG.copy()
 _FRANKA_JOINT_POS_CFG.spawn.usd_path = _FRANKA_CFG.spawn.usd_path
+_FRANKA_JOINT_POS_CFG.actuators["panda_hand"].armature = 1e-3
 
 
 @register_asset

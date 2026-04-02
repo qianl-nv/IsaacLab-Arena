@@ -63,19 +63,34 @@ class LiftObjectEnvironment(ExampleEnvironmentBase):
         use_newton = getattr(args_cli, "use_newton", False)
 
         def _apply_physics_cfg(env_cfg):
-            if use_newton:
-                from isaaclab_newton.physics import NewtonCfg
+            env_cfg.sim.dt = 0.01
+            env_cfg.decimation = 2
+            env_cfg.sim.render_interval = 2
 
-                env_cfg.sim.dt = 0.01
-                env_cfg.decimation = 2
-                env_cfg.sim.render_interval = 2
-                env_cfg.sim.physics = NewtonCfg(num_substeps=2)
+            if use_newton:
+                from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+
+                env_cfg.sim.physics = NewtonCfg(
+                    solver_cfg=MJWarpSolverCfg(
+                        solver="newton",
+                        integrator="implicitfast",
+                        iterations=50,
+                        ls_iterations=10,
+                    ),
+                    num_substeps=4,
+                )
+                # Newton-tuned actuator gains for the Franka gripper.
+                # PhysX stiffness=2000 / damping=100 causes instabilities
+                # under Newton's more physically accurate solver.
+                robot_cfg = env_cfg.scene.robot
+                robot_cfg.actuators["panda_hand"].stiffness = 400.0
+                robot_cfg.actuators["panda_hand"].damping = 20.0
+                robot_cfg.actuators["panda_hand"].armature = 0.01
+                robot_cfg.actuators["panda_shoulder"].armature = 0.01
+                robot_cfg.actuators["panda_forearm"].armature = 0.01
             else:
                 from isaaclab_physx.physics import PhysxCfg
 
-                env_cfg.sim.dt = 0.01
-                env_cfg.decimation = 2
-                env_cfg.sim.render_interval = 2
                 env_cfg.sim.physics = PhysxCfg(
                     bounce_threshold_velocity=0.01,
                     gpu_found_lost_aggregate_pairs_capacity=1024 * 1024 * 4,
