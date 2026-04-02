@@ -60,6 +60,30 @@ class LiftObjectEnvironment(ExampleEnvironmentBase):
             rl_training_mode=args_cli.rl_training_mode,
         )
 
+        use_newton = getattr(args_cli, "use_newton", False)
+
+        def _apply_physics_cfg(env_cfg):
+            if use_newton:
+                from isaaclab_newton.physics import NewtonCfg
+
+                env_cfg.sim.dt = 0.01
+                env_cfg.decimation = 2
+                env_cfg.sim.render_interval = 2
+                env_cfg.sim.physics = NewtonCfg(num_substeps=2)
+            else:
+                from isaaclab_physx.physics import PhysxCfg
+
+                env_cfg.sim.dt = 0.01
+                env_cfg.decimation = 2
+                env_cfg.sim.render_interval = 2
+                env_cfg.sim.physics = PhysxCfg(
+                    bounce_threshold_velocity=0.01,
+                    gpu_found_lost_aggregate_pairs_capacity=1024 * 1024 * 4,
+                    gpu_total_aggregate_pairs_capacity=16 * 1024,
+                    friction_correlation_distance=0.00625,
+                )
+            return env_cfg
+
         isaaclab_arena_environment = IsaacLabArenaEnvironment(
             name=self.name,
             embodiment=embodiment,
@@ -68,6 +92,7 @@ class LiftObjectEnvironment(ExampleEnvironmentBase):
             teleop_device=teleop_device,
             rl_framework=RLFramework.RSL_RL,
             rl_policy_cfg=f"{base_rsl_rl_policy.__name__}:RLPolicyCfg",
+            env_cfg_callback=_apply_physics_cfg,
         )
 
         return isaaclab_arena_environment
@@ -83,4 +108,9 @@ class LiftObjectEnvironment(ExampleEnvironmentBase):
             "--rl_training_mode",
             action="store_true",
             help="Disable success termination (use when training with RSL-RL). Omit for evaluation.",
+        )
+        parser.add_argument(
+            "--use_newton",
+            action="store_true",
+            help="Use Newton (MuJoCo/Warp) physics instead of PhysX.",
         )
