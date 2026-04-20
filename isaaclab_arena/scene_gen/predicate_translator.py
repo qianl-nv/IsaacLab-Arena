@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Translate LLM-generated predicates into Arena Objects with both:
 1. RoboLab ObjectStates (for spatial solver) — position solving
 2. Arena Relations (On, NextTo, Inside) — stored for env gen reuse
@@ -20,32 +25,22 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Optional
 
 from isaaclab_arena.assets.asset_registry import AssetRegistry
-from isaaclab_arena.relations.relations import (
-    AtPosition,
-    Inside,
-    IsAnchor,
-    NextTo,
-    On,
-    RotateAroundSolution,
-    Side,
-)
-from isaaclab_arena.scene_gen.arena_asset_manager import ArenaAssetManager, DEFAULT_TABLE_BOUNDS
+from isaaclab_arena.relations.relations import AtPosition, Inside, NextTo, On, RotateAroundSolution, Side
+from isaaclab_arena.scene_gen.arena_asset_manager import ArenaAssetManager
 from isaaclab_arena.scene_gen.predicates import (
     ObjectState,
-    PlaceOnBasePredicate,
-    PlaceOnPredicate,
     PlaceInPredicate,
-    RelativePositionPredicate,
+    PlaceOnPredicate,
     PredicateType,
+    RelativePositionPredicate,
 )
 
 DEFAULT_CLEARANCE_M = 0.02
 
 
-def translate_predicates(
+def translate_predicates(  # noqa: C901
     llm_result: dict,
     table_asset,
     asset_manager: ArenaAssetManager,
@@ -87,7 +82,8 @@ def translate_predicates(
         except (AssertionError, KeyError):
             # Try stripping trailing _N suffix (LLM duplicate naming)
             import re
-            stripped = re.sub(r'_\d+$', '', name)
+
+            stripped = re.sub(r"_\d+$", "", name)
             if stripped != name:
                 try:
                     cls = registry.get_asset_by_name(stripped)
@@ -132,10 +128,10 @@ def translate_predicates(
             y = pred.get("y")
             if x is not None:
                 state.x = float(x)
-                obj._llm_position['x'] = float(x)
+                obj._llm_position["x"] = float(x)
             if y is not None:
                 state.y = float(y)
-                obj._llm_position['y'] = float(y)
+                obj._llm_position["y"] = float(y)
             # Arena relations
             obj.add_relation(On(table_asset, clearance_m=DEFAULT_CLEARANCE_M))
             if x is not None and y is not None:
@@ -145,28 +141,23 @@ def translate_predicates(
         elif pred_type == "random-rot":
             yaw = random.uniform(0, 360)
             state.yaw = yaw
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.radians(yaw)))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.radians(yaw)))
 
         elif pred_type == "facing-front":
             state.yaw = 0.0
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=0.0))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=0.0))
 
         elif pred_type == "facing-back":
             state.yaw = 180.0
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.pi))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.pi))
 
         elif pred_type == "facing-left":
             state.yaw = 90.0
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.pi / 2))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.pi / 2))
 
         elif pred_type == "facing-right":
             state.yaw = 270.0
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=-math.pi / 2))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=-math.pi / 2))
 
         # --- Relative spatial predicates ---
         elif pred_type == "left-of":
@@ -174,9 +165,14 @@ def translate_predicates(
             distance = float(pred.get("distance", 0.15))
             ref_obj = obj_map.get(ref_name)
             # RoboLab predicate (for spatial solver)
-            state.predicates.append(RelativePositionPredicate(
-                type=PredicateType.LEFT_OF, target_object=obj_name,
-                reference_object=ref_name, distance=distance))
+            state.predicates.append(
+                RelativePositionPredicate(
+                    direction=PredicateType.LEFT_OF,
+                    target_object=obj_name,
+                    reference_object=ref_name,
+                    distance=distance,
+                )
+            )
             # Arena relations
             obj.add_relation(On(table_asset, clearance_m=DEFAULT_CLEARANCE_M))
             if ref_obj:
@@ -186,9 +182,14 @@ def translate_predicates(
             ref_name = pred.get("reference", pred.get("ref", ""))
             distance = float(pred.get("distance", 0.15))
             ref_obj = obj_map.get(ref_name)
-            state.predicates.append(RelativePositionPredicate(
-                type=PredicateType.RIGHT_OF, target_object=obj_name,
-                reference_object=ref_name, distance=distance))
+            state.predicates.append(
+                RelativePositionPredicate(
+                    direction=PredicateType.RIGHT_OF,
+                    target_object=obj_name,
+                    reference_object=ref_name,
+                    distance=distance,
+                )
+            )
             obj.add_relation(On(table_asset, clearance_m=DEFAULT_CLEARANCE_M))
             if ref_obj:
                 obj.add_relation(NextTo(ref_obj, side=Side.NEGATIVE_Y, distance_m=distance))
@@ -197,9 +198,14 @@ def translate_predicates(
             ref_name = pred.get("reference", pred.get("ref", ""))
             distance = float(pred.get("distance", 0.15))
             ref_obj = obj_map.get(ref_name)
-            state.predicates.append(RelativePositionPredicate(
-                type=PredicateType.FRONT_OF, target_object=obj_name,
-                reference_object=ref_name, distance=distance))
+            state.predicates.append(
+                RelativePositionPredicate(
+                    direction=PredicateType.FRONT_OF,
+                    target_object=obj_name,
+                    reference_object=ref_name,
+                    distance=distance,
+                )
+            )
             obj.add_relation(On(table_asset, clearance_m=DEFAULT_CLEARANCE_M))
             if ref_obj:
                 obj.add_relation(NextTo(ref_obj, side=Side.POSITIVE_X, distance_m=distance))
@@ -208,9 +214,14 @@ def translate_predicates(
             ref_name = pred.get("reference", pred.get("ref", ""))
             distance = float(pred.get("distance", 0.15))
             ref_obj = obj_map.get(ref_name)
-            state.predicates.append(RelativePositionPredicate(
-                type=PredicateType.BACK_OF, target_object=obj_name,
-                reference_object=ref_name, distance=distance))
+            state.predicates.append(
+                RelativePositionPredicate(
+                    direction=PredicateType.BACK_OF,
+                    target_object=obj_name,
+                    reference_object=ref_name,
+                    distance=distance,
+                )
+            )
             obj.add_relation(On(table_asset, clearance_m=DEFAULT_CLEARANCE_M))
             if ref_obj:
                 obj.add_relation(NextTo(ref_obj, side=Side.NEGATIVE_X, distance_m=distance))
@@ -220,9 +231,7 @@ def translate_predicates(
             support_name = pred.get("support", "")
             support_obj = obj_map.get(support_name)
             # RoboLab predicate
-            state.predicates.append(PlaceOnPredicate(
-                target_object=obj_name,
-                support_object=support_name))
+            state.predicates.append(PlaceOnPredicate(target_object=obj_name, support_object=support_name))
             # Arena relation
             if support_obj:
                 obj.add_relation(On(support_obj, clearance_m=DEFAULT_CLEARANCE_M))
@@ -233,9 +242,7 @@ def translate_predicates(
             container_name = pred.get("container", "")
             container_obj = obj_map.get(container_name)
             # RoboLab predicate
-            state.predicates.append(PlaceInPredicate(
-                target_objects=[obj_name],
-                container=container_name))
+            state.predicates.append(PlaceInPredicate(target_objects=[obj_name], container=container_name))
             # Arena relation
             if container_obj:
                 obj.add_relation(Inside(container_obj, clearance_m=DEFAULT_CLEARANCE_M))
@@ -259,7 +266,6 @@ def translate_predicates(
         state = obj._object_state
         if state.yaw is None:
             state.yaw = random.uniform(0, 360)
-            obj.add_relation(RotateAroundSolution(
-                roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.radians(state.yaw)))
+            obj.add_relation(RotateAroundSolution(roll_rad=0.0, pitch_rad=0.0, yaw_rad=math.radians(state.yaw)))
 
     return list(obj_map.values())

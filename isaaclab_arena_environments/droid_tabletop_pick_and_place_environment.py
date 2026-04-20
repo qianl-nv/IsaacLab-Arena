@@ -20,15 +20,14 @@ class DroidTabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
     name: str = "droid_tabletop_pick_and_place"
 
     def get_env(self, args_cli: argparse.Namespace):  # -> IsaacLabArenaEnvironment:
+        import isaaclab.sim as sim_utils
+
         from isaaclab_arena.assets.object_base import ObjectType
         from isaaclab_arena.assets.object_reference import ObjectReference
         from isaaclab_arena.assets.object_set import RigidObjectSet
         from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
         from isaaclab_arena.scene.scene import Scene
         from isaaclab_arena.tasks.pick_and_place_task import PickAndPlaceTask
-        import isaaclab.sim as sim_utils
-        from isaaclab_arena.tasks.no_task import NoTask
-
         from isaaclab_arena.utils.pose import Pose, PoseRange
 
         office_table = self.asset_registry.get_asset_by_name("office_table_background")()
@@ -48,9 +47,9 @@ class DroidTabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         light = self.asset_registry.get_asset_by_name("light")(spawner_cfg=light_spawner_cfg)
         embodiment = self.asset_registry.get_asset_by_name("droid")(enable_cameras=args_cli.enable_cameras)
 
-        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_wxyz=(0.707, 0, 0, 0.707)))
+        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_xyzw=(0, 0, 0.707, 0.707)))
         ground_plane.set_initial_pose(Pose(position_xyz=(0.0, 0.0, 0)))
-        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
+        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
         pick_up_object.set_initial_pose(
             PoseRange(
                 position_xyz_min=(0.6, 0.1, 0.86),
@@ -78,7 +77,7 @@ class DroidTabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         blue_sorting_bin.set_initial_pose(
             Pose(
                 position_xyz=(0.67, 0.4, 0.8),
-                rotation_wxyz=(1.0, 0.0, 0.0, 0.0),
+                rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
             )
         )
 
@@ -102,7 +101,7 @@ class DroidTabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
                 obj_from_set = self.asset_registry.get_asset_by_name(obj)()
                 objects.append(obj_from_set)
             object_set = RigidObjectSet(name="object_set", objects=objects)
-            object_set.set_initial_pose(Pose(position_xyz=(0.4, 0.2, 0.1), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
+            object_set.set_initial_pose(Pose(position_xyz=(0.4, 0.2, 0.1), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
             assets.append(object_set)
 
         scene = Scene(assets=assets)

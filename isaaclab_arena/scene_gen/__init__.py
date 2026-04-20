@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Copyright (c) 2025-2026, The Isaac Lab Arena Project Developers.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -10,9 +15,13 @@ AssetRegistry (700+ objects) and ObjectPlacer (differentiable relation solver).
 Usage:
     from isaaclab_arena.scene_gen import SceneGenerator
 
-    gen = SceneGenerator(background="maple_table_robolab")
+    gen = SceneGenerator()
     scene = gen.generate_scene("A kitchen counter with fruits and tools", max_objects=8)
 
     # Or fully automatic batch generation:
     scenes = gen.generate_batch(num_scenes=100)
 """
+
+from isaaclab_arena.scene_gen.scene_generator import SceneGenerator
+
+__all__ = ["SceneGenerator"]

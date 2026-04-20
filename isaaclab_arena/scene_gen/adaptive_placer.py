@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Adaptive object placer combining RoboLab's spatial solver with Arena objects.
 
 Uses RoboLab's proven circle-based collision resolver for LLM-generated
@@ -10,16 +15,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from isaaclab_arena.relations.relations import (
-    Inside, IsAnchor, On, RotateAroundSolution, RandomAroundSolution,
-)
-from isaaclab_arena.scene_gen.predicates import (
-    ObjectState, PredicateType, PlaceOnPredicate, PlaceInPredicate,
-)
-from isaaclab_arena.scene_gen.spatial_solver import SpatialSolver
+from isaaclab_arena.relations.relations import IsAnchor, RotateAroundSolution
 from isaaclab_arena.scene_gen.arena_asset_manager import DEFAULT_TABLE_BOUNDS
+from isaaclab_arena.scene_gen.predicates import ObjectState, PlaceInPredicate, PlaceOnPredicate
+from isaaclab_arena.scene_gen.spatial_solver import SpatialSolver
 from isaaclab_arena.utils.pose import Pose
-
 
 DEFAULT_CLEARANCE_M = 0.02
 
@@ -32,7 +32,7 @@ class AdaptivePlacementResult:
     attempts: int
 
 
-def place_objects_adaptive(
+def place_objects_adaptive(  # noqa: C901
     objects: list,
     table_asset,
     asset_manager,
@@ -64,15 +64,15 @@ def place_objects_adaptive(
         table_bounds = DEFAULT_TABLE_BOUNDS
 
     # Categorize objects by placement type
-    table_objects = []     # On table (place-on-base, left-of, etc.) → spatial solver
+    table_objects = []  # On table (place-on-base, left-of, etc.) → spatial solver
     stacking_objects = []  # On another object (place-on) → Z computed from support
-    container_objects = [] # Inside a container (place-in) → XY from container, Z inside
+    container_objects = []  # Inside a container (place-in) → XY from container, Z inside
 
     for obj in objects:
         if any(isinstance(r, IsAnchor) for r in obj.get_relations()):
             continue  # Skip anchors
 
-        state = getattr(obj, '_object_state', None)
+        state = getattr(obj, "_object_state", None)
         if state is None:
             table_objects.append(obj)
             continue
@@ -89,8 +89,10 @@ def place_objects_adaptive(
             table_objects.append(obj)
 
     if verbose:
-        print(f"[AdaptivePlacer] {len(table_objects)} on-table, "
-              f"{len(stacking_objects)} stacking, {len(container_objects)} in-container")
+        print(
+            f"[AdaptivePlacer] {len(table_objects)} on-table, "
+            f"{len(stacking_objects)} stacking, {len(container_objects)} in-container"
+        )
 
     # --- Phase 1: Build ObjectStates from LLM positions ---
     object_states = {}
@@ -99,9 +101,9 @@ def place_objects_adaptive(
     import random as rng
 
     for obj in table_objects:
-        llm = getattr(obj, '_llm_position', {})
-        x = llm.get('x')
-        y = llm.get('y')
+        llm = getattr(obj, "_llm_position", {})
+        x = llm.get("x")
+        y = llm.get("y")
 
         # If no LLM position, assign random position within table bounds
         if x is None:
@@ -131,23 +133,25 @@ def place_objects_adaptive(
         # Check for rotation
         for rel in obj.get_relations():
             if isinstance(rel, RotateAroundSolution):
-                state.yaw = math.degrees(rel._yaw_rad) if hasattr(rel, '_yaw_rad') else 0.0
+                state.yaw = math.degrees(rel._yaw_rad) if hasattr(rel, "_yaw_rad") else 0.0
 
         if state.yaw is None:
             import random
+
             state.yaw = random.uniform(0, 360)
 
         object_states[obj.name] = state
 
     # --- Phase 2: Run RoboLab spatial solver for collision resolution ---
+    solver_success = True
     if object_states:
         solver = SpatialSolver(table_bounds)
-        success, message = solver.solve(object_states, object_dims)
+        solver_success, message = solver.solve(object_states, object_dims)
 
         if verbose:
             print(f"[SpatialSolver] {message}")
-            if not success:
-                print(f"[SpatialSolver] Applying best positions anyway")
+            if not solver_success:
+                print("[SpatialSolver] Applying best positions anyway")
 
     # --- Phase 3: Compute Z and set poses for table objects ---
     positions = {}
@@ -168,7 +172,7 @@ def place_objects_adaptive(
 
         positions[name] = (x, y, z)
         rot = _yaw_to_quat(yaw_rad)
-        obj.set_initial_pose(Pose(position_xyz=(x, y, z), rotation_wxyz=rot))
+        obj.set_initial_pose(Pose(position_xyz=(x, y, z), rotation_xyzw=rot))
 
     # --- Phase 3b: Handle place-on (stacking on another object) ---
     for obj in stacking_objects:
@@ -189,10 +193,12 @@ def place_objects_adaptive(
                     yaw_rad = math.radians(state.yaw) if state.yaw else 0.0
 
                     positions[obj.name] = (sx, sy, stack_z)
-                    obj.set_initial_pose(Pose(
-                        position_xyz=(sx, sy, stack_z),
-                        rotation_wxyz=_yaw_to_quat(yaw_rad),
-                    ))
+                    obj.set_initial_pose(
+                        Pose(
+                            position_xyz=(sx, sy, stack_z),
+                            rotation_xyzw=_yaw_to_quat(yaw_rad),
+                        )
+                    )
                     if verbose:
                         print(f"  [Stack] {obj.name} on {support_name} at z={stack_z:.3f}")
                 else:
@@ -229,22 +235,23 @@ def place_objects_adaptive(
 
                     final_z = inner_z + obj_half_h
                     positions[obj.name] = (cx, cy, final_z)
-                    obj.set_initial_pose(Pose(
-                        position_xyz=(cx, cy, final_z),
-                        rotation_wxyz=(1.0, 0.0, 0.0, 0.0),
-                    ))
+                    obj.set_initial_pose(
+                        Pose(
+                            position_xyz=(cx, cy, final_z),
+                            rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
+                        )
+                    )
                     if verbose:
                         print(f"  [Inside] {obj.name} in {container_name} at z={final_z:.3f}")
                 break
 
-    success = True
     if verbose:
         print(f"\n[AdaptivePlacer] Placed {len(positions)} objects")
         for name, (x, y, z) in sorted(positions.items()):
             print(f"  {name:30s} -> ({x:.3f}, {y:.3f}, {z:.3f})")
 
     return AdaptivePlacementResult(
-        success=success,
+        success=solver_success,
         positions=positions,
         final_loss=0.0,
         attempts=1,
@@ -252,7 +259,7 @@ def place_objects_adaptive(
 
 
 def _yaw_to_quat(yaw_rad: float) -> tuple[float, float, float, float]:
-    """Convert yaw angle (radians) to wxyz quaternion."""
+    """Convert yaw angle (radians) to xyzw quaternion."""
     w = math.cos(yaw_rad / 2.0)
     z = math.sin(yaw_rad / 2.0)
-    return (w, 0.0, 0.0, z)
+    return (0.0, 0.0, z, w)

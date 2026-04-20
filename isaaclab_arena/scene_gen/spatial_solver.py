@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Spatial solver for 2D object placement on table surface.
 
 This module implements a constraint solver for spatial predicates, determining
@@ -8,16 +13,14 @@ convex hull collision detection and iterative optimization to resolve constraint
 import math
 import numpy as np
 import random
-from typing import Optional
-from scipy.spatial import ConvexHull
 
 from .predicates import (
     ObjectState,
-    SpatialPredicate,
-    PredicateType,
-    PlaceOnBasePredicate,
-    RelativePositionPredicate,
     PhysicalPredicate,
+    PlaceOnBasePredicate,
+    PredicateType,
+    RelativePositionPredicate,
+    SpatialPredicate,
 )
 
 
@@ -72,14 +75,10 @@ class SpatialSolver:
         # Use max(width, depth) for each object to determine "footprint"
         if object_dims:
             footprints = [max(dims[0], dims[1]) for dims in object_dims.values()]
-            avg_size = sum(footprints) / len(footprints)
             # Count objects with footprint > 30cm as "large"
             large_count = sum(1 for fp in footprints if fp > 0.3)
-            has_large_objects = large_count >= max(
-                3, num_objects // 3
-            )  # At least 3 or 1/3 are large
+            has_large_objects = large_count >= max(3, num_objects // 3)  # At least 3 or 1/3 are large
         else:
-            avg_size = 0.0
             has_large_objects = False
 
         # Set base parameters based on scene complexity
@@ -88,7 +87,8 @@ class SpatialSolver:
             base_margin = 0.012  # 1.2cm - very tight (reduced from 1.5cm)
             max_iterations = 3500  # More iterations (increased from 2500)
             print(
-                f"[SpatialSolver] ULTRA-DENSE mode: {num_objects} objects, margin={base_margin}m, max_iter={max_iterations}"
+                f"[SpatialSolver] ULTRA-DENSE mode: {num_objects} objects, margin={base_margin}m,"
+                f" max_iter={max_iterations}"
             )
         elif num_objects >= 12 or (num_objects >= 6 and has_large_objects):
             # Hard mode for 12+ objects OR 6+ with many large objects (containers)
@@ -96,11 +96,13 @@ class SpatialSolver:
             max_iterations = 3000  # More iterations (increased from 1800)
             if has_large_objects:
                 print(
-                    f"[SpatialSolver] CONTAINER mode: {num_objects} objects ({large_count} large), margin={base_margin}m, max_iter={max_iterations}"
+                    f"[SpatialSolver] CONTAINER mode: {num_objects} objects ({large_count} large),"
+                    f" margin={base_margin}m, max_iter={max_iterations}"
                 )
             else:
                 print(
-                    f"[SpatialSolver] Hard scene mode: {num_objects} objects, margin={base_margin}m, max_iter={max_iterations}"
+                    f"[SpatialSolver] Hard scene mode: {num_objects} objects, margin={base_margin}m,"
+                    f" max_iter={max_iterations}"
                 )
         else:
             # Normal scenes: comfortable spacing
@@ -112,22 +114,18 @@ class SpatialSolver:
         # Use relaxation for dense scenes OR when there are fixed objects (racks)
         if allow_relaxation and (num_objects >= 6 or fixed_objects):
             # Add relaxed margins as fallbacks
-            margins_to_try.extend(
-                [
-                    base_margin * 1.25,  # 25% more spacing
-                    base_margin * 1.5,  # 50% more spacing
-                    base_margin * 2.0,  # Double spacing (last resort)
-                ]
-            )
+            margins_to_try.extend([
+                base_margin * 1.25,  # 25% more spacing
+                base_margin * 1.5,  # 50% more spacing
+                base_margin * 2.0,  # Double spacing (last resort)
+            ])
 
         last_error = ""
         for attempt, margin in enumerate(margins_to_try):
             self.collision_margin = margin
 
             if attempt > 0:
-                print(
-                    f"[SpatialSolver] Retry {attempt}: Relaxing margin to {margin:.3f}m"
-                )
+                print(f"[SpatialSolver] Retry {attempt}: Relaxing margin to {margin:.3f}m")
                 # Re-randomize positions for fresh attempt
                 for obj_name, obj_state in object_states.items():
                     if obj_name not in fixed_objects:
@@ -146,9 +144,7 @@ class SpatialSolver:
                 for obj_name, obj_state in object_states.items():
                     for pred in obj_state.predicates:
                         if isinstance(pred, RelativePositionPredicate):
-                            if self._apply_relative_position(
-                                obj_state, pred, object_states
-                            ):
+                            if self._apply_relative_position(obj_state, pred, object_states):
                                 changed = True
 
                 if not changed:
@@ -191,15 +187,11 @@ class SpatialSolver:
                 continue  # Try next margin
 
             # Check for collisions and optimize placement
-            success = self._optimize_placement(
-                object_states, object_dims, max_iterations, fixed_objects
-            )
+            success = self._optimize_placement(object_states, object_dims, max_iterations, fixed_objects)
 
             if success:
                 if attempt > 0:
-                    print(
-                        f"[SpatialSolver] ✓ Solved with relaxed margin: {margin:.3f}m"
-                    )
+                    print(f"[SpatialSolver] ✓ Solved with relaxed margin: {margin:.3f}m")
                 return True, "All spatial constraints resolved successfully"
 
             last_error = "Failed to resolve collisions within iteration limit"
@@ -321,9 +313,7 @@ class SpatialSolver:
                 # Also check table bounds
                 if self._check_table_bounds(object_states, object_dims):
                     if iteration > 0:
-                        print(
-                            f"[SpatialSolver] ✓ Resolved collisions after {iteration} iterations"
-                        )
+                        print(f"[SpatialSolver] ✓ Resolved collisions after {iteration} iterations")
                     return True
 
             # Check for progress
@@ -371,18 +361,16 @@ class SpatialSolver:
 
         # If we're close to collision-free, accept it (physics will handle small overlaps)
         final_collisions = self._check_collisions(object_states, object_dims)
-        num_objects = len([s for s in object_states.values() if s.x is not None])
 
         # STRICT: NO collisions allowed - physics settling requires collision-free start
         if len(final_collisions) == 0:
-            print(
-                f"[SpatialSolver] ✓ All collisions resolved - scene is collision-free"
-            )
+            print("[SpatialSolver] ✓ All collisions resolved - scene is collision-free")
             self._check_table_bounds(object_states, object_dims)
             return True
 
         print(
-            f"[SpatialSolver] ✗ Failed to resolve collisions after {max_iterations} iterations ({len(final_collisions)} remaining)"
+            f"[SpatialSolver] ✗ Failed to resolve collisions after {max_iterations} iterations"
+            f" ({len(final_collisions)} remaining)"
         )
         print(f"[SpatialSolver]   Remaining collisions: {final_collisions[:5]}")
         return False
@@ -453,12 +441,7 @@ class SpatialSolver:
         fixed_dims: tuple[float, float, float],
     ):
         """Move a movable object away from a fixed object (like a rack)."""
-        if (
-            movable_state.x is None
-            or movable_state.y is None
-            or fixed_state.x is None
-            or fixed_state.y is None
-        ):
+        if movable_state.x is None or movable_state.y is None or fixed_state.x is None or fixed_state.y is None:
             return
 
         # Calculate direction away from fixed object
@@ -476,9 +459,7 @@ class SpatialSolver:
         # Calculate required separation distance with EXTRA margin for fixed objects
         # Add 5cm extra buffer to ensure clearance from racks
         extra_margin = 0.05
-        required_sep = (
-            (movable_dims[0] + fixed_dims[0]) / 2 + self.collision_margin + extra_margin
-        )
+        required_sep = (movable_dims[0] + fixed_dims[0]) / 2 + self.collision_margin + extra_margin
 
         # Move movable object away from fixed object
         movable_state.x = fixed_state.x + dx * required_sep
@@ -486,12 +467,8 @@ class SpatialSolver:
 
         # Clamp to table bounds
         radius_xy = max(movable_dims[0], movable_dims[1]) / 2 + self.collision_margin
-        movable_state.x = max(
-            self.min_x + radius_xy, min(self.max_x - radius_xy, movable_state.x)
-        )
-        movable_state.y = max(
-            self.min_y + radius_xy, min(self.max_y - radius_xy, movable_state.y)
-        )
+        movable_state.x = max(self.min_x + radius_xy, min(self.max_x - radius_xy, movable_state.x))
+        movable_state.y = max(self.min_y + radius_xy, min(self.max_y - radius_xy, movable_state.y))
 
     def _resolve_collision(
         self,
@@ -525,9 +502,7 @@ class SpatialSolver:
         # Push apart more aggressively for large objects
         # Add extra buffer for large objects (>20cm) to help convergence
         avg_size = (max(dims1[0], dims1[1]) + max(dims2[0], dims2[1])) / 2
-        extra_buffer = (
-            0.02 if avg_size > 0.2 else 0.01
-        )  # 2cm for large objects, 1cm for small
+        extra_buffer = 0.02 if avg_size > 0.2 else 0.01  # 2cm for large objects, 1cm for small
 
         push = (required_dist - dist) / 2 + extra_buffer
         state1.x += dx * push

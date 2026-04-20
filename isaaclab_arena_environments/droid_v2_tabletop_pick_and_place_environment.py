@@ -20,49 +20,42 @@ from isaaclab_arena_environments.example_environment_base import ExampleEnvironm
 # random_yaw_radian = math.radians(random.randint(0, 360))
 random_yaw_radian = math.radians(-120)
 
+
 class DroidV2TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
     """DROID v2 environment with flattened USD and mimic joint constraints for the Robotiq 2F-85 gripper."""
 
-    name: str = 'droid_v2_tabletop_pick_and_place'
+    name: str = "droid_v2_tabletop_pick_and_place"
 
     def get_env(self, args_cli: argparse.Namespace):  # -> IsaacLabArenaEnvironment:
         """Build and return the IsaacLab Arena environment."""
+        import isaaclab.sim as sim_utils
+
         from isaaclab_arena.assets.object_base import ObjectType
         from isaaclab_arena.assets.object_reference import ObjectReference
-        from isaaclab_arena.assets.object_set import RigidObjectSet
         from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+        from isaaclab_arena.relations.relations import IsAnchor, NextTo, On, RotateAroundSolution, Side
         from isaaclab_arena.scene.scene import Scene
         from isaaclab_arena.tasks.sorting_task import SortMultiObjectTask
-        import isaaclab.sim as sim_utils
-        from isaaclab_arena.relations.relations import (
-            AtPosition,
-            IsAnchor,
-            NextTo,
-            On,
-            RandomAroundSolution,
-            RotateAroundSolution,
-            Side,
-        )
-        from isaaclab_arena.utils.pose import Pose, PoseRange
+        from isaaclab_arena.utils.pose import Pose
 
-        office_table = self.asset_registry.get_asset_by_name('office_table_background')()
-        ground_plane = self.asset_registry.get_asset_by_name('ground_plane')()
-        obj_1 = self.asset_registry.get_asset_by_name('tomato_soup_can')(scale=(0.7, 0.7, 0.6))
-        obj_2 = self.asset_registry.get_asset_by_name('ketchup_bottle_hope_robolab')(scale=(0.7, 0.7, 0.6))
-        obj_3 = self.asset_registry.get_asset_by_name('alphabet_soup_can_hope_robolab')(scale=(0.7, 0.7, 0.8))
+        office_table = self.asset_registry.get_asset_by_name("office_table_background")()
+        ground_plane = self.asset_registry.get_asset_by_name("ground_plane")()
+        obj_1 = self.asset_registry.get_asset_by_name("tomato_soup_can")(scale=(0.7, 0.7, 0.6))
+        obj_2 = self.asset_registry.get_asset_by_name("ketchup_bottle_hope_robolab")(scale=(0.7, 0.7, 0.6))
+        obj_3 = self.asset_registry.get_asset_by_name("alphabet_soup_can_hope_robolab")(scale=(0.7, 0.7, 0.8))
 
-        blue_sorting_bin = self.asset_registry.get_asset_by_name('blue_sorting_bin')(scale=(1.5, 0.8, 1.0))
+        blue_sorting_bin = self.asset_registry.get_asset_by_name("blue_sorting_bin")(scale=(1.5, 0.8, 1.0))
         light_spawner_cfg = sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0)
-        light = self.asset_registry.get_asset_by_name('light')(spawner_cfg=light_spawner_cfg)
+        light = self.asset_registry.get_asset_by_name("light")(spawner_cfg=light_spawner_cfg)
         embodiment = self.asset_registry.get_asset_by_name(args_cli.embodiment)(enable_cameras=args_cli.enable_cameras)
 
-        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_wxyz=(0.707, 0, 0, 0.707)))
+        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_xyzw=(0, 0, 0.707, 0.707)))
         ground_plane.set_initial_pose(Pose(position_xyz=(0.0, 0.0, 0)))
-        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
+        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
         blue_sorting_bin.set_initial_pose(
             Pose(
                 position_xyz=(0.67, 0.4, 0.8),
-                rotation_wxyz=(1.0, 0.0, 0.0, 0.0),
+                rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
             )
         )
 
@@ -85,7 +78,6 @@ class DroidV2TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         obj3_distance_to_blue_sorting_bin = random.uniform(0.05, 0.15)
         # obj3_distance_to_blue_sorting_bin = 0.10
         obj_3.add_relation(NextTo(blue_sorting_bin, side=Side.POSITIVE_Y, distance_m=obj3_distance_to_blue_sorting_bin))
-
 
         # obj_1.set_initial_pose(
         #     PoseRange(
@@ -114,8 +106,8 @@ class DroidV2TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
 
         # Shared destination for all objects
         destination_location = ObjectReference(
-            name='destination_location',
-            prim_path='{ENV_REGEX_NS}/blue_sorting_bin/Geometry/sm_bin_20x25x05cm_a01_01',
+            name="destination_location",
+            prim_path="{ENV_REGEX_NS}/blue_sorting_bin/Geometry/sm_bin_20x25x05cm_a01_01",
             parent_asset=blue_sorting_bin,
             object_type=ObjectType.RIGID,
         )
@@ -126,7 +118,6 @@ class DroidV2TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
             teleop_device = None
 
         assets = [office_table, ground_plane, obj_1, obj_2, obj_3, blue_sorting_bin, light]
-
 
         scene = Scene(assets=assets)
 
@@ -155,7 +146,7 @@ class DroidV2TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
     @staticmethod
     def add_cli_args(parser: argparse.ArgumentParser) -> None:
         """Add CLI arguments specific to this environment."""
-        parser.add_argument('--object', type=str, default='tomato_soup_can')
-        parser.add_argument('--object_set', nargs='+', type=str, default=None)
-        parser.add_argument('--embodiment', type=str, default='droid_differential_ik')
-        parser.add_argument('--teleop_device', type=str, default=None)
+        parser.add_argument("--object", type=str, default="tomato_soup_can")
+        parser.add_argument("--object_set", nargs="+", type=str, default=None)
+        parser.add_argument("--embodiment", type=str, default="droid_differential_ik")
+        parser.add_argument("--teleop_device", type=str, default=None)

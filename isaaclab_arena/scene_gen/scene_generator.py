@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Scene generator orchestrator — ties all pieces together.
 
 Pipeline:
@@ -15,22 +20,16 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
-import random
 from pathlib import Path
-from typing import Optional
 
 from isaaclab_arena.relations.relations import IsAnchor
 from isaaclab_arena.scene.scene import Scene
-from isaaclab_arena.scene_gen.arena_asset_manager import ArenaAssetManager, SCENE_GEN_TABLES
 from isaaclab_arena.scene_gen.adaptive_placer import place_objects_adaptive
+from isaaclab_arena.scene_gen.arena_asset_manager import ArenaAssetManager
 from isaaclab_arena.scene_gen.feedback_system import FeedbackSystem
 from isaaclab_arena.scene_gen.llm_agent import LLMAgent
 from isaaclab_arena.scene_gen.predicate_translator import translate_predicates
-from isaaclab_arena.scene_gen.scene_themes import (
-    generate_scene_prompts,
-    ARTICULATED_THEMES,
-)
+from isaaclab_arena.scene_gen.scene_themes import generate_scene_prompts
 from isaaclab_arena.utils.pose import Pose
 
 
@@ -46,10 +45,10 @@ class SceneGenerator:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "aws/anthropic/bedrock-claude-opus-4-6",
         base_url: str = "https://inference-api.nvidia.com",
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         max_retries: int = 3,
         table_top_z: float = 0.0,  # Table surface at Z=0 (table at Z=-0.35, height ~0.35m)
     ):
@@ -77,10 +76,10 @@ class SceneGenerator:
         self,
         prompt: str,
         max_objects: int = 10,
-        table_name: Optional[str] = None,
-        scene_name: Optional[str] = None,
+        table_name: str | None = None,
+        scene_name: str | None = None,
         has_articulated: bool = False,
-    ) -> Optional[Scene]:
+    ) -> Scene | None:
         """Generate a single scene from a natural language prompt.
 
         Args:
@@ -94,6 +93,7 @@ class SceneGenerator:
             Arena Scene object, or None if generation failed.
         """
         from isaaclab_arena.assets.asset_registry import AssetRegistry
+
         registry = AssetRegistry()
 
         # 1. Select table
@@ -111,10 +111,12 @@ class SceneGenerator:
         # The table USD has its top surface ~0.35m above its origin
         # So table at Z=-0.35 puts the surface at Z≈0.0
         table = registry.get_asset_by_name(table_info["registry_name"])()
-        table.set_initial_pose(Pose(
-            position_xyz=(0.547, 0.0, -0.35),
-            rotation_wxyz=(1.0, 0.0, 0.0, 0.0),
-        ))
+        table.set_initial_pose(
+            Pose(
+                position_xyz=(0.547, 0.0, -0.35),
+                rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
+            )
+        )
         table.add_relation(IsAnchor())
 
         # 3. Select candidate objects
@@ -154,7 +156,8 @@ class SceneGenerator:
                 # Validate minimum objects
                 if num_objects < max(2, max_objects * 0.5):
                     feedback = self.feedback_system.generate_solver_feedback(
-                        False, f"Too few objects: got {num_objects}, need at least {max(2, int(max_objects * 0.6))}")
+                        False, f"Too few objects: got {num_objects}, need at least {max(2, int(max_objects * 0.6))}"
+                    )
                     continue
 
                 # 6. Translate predicates → Arena Objects with Relations
@@ -163,7 +166,9 @@ class SceneGenerator:
 
                 # 7. Place objects (spatial solver + stacking + containment)
                 result = place_objects_adaptive(
-                    objects, table, self.asset_manager,
+                    objects,
+                    table,
+                    self.asset_manager,
                     table_bounds=table_bounds,
                     table_top_z=self.table_top_z,
                     verbose=True,
@@ -171,7 +176,8 @@ class SceneGenerator:
 
                 if not result.success:
                     feedback = self.feedback_system.generate_solver_feedback(
-                        False, "Collision resolution failed — objects overlap")
+                        False, "Collision resolution failed — objects overlap"
+                    )
                     continue
 
                 # 8. Build Arena Scene
@@ -190,8 +196,8 @@ class SceneGenerator:
 
                 try:
                     import isaaclab.sim as sim_utils
-                    light_cfg = sim_utils.DomeLightCfg(
-                        color=(0.75, 0.75, 0.75), intensity=1500.0)
+
+                    light_cfg = sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0)
                     light = registry.get_asset_by_name("light")(spawner_cfg=light_cfg)
                     scene.add_asset(light)
                 except Exception:
@@ -201,8 +207,7 @@ class SceneGenerator:
 
                 # 9. Save metadata
                 if self.output_dir and scene_name:
-                    self._save_metadata(scene_name, prompt, table_name,
-                                       llm_result, result.positions)
+                    self._save_metadata(scene_name, prompt, table_name, llm_result, result.positions)
 
                 return scene
 
@@ -220,7 +225,7 @@ class SceneGenerator:
         num_medium: int = 70,
         num_hard: int = 15,
         appliance_ratio: float = 0.15,
-    ) -> list[Optional[Scene]]:
+    ) -> list[Scene | None]:
         """Generate a batch of scenes using automated prompts.
 
         Args:
@@ -233,7 +238,9 @@ class SceneGenerator:
             List of Arena Scene objects (None for failed scenes).
         """
         scene_configs = generate_scene_prompts(
-            num_easy=num_easy, num_medium=num_medium, num_hard=num_hard,
+            num_easy=num_easy,
+            num_medium=num_medium,
+            num_hard=num_hard,
             appliance_ratio=appliance_ratio,
         )
 
@@ -242,9 +249,9 @@ class SceneGenerator:
         success_count = 0
 
         for i, config in enumerate(scene_configs, 1):
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"[{i}/{total}] {config['name']} ({config['difficulty']})")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             scene = self.generate_scene(
                 prompt=config["prompt"],
@@ -258,8 +265,7 @@ class SceneGenerator:
                 success_count += 1
 
             if i % 10 == 0:
-                print(f"\n--- Progress: {i}/{total} ({success_count} success, "
-                      f"{i - success_count} failed) ---\n")
+                print(f"\n--- Progress: {i}/{total} ({success_count} success, {i - success_count} failed) ---\n")
 
         print(f"\nBatch complete: {success_count}/{total} scenes generated")
         self.asset_manager.print_coverage_report()
@@ -273,9 +279,7 @@ class SceneGenerator:
             "prompt": prompt,
             "table": table_name,
             "llm_result": llm_result,
-            "positions": {
-                name: list(pos) for name, pos in positions.items()
-            } if positions else {},
+            "positions": {name: list(pos) for name, pos in positions.items()} if positions else {},
         }
         path = self.output_dir / f"{scene_name}_metadata.json"
         with open(path, "w") as f:

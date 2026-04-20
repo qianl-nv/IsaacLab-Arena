@@ -33,10 +33,10 @@ def _make_randomize_pick_event(arena_env):
     # would be applied.  This dict lets us restore the per-object rotation.
     original_rotations: dict[str, tuple[float, float, float, float]] = {}
     for obj in arena_env._pick_objects:
-        rot = (1.0, 0.0, 0.0, 0.0)
+        rot = (0.0, 0.0, 0.0, 1.0)
         for rel in obj.get_relations():
             if isinstance(rel, RotateAroundSolution):
-                rot = rel.get_rotation_wxyz()
+                rot = rel.get_rotation_xyzw()
                 break
         original_rotations[obj.name] = rot
 
@@ -47,16 +47,13 @@ def _make_randomize_pick_event(arena_env):
         import torch
 
         from isaaclab.managers import SceneEntityCfg
+
         from isaaclab_arena.relations.object_placer import ObjectPlacer
         from isaaclab_arena.relations.relations import IsAnchor
         from isaaclab_arena.terms.events import set_object_pose
         from isaaclab_arena.utils.pose import Pose
 
-        all_objects = (
-            [arena_env._table, arena_env._bin]
-            + arena_env._static_objects
-            + arena_env._pick_objects
-        )
+        all_objects = [arena_env._table, arena_env._bin] + arena_env._static_objects + arena_env._pick_objects
 
         random.shuffle(arena_env._pick_objects)
         print(f"Shuffled pick objects layout: {[o.name for o in arena_env._pick_objects]}")
@@ -78,9 +75,7 @@ def _make_randomize_pick_event(arena_env):
             )
 
             # Capture the randomized init relations before they get restored.
-            arena_env._current_init_relations = {
-                obj.name: obj.relations[:] for obj in arena_env._pick_objects
-            }
+            arena_env._current_init_relations = {obj.name: obj.relations[:] for obj in arena_env._pick_objects}
 
             # ObjectPlacer applies solved positions + slot-based rotations.
             with torch.inference_mode(mode=False):
@@ -89,16 +84,19 @@ def _make_randomize_pick_event(arena_env):
             # Override slot-based rotations with each object's original rotation.
             for obj in arena_env._pick_objects:
                 pose = obj.get_initial_pose()
-                obj.set_initial_pose(Pose(
-                    position_xyz=pose.position_xyz,
-                    rotation_wxyz=original_rotations[obj.name],
-                ))
+                obj.set_initial_pose(
+                    Pose(
+                        position_xyz=pose.position_xyz,
+                        rotation_xyzw=original_rotations[obj.name],
+                    )
+                )
 
             # Write the solved poses into the sim for this environment.
             cur_env_ids = torch.tensor([cur_env], device=env.device)
             for obj in arena_env._pick_objects:
                 set_object_pose(
-                    env, cur_env_ids,
+                    env,
+                    cur_env_ids,
                     asset_cfg=SceneEntityCfg(obj.name),
                     pose=obj.get_initial_pose(),
                 )
@@ -112,46 +110,46 @@ def _make_randomize_pick_event(arena_env):
 class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
     """DROID v3 environment with flattened USD and mimic joint constraints for the Robotiq 2F-85 gripper."""
 
-    name: str = 'droid_v3_tabletop_pick_and_place'
+    name: str = "droid_v3_tabletop_pick_and_place"
 
     def get_env(self, args_cli: argparse.Namespace):  # -> IsaacLabArenaEnvironment:
         """Build and return the IsaacLab Arena environment."""
+        import isaaclab.sim as sim_utils
+
         from isaaclab_arena.assets.object_base import ObjectType
         from isaaclab_arena.assets.object_reference import ObjectReference
-        from isaaclab_arena.assets.object_set import RigidObjectSet
         from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+        from isaaclab_arena.relations.relations import IsAnchor
         from isaaclab_arena.scene.scene import Scene
         from isaaclab_arena.tasks.sorting_task import SortMultiObjectTask
-        import isaaclab.sim as sim_utils
-        from isaaclab_arena.relations.relations import IsAnchor
-        from isaaclab_arena.utils.pose import Pose, PoseRange
+        from isaaclab_arena.utils.pose import Pose
 
-        office_table = self.asset_registry.get_asset_by_name('office_table_background')()
-        ground_plane = self.asset_registry.get_asset_by_name('ground_plane')()
-        obj_1 = self.asset_registry.get_asset_by_name('tomato_soup_can')(scale=(0.7, 0.7, 0.6))
-        obj_2 = self.asset_registry.get_asset_by_name('ketchup_bottle_hope_robolab')(scale=(0.7, 0.7, 0.6))
-        obj_3 = self.asset_registry.get_asset_by_name('alphabet_soup_can_hope_robolab')(scale=(0.7, 0.7, 0.8))
-        obj_4 = self.asset_registry.get_asset_by_name('bowl_ycb_robolab')()
-        obj_5 = self.asset_registry.get_asset_by_name('red_container')(scale=(0.4, 0.4, 0.5))
+        office_table = self.asset_registry.get_asset_by_name("office_table_background")()
+        ground_plane = self.asset_registry.get_asset_by_name("ground_plane")()
+        obj_1 = self.asset_registry.get_asset_by_name("tomato_soup_can")(scale=(0.7, 0.7, 0.6))
+        obj_2 = self.asset_registry.get_asset_by_name("ketchup_bottle_hope_robolab")(scale=(0.7, 0.7, 0.6))
+        obj_3 = self.asset_registry.get_asset_by_name("alphabet_soup_can_hope_robolab")(scale=(0.7, 0.7, 0.8))
+        obj_4 = self.asset_registry.get_asset_by_name("bowl_ycb_robolab")()
+        obj_5 = self.asset_registry.get_asset_by_name("red_container")(scale=(0.4, 0.4, 0.5))
 
-        blue_sorting_bin = self.asset_registry.get_asset_by_name('blue_sorting_bin')(scale=(1.5, 0.8, 1.0))
+        blue_sorting_bin = self.asset_registry.get_asset_by_name("blue_sorting_bin")(scale=(1.5, 0.8, 1.0))
         light_spawner_cfg = sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0)
-        light = self.asset_registry.get_asset_by_name('light')(spawner_cfg=light_spawner_cfg)
+        light = self.asset_registry.get_asset_by_name("light")(spawner_cfg=light_spawner_cfg)
         embodiment = self.asset_registry.get_asset_by_name(args_cli.embodiment)(enable_cameras=args_cli.enable_cameras)
 
-        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_wxyz=(0.707, 0, 0, 0.707)))
+        office_table.set_initial_pose(Pose(position_xyz=(0.7, 0.5, 0.0), rotation_xyzw=(0, 0, 0.707, 0.707)))
         ground_plane.set_initial_pose(Pose(position_xyz=(0.0, 0.0, 0)))
-        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
+        embodiment.set_initial_pose(Pose(position_xyz=(0.1, 0.18, 0.75), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
         blue_sorting_bin.set_initial_pose(
             Pose(
                 position_xyz=(0.67, 0.4, 0.8),
-                rotation_wxyz=(1.0, 0.0, 0.0, 0.0),
+                rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
             )
         )
 
         # Static objects need initial poses since they are anchors
-        obj_4.set_initial_pose(Pose(position_xyz=(0.67, 0.6, 0.8), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
-        obj_5.set_initial_pose(Pose(position_xyz=(0.67, -0.3, 0.8), rotation_wxyz=(1.0, 0.0, 0.0, 0.0)))
+        obj_4.set_initial_pose(Pose(position_xyz=(0.67, 0.6, 0.8), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
+        obj_5.set_initial_pose(Pose(position_xyz=(0.67, -0.3, 0.8), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
 
         office_table.add_relation(IsAnchor())
         blue_sorting_bin.add_relation(IsAnchor())
@@ -174,8 +172,8 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
 
         # Shared destination for all objects
         destination_location = ObjectReference(
-            name='destination_location',
-            prim_path='{ENV_REGEX_NS}/blue_sorting_bin/Geometry/sm_bin_20x25x05cm_a01_01',
+            name="destination_location",
+            prim_path="{ENV_REGEX_NS}/blue_sorting_bin/Geometry/sm_bin_20x25x05cm_a01_01",
             parent_asset=blue_sorting_bin,
             object_type=ObjectType.RIGID,
         )
@@ -186,7 +184,6 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
             teleop_device = None
 
         assets = [office_table, ground_plane, obj_1, obj_2, obj_3, obj_4, obj_5, blue_sorting_bin, light]
-
 
         scene = Scene(assets=assets)
 
@@ -231,7 +228,6 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         )
         return isaaclab_arena_environment
 
-
     def generate_target_positions(self) -> dict[str, tuple[float, float, float]]:
         """Generate a new random layout and return resolved world-frame positions.
 
@@ -252,7 +248,7 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         saved = {id(obj): obj.relations[:] for obj in all_objects}
         # Use the randomized init relations captured by the reset event,
         # falling back to current relations if no reset has occurred yet.
-        self._init_relations = getattr(self, '_current_init_relations', None) or {
+        self._init_relations = getattr(self, "_current_init_relations", None) or {
             obj.name: saved[id(obj)][:] for obj in self._pick_objects
         }
 
@@ -265,7 +261,9 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         for obj in self._static_objects:
             obj.add_relation(IsAnchor())
         self._generate_object_layout(
-            objects=self._pick_objects, table=self._table, bin_asset=self._bin,
+            objects=self._pick_objects,
+            table=self._table,
+            bin_asset=self._bin,
             static_objects=self._static_objects,
         )
 
@@ -285,7 +283,9 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         return positions
 
     def plan_pick_order(
-        self, verbose: bool = False, ik_cost_fn=None,
+        self,
+        verbose: bool = False,
+        ik_cost_fn=None,
     ) -> tuple[list[str], float]:
         """A* symbolic planning: find minimum-cost pick order respecting relation constraints.
 
@@ -317,6 +317,7 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
             (0.0 means the full sequence is IK-feasible).
         """
         import heapq
+
         from isaaclab_arena.relations.relations import NextTo, On
 
         _log = print if verbose else (lambda *a, **k: None)
@@ -324,41 +325,38 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         pick_obj_ids = {id(obj) for obj in self._pick_objects}
         pick_names = [obj.name for obj in self._pick_objects]
 
-        sep = '=' * 70
+        sep = "=" * 70
         _log(f"\n{sep}")
-        _log('SYMBOLIC A* PLANNER')
+        _log("SYMBOLIC A* PLANNER")
         _log(sep)
         _log(f"Objects: {pick_names}")
 
         # must_precede[A] = set of names that must be placed before A
         must_precede: dict[str, set[str]] = {name: set() for name in pick_names}
 
-        _log(f"\n--- Target relation constraints (placement correctness) ---")
+        _log("\n--- Target relation constraints (placement correctness) ---")
         for obj in self._pick_objects:
             for rel in self._target_relations[obj.name]:
                 if isinstance(rel, (NextTo, On)) and id(rel.parent) in pick_obj_ids:
                     rel_type = type(rel).__name__
-                    _log(f"  {obj.name} {rel_type}({rel.parent.name})"
-                         f" -> place {rel.parent.name} BEFORE {obj.name}")
+                    _log(f"  {obj.name} {rel_type}({rel.parent.name}) -> place {rel.parent.name} BEFORE {obj.name}")
                     must_precede[obj.name].add(rel.parent.name)
 
         # Init: On(A) or NextTo(A) among pick objects -> current before A
         # Skip if it conflicts with a target constraint
-        _log(f"\n--- Init relation constraints (pick safety) ---")
+        _log("\n--- Init relation constraints (pick safety) ---")
         for obj in self._pick_objects:
             for rel in self._init_relations[obj.name]:
                 if isinstance(rel, (NextTo, On)) and id(rel.parent) in pick_obj_ids:
                     parent_name = rel.parent.name
                     rel_type = type(rel).__name__
                     if parent_name not in must_precede[obj.name]:
-                        _log(f"  {obj.name} {rel_type}({parent_name})"
-                             f" -> pick {obj.name} BEFORE {parent_name}")
+                        _log(f"  {obj.name} {rel_type}({parent_name}) -> pick {obj.name} BEFORE {parent_name}")
                         must_precede[parent_name].add(obj.name)
                     else:
-                        _log(f"  {obj.name} {rel_type}({parent_name})"
-                             f" -> SKIPPED (conflicts with target constraint)")
+                        _log(f"  {obj.name} {rel_type}({parent_name}) -> SKIPPED (conflicts with target constraint)")
 
-        _log(f"\n--- Dependency graph ---")
+        _log("\n--- Dependency graph ---")
         for name in pick_names:
             deps = must_precede[name]
             if deps:
@@ -378,7 +376,7 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         def _fmt_pos(p):
             return f"({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f})" if p else "N/A"
 
-        _log(f"\n--- Object positions ---")
+        _log("\n--- Object positions ---")
         for name in pick_names:
             _log(f"  {name}: init={_fmt_pos(init_pos.get(name))} target={_fmt_pos(target_pos.get(name))}")
 
@@ -409,7 +407,7 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         visited_order: set[tuple[str, ...]] = set()
         visited_set: set[frozenset[str]] = set()
 
-        mode_label = '(sequential IK)' if ik_cost_fn else ''
+        mode_label = "(sequential IK)" if ik_cost_fn else ""
         _log(f"\n--- A* search {mode_label} ---")
 
         while heap:
@@ -418,13 +416,12 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
             prev_ik_total = ik_totals.pop(node_id, 0.0)
 
             if placed == goal:
-                _log(f"\n--- Result ---")
+                _log("\n--- Result ---")
                 _log(f"  Nodes expanded: {nodes_expanded}")
                 _log(f"  Total cost:     {g:.3f} (IK penalty: {prev_ik_total:.1f})")
                 _log(f"  Pick order:     {' -> '.join(order)}")
                 _log(sep)
-                print(f"[SYMBOLIC A*] Pick order: {order} "
-                      f"(cost: {g:.3f}m, ik_penalty: {prev_ik_total:.1f})")
+                print(f"[SYMBOLIC A*] Pick order: {order} (cost: {g:.3f}m, ik_penalty: {prev_ik_total:.1f})")
                 joint_configs.clear()
                 ik_totals.clear()
                 return order, prev_ik_total
@@ -466,7 +463,7 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
                 counter += 1
                 joint_configs[counter] = next_jc
                 ik_totals[counter] = prev_ik_total + ik_penalty
-                ik_tag = f" IK_PENALTY={ik_penalty:.1f}" if ik_penalty > 0 else ''
+                ik_tag = f" IK_PENALTY={ik_penalty:.1f}" if ik_penalty > 0 else ""
                 _log(f"    -> {name}: g={new_g:.3f} h={new_h:.3f} f={new_g + new_h:.3f}{ik_tag}")
                 heapq.heappush(
                     heap,
@@ -476,12 +473,12 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         joint_configs.clear()
         ik_totals.clear()
 
-        _log(f"\n--- Result ---")
-        _log(f"  WARNING: no valid ordering found (cyclic dependencies?)")
-        _log(f"  Falling back to alphabetical order")
+        _log("\n--- Result ---")
+        _log("  WARNING: no valid ordering found (cyclic dependencies?)")
+        _log("  Falling back to alphabetical order")
         _log(sep)
         print("[SYMBOLIC A*] Warning: no valid ordering found, returning alphabetical")
-        return sorted(pick_names), float('inf')
+        return sorted(pick_names), float("inf")
 
     @staticmethod
     def _generate_object_layout(objects, table, bin_asset, static_objects=None):
@@ -493,35 +490,31 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
           - obj[2]: On table, NextTo static_1 (bowl) on a random side, upright
         Distances are randomized within safe IK ranges.
         """
-        from isaaclab_arena.relations.relations import (
-            AtPosition,
-            IsAnchor,
-            NextTo,
-            On,
-            RandomAroundSolution,
-            RotateAroundSolution,
-            Side,
-            Inside
-        )
-        all_sides = [Side.POSITIVE_X, Side.NEGATIVE_X, Side.POSITIVE_Y, Side.NEGATIVE_Y]
+        from isaaclab_arena.relations.relations import Inside, NextTo, On, RotateAroundSolution, Side
+
         obj_1, obj_2, obj_3 = objects[0], objects[1], objects[2]
         static_1 = static_objects[0] if static_objects else bin_asset
-        static_2 = static_objects[1] if static_objects and len(static_objects) > 1 else bin_asset
 
         # obj_1: next to bin on -Y side, lying on its side
         obj_1.add_relation(On(table))
-        obj_1.add_relation(NextTo(
-            bin_asset, side=Side.NEGATIVE_Y,
-            distance_m=random.uniform(0.15, 0.25),  # Do not go over 0.25 as IK may fail
-        ))
+        obj_1.add_relation(
+            NextTo(
+                bin_asset,
+                side=Side.NEGATIVE_Y,
+                distance_m=random.uniform(0.15, 0.25),  # Do not go over 0.25 as IK may fail
+            )
+        )
         obj_1.add_relation(RotateAroundSolution(roll_rad=math.pi / 2, yaw_rad=0))
 
         # obj_2: next to obj_1 on -X side, random yaw
         obj_2.add_relation(On(table))
-        obj_2.add_relation(NextTo(
-            obj_1, side=Side.NEGATIVE_X,
-            distance_m=random.uniform(0.05, 0.15),
-        ))
+        obj_2.add_relation(
+            NextTo(
+                obj_1,
+                side=Side.NEGATIVE_X,
+                distance_m=random.uniform(0.05, 0.15),
+            )
+        )
         obj_2.add_relation(RotateAroundSolution(yaw_rad=math.radians(random.randint(0, 360))))
 
         # obj_3: inside static_1 (bowl) if available, otherwise next to bin
@@ -529,10 +522,13 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
             obj_3.add_relation(Inside(static_1, clearance_m=0.02))
         else:
             obj_3.add_relation(On(table))
-            obj_3.add_relation(NextTo(
-                bin_asset, side=Side.NEGATIVE_Y,
-                distance_m=random.uniform(0.05, 0.15),
-            ))
+            obj_3.add_relation(
+                NextTo(
+                    bin_asset,
+                    side=Side.NEGATIVE_Y,
+                    distance_m=random.uniform(0.05, 0.15),
+                )
+            )
 
     @staticmethod
     def _place_static_objects(static_objects, table, bin_asset):
@@ -541,33 +537,29 @@ class DroidV3TabletopPickAndPlaceEnvironment(ExampleEnvironmentBase):
         Returns:
             List of static objects with relations applied (for goal config generation).
         """
-        from isaaclab_arena.relations.relations import (
-            IsAnchor,
-            NextTo,
-            On,
-            Side,
-            AtPosition,
-            RotateAroundSolution,
-        )
+        from isaaclab_arena.relations.relations import AtPosition, NextTo, On, Side
+
         static_1, static_2 = static_objects[0], static_objects[1]
 
         # static_1 (bowl): on table, next to bin on +X side
         static_1.add_relation(On(table))
-        static_1.add_relation(NextTo(
-            bin_asset, side=Side.POSITIVE_Y,
-            distance_m=random.uniform(0.10, 0.20),
-        ))
+        static_1.add_relation(
+            NextTo(
+                bin_asset,
+                side=Side.POSITIVE_Y,
+                distance_m=random.uniform(0.10, 0.20),
+            )
+        )
 
         # static_2 (red container): on table, next to bin on -X side
         bowl_pose = static_1.get_initial_pose()
         static_2.add_relation(On(table))
-        static_2.add_relation(AtPosition(x=bowl_pose.position_xyz[0], y=bowl_pose.position_xyz[1]-0.8))
-
+        static_2.add_relation(AtPosition(x=bowl_pose.position_xyz[0], y=bowl_pose.position_xyz[1] - 0.8))
 
     @staticmethod
     def add_cli_args(parser: argparse.ArgumentParser) -> None:
         """Add CLI arguments specific to this environment."""
-        parser.add_argument('--object', type=str, default='tomato_soup_can')
-        parser.add_argument('--object_set', nargs='+', type=str, default=None)
-        parser.add_argument('--embodiment', type=str, default='droid_differential_ik')
-        parser.add_argument('--teleop_device', type=str, default=None)
+        parser.add_argument("--object", type=str, default="tomato_soup_can")
+        parser.add_argument("--object_set", nargs="+", type=str, default=None)
+        parser.add_argument("--embodiment", type=str, default="droid_differential_ik")
+        parser.add_argument("--teleop_device", type=str, default=None)

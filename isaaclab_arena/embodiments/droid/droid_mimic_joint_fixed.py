@@ -5,10 +5,11 @@
 
 
 import torch
-from typing import Any
 from dataclasses import MISSING
+from typing import Any
 
 import isaaclab.envs.mdp as mdp_isaac_lab
+import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation.articulation_cfg import ArticulationCfg
 from isaaclab.assets.asset_base_cfg import AssetBaseCfg
@@ -23,11 +24,8 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.sensors.camera.camera_cfg import CameraCfg
 from isaaclab.sensors.camera.tiled_camera_cfg import TiledCameraCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg, OffsetCfg
-from isaaclab.sim import PinholeCameraCfg
-import isaaclab.sim as sim_utils
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.utils import configclass
-from isaaclab_assets.robots.franka import FRANKA_ROBOTIQ_GRIPPER_CFG
 from isaaclab_tasks.manager_based.manipulation.stack.mdp import franka_stack_events
 
 from isaaclab_arena.assets.register import register_asset
@@ -72,7 +70,7 @@ class DroidEmbodimentGripperMimicJointFixed(EmbodimentBase):
         if scene_config is None or not hasattr(scene_config, "robot"):
             raise RuntimeError("scene_config must be populated with a `robot` before calling `set_robot_initial_pose`.")
         scene_config.stand.init_state.pos = pose.position_xyz
-        scene_config.stand.init_state.rot = pose.rotation_wxyz
+        scene_config.stand.init_state.rot = pose.rotation_xyzw
 
         return scene_config
 
@@ -169,7 +167,7 @@ class DroidSceneCfg:
                 prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
                 name="end_effector",
                 offset=OffsetCfg(
-                    pos=[0.0, 0.0, 0.0], # 0.1034
+                    pos=[0.0, 0.0, 0.0],  # 0.1034
                 ),
             ),
             FrameTransformerCfg.FrameCfg(
