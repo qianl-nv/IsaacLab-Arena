@@ -276,6 +276,85 @@ class SceneGenerator:
 
         return scenes
 
+    def load_scene(self, metadata_path: str) -> Scene | None:
+        """Rebuild a Scene from a previously saved metadata JSON file.
+
+        This replays the placement pipeline (translate + solve) using the
+        stored ``llm_result``, so **no LLM call is made**.
+
+        Args:
+            metadata_path: Path to a ``*_metadata.json`` file produced by
+                :meth:`generate_scene` with ``output_dir`` set.
+
+        Returns:
+            Arena Scene object, or None on failure.
+        """
+        from isaaclab_arena.assets.asset_registry import AssetRegistry
+
+        path = Path(metadata_path)
+        if not path.exists():
+            print(f"[SceneGen] Metadata file not found: {path}")
+            return None
+
+        with open(path) as f:
+            metadata = json.load(f)
+
+        table_name = metadata["table"]
+        llm_result = metadata["llm_result"]
+        scene_name = metadata.get("scene_name", path.stem)
+
+        registry = AssetRegistry()
+
+        table_info = self.asset_manager.get_table_info(table_name)
+        table_bounds = self.asset_manager.get_table_bounds(table_name)
+
+        table = registry.get_asset_by_name(table_info["registry_name"])()
+        table.set_initial_pose(Pose(position_xyz=(0.547, 0.0, -0.35), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
+        table.add_relation(IsAnchor())
+
+        try:
+            objects = translate_predicates(llm_result, table, self.asset_manager)
+            result = place_objects_adaptive(
+                objects,
+                table,
+                self.asset_manager,
+                table_bounds=table_bounds,
+                table_top_z=self.table_top_z,
+                verbose=False,
+            )
+
+            if not result.success:
+                print(f"[SceneGen] Placement failed when loading {scene_name}")
+                return None
+
+            scene = Scene()
+            scene.add_asset(table)
+            for obj in objects:
+                scene.add_asset(obj)
+
+            try:
+                ground = registry.get_asset_by_name("ground_plane")()
+                ground.set_initial_pose(Pose(position_xyz=(0.0, 0.0, -0.35)))
+                scene.add_asset(ground)
+            except Exception:
+                pass
+
+            try:
+                import isaaclab.sim as sim_utils
+
+                light_cfg = sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0)
+                light = registry.get_asset_by_name("light")(spawner_cfg=light_cfg)
+                scene.add_asset(light)
+            except Exception:
+                pass
+
+            print(f"[SceneGen] Loaded scene '{scene_name}' with {len(scene.assets)} assets")
+            return scene
+
+        except Exception as e:
+            print(f"[SceneGen] Failed to load scene: {e}")
+            return None
+
     def _save_metadata(self, scene_name, prompt, table_name, llm_result, positions):
         """Save scene generation metadata to JSON."""
         metadata = {
