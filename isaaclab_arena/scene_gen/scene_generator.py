@@ -46,18 +46,22 @@ class SceneGenerator:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "aws/anthropic/bedrock-claude-opus-4-6",
-        base_url: str = "https://inference-api.nvidia.com",
+        model: str | None = None,
+        base_url: str | None = None,
         output_dir: str | None = None,
         max_retries: int = 3,
-        table_top_z: float = 0.0,  # Table surface at Z=0 (table at Z=-0.35, height ~0.35m)
+        table_top_z: float = 0.0,
     ):
         """Initialize the scene generator.
 
+        All LLM connection parameters (key, model, URL) cascade through
+        ``LLMAgent``: explicit arg → env var → built-in default.  See
+        :class:`~isaaclab_arena.scene_gen.llm_agent.LLMAgent` for env var names.
+
         Args:
-            api_key: API key for LLM. Reads NV_API_KEY env var if None.
-            model: LLM model identifier.
-            base_url: LLM API base URL.
+            api_key: API key for LLM. Reads ``NV_API_KEY`` env var if None.
+            model: LLM model identifier.  Reads ``SCENE_GEN_MODEL`` if None.
+            base_url: LLM API base URL.  Reads ``SCENE_GEN_BASE_URL`` if None.
             output_dir: Directory to save generated scene metadata.
             max_retries: Max LLM retries per scene on failure.
             table_top_z: Z height of the table surface (meters).

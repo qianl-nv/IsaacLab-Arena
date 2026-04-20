@@ -72,7 +72,9 @@ RUN /isaac-sim/python.sh -m pip install --upgrade pip && \
   # NOTE(xinjieyao, 2025-09-15): Needed for inheritance of torch nn.module, saving/loading model
   typing_extensions \
   # NOTE(xinjieyao, 2025-09-15): Needed for WBC running onnx compiled policy
-  onnxruntime
+  onnxruntime \
+  # Needed by isaaclab_arena/scene_gen for LLM-based scene generation
+  openai
 
 RUN rm -rf /isaac-sim/exts/omni.isaac.ml_archive/pip_prebundle/typing_extensions*
 RUN rm -rf /isaac-sim/exts/omni.pip.cloud/pip_prebundle/typing_extensions*

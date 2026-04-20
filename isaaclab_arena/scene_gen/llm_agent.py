@@ -1,24 +1,34 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """LLM agent for generating scene predicates from natural language.
 
-Uses Claude Opus 4.6 via NVIDIA inference API (OpenAI-compatible) to generate
-structured predicates for object placement on a table surface.
+Uses an LLM via an OpenAI-compatible inference API to generate structured
+predicates for object placement on a table surface.
 
-Requires: NV_API_KEY environment variable or passed directly.
+Default endpoint: ``integrate.api.nvidia.com/v1`` (accepts ``nvapi-`` keys).
+Override with ``SCENE_GEN_BASE_URL`` / ``SCENE_GEN_MODEL`` env vars.
+
+Requires: ``NV_API_KEY`` environment variable or passed directly.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
-from typing import Optional
 
 from openai import OpenAI
 
 from isaaclab_arena.scene_gen.arena_asset_manager import RACK_OBJECTS
 
-# NVIDIA inference API defaults
-DEFAULT_BASE_URL = "https://inference-api.nvidia.com"
-DEFAULT_MODEL = "aws/anthropic/bedrock-claude-opus-4-6"
+# Endpoint / model defaults.  Override with SCENE_GEN_BASE_URL / SCENE_GEN_MODEL env vars.
+# integrate.api.nvidia.com/v1 accepts standard nvapi- keys from build.nvidia.com.
+# inference-api.nvidia.com    requires LiteLLM virtual keys (sk-...).
+DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_MODEL = "meta/llama-3.3-70b-instruct"
 
 
 class LLMAgent:
@@ -26,22 +36,29 @@ class LLMAgent:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = DEFAULT_MODEL,
-        base_url: str = DEFAULT_BASE_URL,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
     ):
         """Initialize the LLM agent.
 
+        Resolution order for each parameter: explicit arg → env var → default.
+
+        Environment variables:
+            ``NV_API_KEY``          — API key (``nvapi-…`` or ``sk-…``).
+            ``SCENE_GEN_BASE_URL`` — OpenAI-compatible endpoint URL.
+            ``SCENE_GEN_MODEL``    — Model identifier.
+
         Args:
-            api_key: NVIDIA API key. If None, reads from NV_API_KEY env var.
-            model: Model identifier for the inference API.
-            base_url: Base URL for the inference API.
+            api_key: API key. Falls back to ``NV_API_KEY`` env var.
+            model: Model identifier.  Falls back to ``SCENE_GEN_MODEL`` env var.
+            base_url: Base URL for the inference API.  Falls back to ``SCENE_GEN_BASE_URL`` env var.
         """
         self.api_key = api_key or os.getenv("NV_API_KEY")
         if not self.api_key:
-            raise ValueError(
-                "API key must be provided or set in NV_API_KEY environment variable"
-            )
+            raise ValueError("API key must be provided or set in NV_API_KEY environment variable")
+        base_url = base_url or os.getenv("SCENE_GEN_BASE_URL", DEFAULT_BASE_URL)
+        model = model or os.getenv("SCENE_GEN_MODEL", DEFAULT_MODEL)
 
         self.model = model
         self.client = OpenAI(api_key=self.api_key, base_url=base_url)
@@ -52,10 +69,10 @@ class LLMAgent:
         prompt: str,
         object_catalog: list[dict],
         max_objects: int = 10,
-        feedback: Optional[str] = None,
-        preselected_objects: Optional[list[str]] = None,
-        rack_fixture: Optional[tuple] = None,
-        articulated_objects: Optional[dict[str, list[str]]] = None,
+        feedback: str | None = None,
+        preselected_objects: list[str] | None = None,
+        rack_fixture: tuple | None = None,
+        articulated_objects: dict[str, list[str]] | None = None,
     ) -> dict:
         """Generate predicates from a natural language prompt.
 
@@ -74,8 +91,13 @@ class LLMAgent:
         """
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(
-            prompt, object_catalog, max_objects, feedback,
-            preselected_objects, rack_fixture, articulated_objects,
+            prompt,
+            object_catalog,
+            max_objects,
+            feedback,
+            preselected_objects,
+            rack_fixture,
+            articulated_objects,
         )
 
         messages = [
@@ -98,9 +120,7 @@ class LLMAgent:
             content = response.choices[0].message.content
 
             # Update conversation history (exclude system prompt)
-            self.conversation_history = messages[1:] + [
-                {"role": "assistant", "content": content}
-            ]
+            self.conversation_history = messages[1:] + [{"role": "assistant", "content": content}]
 
             return self._parse_llm_response(content)
 
@@ -176,15 +196,13 @@ class LLMAgent:
         prompt: str,
         object_catalog: list[dict],
         max_objects: int,
-        feedback: Optional[str],
-        preselected_objects: Optional[list[str]] = None,
-        rack_fixture: Optional[tuple] = None,
-        articulated_objects: Optional[dict[str, list[str]]] = None,
+        feedback: str | None,
+        preselected_objects: list[str] | None = None,
+        rack_fixture: tuple | None = None,
+        articulated_objects: dict[str, list[str]] | None = None,
     ) -> str:
         """Build the user prompt with scene description and object catalog."""
-        filtered_catalog = [
-            obj for obj in object_catalog if obj["name"] not in RACK_OBJECTS
-        ]
+        filtered_catalog = [obj for obj in object_catalog if obj["name"] not in RACK_OBJECTS]
 
         # Mark articulated objects in catalog with [A] prefix
         if articulated_objects:
@@ -296,7 +314,7 @@ class LLMAgent:
                 f"  Size: {rack_dims[0]:.2f}m x {rack_dims[1]:.2f}m (scaled {rack_scale:.2f}x)",
                 "",
                 "AVOID this area! Place objects AROUND the rack, not on/in it.",
-                f"Keep objects at least 0.10m away from the rack's boundaries.",
+                "Keep objects at least 0.10m away from the rack's boundaries.",
             ])
 
         return "\n".join(prompt_parts)
@@ -314,11 +332,8 @@ class LLMAgent:
                 lines = lines[:-1]
             content = "\n".join(lines)
 
-        # Try direct parse first
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             return json.loads(content)
-        except json.JSONDecodeError:
-            pass
 
         # Extract JSON object from surrounding text (LLM sometimes adds reasoning)
         brace_start = content.find("{")
@@ -331,15 +346,13 @@ class LLMAgent:
                 elif content[i] == "}":
                     depth -= 1
                     if depth == 0:
-                        json_str = content[brace_start:i + 1]
+                        json_str = content[brace_start : i + 1]
                         try:
                             return json.loads(json_str)
                         except json.JSONDecodeError:
                             break
 
-        raise ValueError(
-            f"Failed to parse LLM response as JSON.\nContent: {content}"
-        )
+        raise ValueError(f"Failed to parse LLM response as JSON.\nContent: {content}")
 
     def reset_conversation(self):
         """Reset conversation history for a new scene generation."""
