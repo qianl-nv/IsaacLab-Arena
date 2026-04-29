@@ -87,9 +87,8 @@ def main() -> None:
         for rel in spec.initial_scene_graph:
             if rel.target == old_bg:
                 rel.target = new_bg
-        for rel in spec.final_scene_graph:
-            if rel.target == old_bg:
-                rel.target = new_bg
+        # Note: tasks don't directly reference background in target (typically None or items),
+        # so no background substitution needed in task.target
         spec.background = new_bg
         print(f"\n=== background override applied: {old_bg!r} -> {new_bg!r} ===")
 
@@ -112,21 +111,22 @@ def main() -> None:
     for rel in resolved.initial_scene_graph:
         print(f"  {rel['kind']}({rel['subject']}, {rel['target']})")
 
-    print("\n=== final_scene_graph (resolved) ===")
-    for rel in resolved.final_scene_graph:
-        print(f"  {rel['kind']}({rel['subject']}, {rel['target']})")
+    print("\n=== tasks ===")
+    for task in resolved.tasks:
+        print(f"  {task['kind']:20s} | subject={task['subject']:15s} target={task['target']:15s}")
+        print(f"    description: {task['description']}")
 
-    print("\n=== goal_added (must become true) ===")
-    for rel in resolved.goal_added:
-        print(f"  {rel['kind']}({rel['subject']}, {rel['target']})")
-    if not resolved.goal_added:
-        print("  (none)")
-
-    print("\n=== goal_removed (must become false) ===")
-    for rel in resolved.goal_removed:
-        print(f"  {rel['kind']}({rel['subject']}, {rel['target']})")
-    if not resolved.goal_removed:
-        print("  (none)")
+    print("\n=== intermediate_scene_graph_delta ===")
+    for i, delta in enumerate(resolved.intermediate_scene_graph_delta):
+        print(f"  Task {i} ({delta['task_kind']}):")
+        if delta["goal_added"]:
+            print("    goal_added:")
+            for rel in delta["goal_added"]:
+                print(f"      {rel['kind']}({rel['subject']}, {rel['target']})")
+        if delta["goal_removed"]:
+            print("    goal_removed:")
+            for rel in delta["goal_removed"]:
+                print(f"      {rel['kind']}({rel['subject']}, {rel['target']})")
 
     print("\n=== trace ===")
     for t in resolved.trace:

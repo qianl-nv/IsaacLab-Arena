@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Visualize a Franka EEF reachability map inside the Isaac Lab Kit viewer.
 
 Either loads a precomputed reach map (``--load_npz tools/franka_reach_top_down.npz``)
@@ -20,15 +25,11 @@ import torch
 
 from isaaclab_arena.cli.isaaclab_arena_cli import get_isaaclab_arena_cli_parser
 from isaaclab_arena.utils.isaaclab_utils.simulation_app import SimulationAppContext
-from isaaclab_arena_environments.cli import (
-    get_arena_builder_from_cli,
-    get_isaaclab_arena_environments_cli_parser,
-)
+from isaaclab_arena_environments.cli import get_arena_builder_from_cli, get_isaaclab_arena_environments_cli_parser
 
 
 def add_args(parser) -> None:
-    parser.add_argument("--load_npz", type=str, default="",
-                        help="Path to precomputed NPZ; skip cuRobo recompute.")
+    parser.add_argument("--load_npz", type=str, default="", help="Path to precomputed NPZ; skip cuRobo recompute.")
     parser.add_argument("--grid", type=int, default=22, help="voxels per axis (recompute mode)")
     parser.add_argument("--x_min", type=float, default=-0.4)
     parser.add_argument("--x_max", type=float, default=1.0)
@@ -49,8 +50,10 @@ def _compute_reach_map_with_curobo(env, args_cli):
     planner_cfg.visualize_plan = False
     planner_cfg.visualize_spheres = False
     planner = CuroboPlanner(
-        env=env.unwrapped, robot=env.unwrapped.scene["robot"],
-        config=planner_cfg, env_id=0,
+        env=env.unwrapped,
+        robot=env.unwrapped.scene["robot"],
+        config=planner_cfg,
+        env_id=0,
     )
     planner.update_world()
     ik = planner.motion_gen.ik_solver
@@ -67,8 +70,7 @@ def _compute_reach_map_with_curobo(env, args_cli):
     quaternions = quat_top_down.expand(positions_base.shape[0], 4).contiguous()
     targets = Pose(position=positions_base, quaternion=quaternions)
 
-    print(f"[reach_map] solving IK for {positions_base.shape[0]} voxels (grid={N}^3) ...",
-          flush=True)
+    print(f"[reach_map] solving IK for {positions_base.shape[0]} voxels (grid={N}^3) ...", flush=True)
     result = ik.solve_batch(targets)
     success = result.success.view(-1).bool()
     pos_err = result.position_error.view(-1)
@@ -78,8 +80,8 @@ def _compute_reach_map_with_curobo(env, args_cli):
 def _load_reach_map_from_npz(path: str, device: torch.device):
     """Load NPZ produced by tools/compute_reach_map.py. Returns (positions_base [M,3], pos_err [M])."""
     d = np.load(path)
-    success = d["success"]                         # (Nx, Ny, Nz)
-    pos_err = d["pos_err"]                         # (Nx, Ny, Nz)
+    success = d["success"]  # (Nx, Ny, Nz)
+    pos_err = d["pos_err"]  # (Nx, Ny, Nz)
     xs, ys, zs = d["x"], d["y"], d["z"]
     X, Y, Z = np.meshgrid(xs, ys, zs, indexing="ij")
     feas = success.astype(bool)
@@ -121,12 +123,11 @@ def main() -> int:
             return 0
 
         median_err = float(feas_err.median().item())
-        bin_idx = (feas_err > median_err).long()       # 0=tight, 1=loose
+        bin_idx = (feas_err > median_err).long()  # 0=tight, 1=loose
 
         # ---- transform feasible voxels into world frame
-        from isaaclab.utils.math import quat_apply
-
         import warp as wp
+        from isaaclab.utils.math import quat_apply
 
         robot = env.unwrapped.scene["robot"]
         base_pos = wp.to_torch(robot.data.root_pos_w)[0, :3].to(device)
@@ -158,11 +159,12 @@ def main() -> int:
             },
         )
         VisualizationMarkers(reach_cfg).visualize(
-            translations=feas_pos_w, marker_indices=bin_idx,
+            translations=feas_pos_w,
+            marker_indices=bin_idx,
         )
         print(
             f"[reach_map] spawned {feas_pos_w.shape[0]} reach markers — "
-            f"green=tight (pos_err<median), cyan=loose. Median pos_err = "
+            "green=tight (pos_err<median), cyan=loose. Median pos_err = "
             f"{median_err * 1000:.2f} mm",
             flush=True,
         )
@@ -179,8 +181,7 @@ def main() -> int:
         )
         VisualizationMarkers(base_cfg).visualize(translations=base_pos.unsqueeze(0))
         print(
-            f"[reach_map] base marker at world pos "
-            f"({base_pos[0]:.3f}, {base_pos[1]:.3f}, {base_pos[2]:.3f})",
+            f"[reach_map] base marker at world pos ({base_pos[0]:.3f}, {base_pos[1]:.3f}, {base_pos[2]:.3f})",
             flush=True,
         )
 

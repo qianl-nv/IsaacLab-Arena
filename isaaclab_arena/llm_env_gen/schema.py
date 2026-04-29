@@ -26,6 +26,9 @@ RelationKind = Literal["on", "in", "next_to", "at_position", "is_anchor", "open"
 
 ItemRole = Literal["foreground", "distractor", "anchor"]
 
+# Task kinds the LLM can propose as atomic actions in a plan.
+TaskKind = Literal["pick_and_place", "open_door", "close_door"]
+
 
 class Item(BaseModel):
     """One object the LLM wants in the scene.
@@ -55,20 +58,33 @@ class Relation(BaseModel):
         return (self.kind, self.subject, self.target)
 
 
-class SceneSpec(BaseModel):
-    """LLM output — a structured plan for the scene.
+class Task(BaseModel):
+    """One atomic task in the plan that transforms the scene state.
 
-    The language prompt is decomposed into two full scene graphs:
+    A task specifies what action to perform (kind), what object it acts on
+    (subject), and optionally where it goes (target). The description provides
+    natural-language context for the task.
+    """
+
+    kind: TaskKind
+    subject: str  # object instance name (e.g. 'avocado', 'microwave')
+    target: str | None = None  # target object/location (e.g. 'bowl', 'background')
+    description: str  # natural-language task description
+
+
+class SceneSpec(BaseModel):
+    """LLM output — a structured plan for the scene and a list of tasks.
+
+    The language prompt is decomposed into:
 
       * ``initial_scene_graph`` — every relation that holds at env reset.
-        This configures where objects spawn.
-      * ``final_scene_graph`` — every relation that must hold for the task
-        to be considered complete. This is a FULL snapshot, not a diff:
-        relations that are unchanged between initial and final must appear
-        in both lists (e.g. the bowl stays on the table). Relations that
-        are invalidated by the task (the avocado is no longer on the
-        table because it is now in the bowl) must be omitted from the
-        final graph.
+        This configures where objects spawn. This is a FULL snapshot
+        including all relations that persist throughout all tasks.
+      * ``tasks`` — a list of atomic actions to execute in sequence. Each
+        task specifies what to do (kind), what object(s) it acts on
+        (subject/target), and a natural-language description. The task
+        sequence implicitly defines the intermediate scene graphs by applying
+        each task's transformations in order.
     """
 
     task_description: str
@@ -76,23 +92,12 @@ class SceneSpec(BaseModel):
     embodiment: str = "franka_ik"
     items: list[Item]
     initial_scene_graph: list[Relation]
-    final_scene_graph: list[Relation]
+    tasks: list[Task]
 
     @model_validator(mode="after")
-    def _graphs_must_differ(self) -> SceneSpec:
-        if not self.goal_added() and not self.goal_removed():
+    def _tasks_must_be_non_empty(self) -> SceneSpec:
+        if not self.tasks:
             raise ValueError(
-                "initial_scene_graph and final_scene_graph are identical — the task "
-                "is trivially solved at reset. At least one relation must differ."
+                "tasks list is empty — at least one task must be specified to define the scene transformation."
             )
         return self
-
-    def goal_added(self) -> list[Relation]:
-        """Relations that must become true to solve the task (final − initial)."""
-        initial = {r.identity() for r in self.initial_scene_graph}
-        return [r for r in self.final_scene_graph if r.identity() not in initial]
-
-    def goal_removed(self) -> list[Relation]:
-        """Relations that must become false to solve the task (initial − final)."""
-        final = {r.identity() for r in self.final_scene_graph}
-        return [r for r in self.initial_scene_graph if r.identity() not in final]

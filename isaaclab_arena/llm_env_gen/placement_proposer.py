@@ -127,9 +127,9 @@ _BACKGROUND_TABLETOP_ANCHOR_BASE_TYPE: frozenset[str] = frozenset({"kitchen"})
 # table centre from the chosen edge. Four cardinal orientations cover
 # the full perimeter of a rectangular tabletop.
 _EDGE_ROTATION_XYZW: dict[str, tuple[float, float, float, float]] = {
-    "x_min": (0.0, 0.0, 0.0, 1.0),               # faces +x (0°)
-    "x_max": (0.0, 0.0, 1.0, 0.0),               # faces -x (180°)
-    "y_min": (0.0, 0.0, 0.7071068, 0.7071068),   # faces +y (+90°)
+    "x_min": (0.0, 0.0, 0.0, 1.0),  # faces +x (0°)
+    "x_max": (0.0, 0.0, 1.0, 0.0),  # faces -x (180°)
+    "y_min": (0.0, 0.0, 0.7071068, 0.7071068),  # faces +y (+90°)
     "y_max": (0.0, 0.0, -0.7071068, 0.7071068),  # faces -y (-90°)
 }
 
@@ -349,9 +349,7 @@ def block_initial_goal_satisfaction(placement: Placement, resolved: ResolvedScen
     return placement
 
 
-def propose_placement(
-    resolved: ResolvedScene, spec: SceneSpec, attempt: int = 0, seed: int | None = None
-) -> Placement:
+def propose_placement(resolved: ResolvedScene, spec: SceneSpec, attempt: int = 0, seed: int | None = None) -> Placement:
     """Turn a resolved scene into a Placement with no I/O side effects.
 
     ``attempt`` selects which robot-placement sample to draw — bumping it
@@ -382,9 +380,7 @@ def propose_placement(
         extra_assets.append("tabletop_anchor")
 
     robot_placement = (
-        _propose_robot_placement(env_name, attempt, seed=seed)
-        if tabletop_plan.emit_position_limits
-        else None
+        _propose_robot_placement(env_name, attempt, seed=seed) if tabletop_plan.emit_position_limits else None
     )
 
     return Placement(

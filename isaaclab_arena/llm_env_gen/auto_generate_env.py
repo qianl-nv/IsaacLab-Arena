@@ -40,7 +40,6 @@ from isaaclab_arena.cli.isaaclab_arena_cli import get_isaaclab_arena_cli_parser
 from isaaclab_arena.llm_env_gen.reachability_utils import add_ik_reachability_cli_args
 from isaaclab_arena.utils.isaaclab_utils.simulation_app import SimulationAppContext
 
-
 _DEFAULT_PROMPT = (
     "franka pick up avocado from the table and place it into a bowl on the table. "
     "there are other veggies on the table as distractor"
@@ -130,9 +129,7 @@ def _hot_load_env_module(path: Path, env_name: str, attempt: int) -> None:
         ):
             fresh_cls = attr
             break
-    assert fresh_cls is not None, (
-        f"Hot-load could not find an env class with name={env_name!r} in module {mod_name!r}"
-    )
+    assert fresh_cls is not None, f"Hot-load could not find an env class with name={env_name!r} in module {mod_name!r}"
     _ER()._components[env_name] = fresh_cls
     # Drop any gym entry the previous attempt's arena_builder.make_registered
     # may have planted; the next make_registered call re-registers with the
@@ -175,9 +172,9 @@ def _build_arena_builder(args_cli: argparse.Namespace):
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
 
     registry = _ER()
-    assert registry.is_registered(args_cli.example_environment), (
-        f"env {args_cli.example_environment!r} not registered — hot-load step probably failed"
-    )
+    assert registry.is_registered(
+        args_cli.example_environment
+    ), f"env {args_cli.example_environment!r} not registered — hot-load step probably failed"
     env_cls = registry.get_component_by_name(args_cli.example_environment)
     arena_env = env_cls().get_env(args_cli)
     return ArenaEnvBuilder(arena_env, args_cli)
@@ -213,9 +210,6 @@ def main() -> int:
             for rel in spec.initial_scene_graph:
                 if rel.target == old_bg:
                     rel.target = new_bg
-            for rel in spec.final_scene_graph:
-                if rel.target == old_bg:
-                    rel.target = new_bg
             spec.background = new_bg
             print(f"[auto_env] Background override: {old_bg!r} -> {new_bg!r}", flush=True)
 
@@ -227,7 +221,7 @@ def main() -> int:
 
         # Stage 2: rewrite + IK-check loop
         from isaaclab_arena.llm_env_gen.env_writer import write_env
-        from isaaclab_arena.llm_env_gen.placement_proposer import block_initial_goal_satisfaction, propose_placement
+        from isaaclab_arena.llm_env_gen.placement_proposer import propose_placement
         from isaaclab_arena.llm_env_gen.run_reachability_check import check_reachability_for_arena_builder
 
         # Each attempt registers a unique env name (``..._t<attempt>``).
@@ -324,7 +318,7 @@ def main() -> int:
 
             print(
                 f"[auto_env] attempt {attempt + 1} failed (exit={last_status}); "
-                f"next iteration will vary the other axis.",
+                "next iteration will vary the other axis.",
                 flush=True,
             )
 

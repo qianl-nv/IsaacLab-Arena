@@ -47,15 +47,32 @@ class ResolvedScene:
     embodiment_name: str
     items: dict[str, type]
     initial_scene_graph: list[dict[str, Any]]
-    final_scene_graph: list[dict[str, Any]]
-    # Derived from the two graphs: relations that must become true to solve
-    # the task (final − initial) and relations that must become false
-    # (initial − final). The placement solver is expected to honor these as
-    # negative constraints on the initial realization — see the TODO on
-    # isaaclab_arena.relations.relation_solver.RelationSolver.
-    goal_added: list[dict[str, Any]]
-    goal_removed: list[dict[str, Any]]
+    # For compatibility with placement/task logic that derives constraints from goals:
+    # intermediate_scene_graph_delta contains per-task constraint/delta entries that
+    # the placement solver and task planner use to synthesize placement and IK
+    # constraints. Currently populated with a single entry per task containing goal
+    # relations (relations that must become true for that task to succeed).
+    intermediate_scene_graph_delta: list[dict[str, Any]]
+    tasks: list[dict[str, Any]]
     trace: list[TraceEvent]
+
+    # Backward compatibility: derive goal_added/goal_removed from the first task
+    # for placement proposer and other downstream code expecting the old API.
+    @property
+    def goal_added(self) -> list[dict[str, Any]]:
+        """Compatibility property: goal relations from the first task."""
+        return (
+            self.intermediate_scene_graph_delta[0].get("goal_added", []) if self.intermediate_scene_graph_delta else []
+        )
+
+    @property
+    def goal_removed(self) -> list[dict[str, Any]]:
+        """Compatibility property: goal removals from the first task."""
+        return (
+            self.intermediate_scene_graph_delta[0].get("goal_removed", [])
+            if self.intermediate_scene_graph_delta
+            else []
+        )
 
 
 class Resolver:
@@ -89,32 +106,99 @@ class Resolver:
 
         known = set(items) | {spec.background}
         initial_graph = self._resolve_graph(spec.initial_scene_graph, "initial", known, trace)
-        final_graph = self._resolve_graph(spec.final_scene_graph, "final", known, trace)
 
-        initial_keys = {(r["kind"], r["subject"], r["target"]) for r in initial_graph}
-        final_keys = {(r["kind"], r["subject"], r["target"]) for r in final_graph}
-        goal_added = [r for r in final_graph if (r["kind"], r["subject"], r["target"]) not in initial_keys]
-        goal_removed = [r for r in initial_graph if (r["kind"], r["subject"], r["target"]) not in final_keys]
+        # Resolve tasks and derive intermediate scene graph deltas.
+        intermediate_deltas: list[dict[str, Any]] = []
+        resolved_tasks: list[dict[str, Any]] = []
 
-        for r in goal_added:
-            trace.append(TraceEvent("diff.goal_added", r["subject"], r["target"], note=r["kind"]))
-        for r in goal_removed:
-            trace.append(TraceEvent("diff.goal_removed", r["subject"], r["target"], note=r["kind"]))
+        for task in spec.tasks:
+            trace.append(
+                TraceEvent("task.resolve", task.kind, task.kind, note=f"subject={task.subject}, target={task.target}")
+            )
+
+            # Validate task references known items
+            if task.subject not in known:
+                trace.append(TraceEvent("task.unknown_subject", task.subject, None, note=f"task kind={task.kind}"))
+            if task.target is not None and task.target not in known:
+                trace.append(TraceEvent("task.unknown_target", task.target, None, note=f"task kind={task.kind}"))
+
+            # Build task-imposed constraints. For now, we derive goal_added/goal_removed
+            # from standard task kinds: pick_and_place derives on(subject, target),
+            # open_door derives open(subject, None), close_door derives closed(subject, None).
+            task_dict = {
+                "kind": task.kind,
+                "subject": task.subject,
+                "target": task.target,
+                "description": task.description,
+            }
+            resolved_tasks.append(task_dict)
+
+            delta = self._derive_task_constraints(task, known, trace)
+            intermediate_deltas.append(delta)
 
         return ResolvedScene(
             background=background_cls,
             embodiment_name=embodiment_name,
             items=items,
             initial_scene_graph=initial_graph,
-            final_scene_graph=final_graph,
-            goal_added=goal_added,
-            goal_removed=goal_removed,
+            intermediate_scene_graph_delta=intermediate_deltas,
+            tasks=resolved_tasks,
             trace=trace,
         )
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+        # Internals
+        # ------------------------------------------------------------------
+
+    def _derive_task_constraints(self, task, known: set[str], trace: list[TraceEvent]) -> dict[str, Any]:
+        """Derive goal_added and goal_removed relations from a task definition.
+
+        For pick_and_place: goal_added is on(subject, target) or in(subject, target).
+        For open_door: goal_added is open(subject, None).
+        For close_door: goal_added is closed(subject, None).
+        """
+        goal_added = []
+        goal_removed = []
+
+        if task.kind == "pick_and_place":
+            if task.target:
+                # Determine if it's an "in" or "on" relation based on heuristics.
+                # For now, default to "on" for simplicity; the LLM can override via params.
+                kind = "on"
+                goal_added.append({
+                    "kind": kind,
+                    "subject": task.subject,
+                    "target": task.target,
+                    "params": {},
+                })
+                # Goal removed: the subject is no longer on its initial location.
+                # This is implicit — the placement solver will ensure the initial state
+                # doesn't already satisfy the goal. For now, we don't emit explicit removals.
+        elif task.kind == "open_door":
+            goal_added.append({
+                "kind": "open",
+                "subject": task.subject,
+                "target": None,
+                "params": {},
+            })
+        elif task.kind == "close_door":
+            goal_added.append({
+                "kind": "closed",
+                "subject": task.subject,
+                "target": None,
+                "params": {},
+            })
+
+        for rel in goal_added:
+            trace.append(TraceEvent("task.goal_added", rel["subject"], rel.get("target"), note=rel["kind"]))
+        for rel in goal_removed:
+            trace.append(TraceEvent("task.goal_removed", rel["subject"], rel.get("target"), note=rel["kind"]))
+
+        return {
+            "task_kind": task.kind,
+            "goal_added": goal_added,
+            "goal_removed": goal_removed,
+        }
 
     def _resolve_item(self, item: Item, trace: list[TraceEvent]) -> type | None:
         if self.registry.is_registered(item.query):
@@ -239,7 +323,7 @@ class Resolver:
                         f"{stage_prefix}.in_skipped",
                         rel.subject,
                         rel.target,
-                        note="'in' has no initial-state semantics; move this to final_scene_graph.",
+                        note="'in' has no initial-state semantics; specify placement changes via tasks instead.",
                     )
                 )
                 continue

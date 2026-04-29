@@ -1,3 +1,8 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Compute Franka EEF reachability map with batched cuRobo IK on GPU.
 
 Pure cuRobo + PyTorch — no Isaac Sim / Kit boot. Runs in seconds for a
@@ -15,10 +20,9 @@ Run inside the curobo container:
 from __future__ import annotations
 
 import argparse
+import numpy as np
 import os
 import time
-
-import numpy as np
 import torch
 
 
@@ -60,9 +64,7 @@ def main() -> int:
 
     robot_dict = load_yaml(join_path(get_robot_configs_path(), args.robot_yml))["robot_cfg"]
     robot_cfg = RobotConfig.from_dict(robot_dict, tdt)
-    ik_cfg = IKSolverConfig.load_from_robot_config(
-        robot_cfg, num_seeds=int(args.num_seeds), tensor_args=tdt
-    )
+    ik_cfg = IKSolverConfig.load_from_robot_config(robot_cfg, num_seeds=int(args.num_seeds), tensor_args=tdt)
     ik = IKSolver(ik_cfg)
 
     # ---- 3-D grid in robot base frame --------------------------------------
@@ -131,8 +133,7 @@ def main() -> int:
         ax.set_ylabel("y (base frame)")
         ax.set_zlabel("z (base frame)")
         ax.set_title(
-            f"Franka top-down reachability — {feasible_count}/{total} feasible "
-            f"({100*feasible_count/total:.1f}%)"
+            f"Franka top-down reachability — {feasible_count}/{total} feasible ({100 * feasible_count / total:.1f}%)"
         )
         # Tick labels in actual base-frame meters, not voxel index.
         ax.set_xticks(np.linspace(0, N, 5))
@@ -149,19 +150,31 @@ def main() -> int:
         # Vertical dashed plumb line through the base — easy to spot even
         # when the marker itself is occluded by voxels.
         ax.plot(
-            [base_xi, base_xi], [base_yi, base_yi], [0, N],
-            color="red", linestyle="--", linewidth=1.2, alpha=0.7,
+            [base_xi, base_xi],
+            [base_yi, base_yi],
+            [0, N],
+            color="red",
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.7,
         )
         ax.scatter(
-            [base_xi], [base_yi], [base_zi],
-            s=300, c="red", marker="o", edgecolor="black", linewidth=2.0,
-            label="robot base (0,0,0)", zorder=10,
+            [base_xi],
+            [base_yi],
+            [base_zi],
+            s=300,
+            c="red",
+            marker="o",
+            edgecolor="black",
+            linewidth=2.0,
+            label="robot base (0,0,0)",
+            zorder=10,
         )
         # Short axis triad at the base for orientation (red=x, green=y, blue=z).
         triad_len = 0.18 * N
-        ax.quiver(base_xi, base_yi, base_zi, triad_len, 0, 0, color="red",   linewidth=2.5)
+        ax.quiver(base_xi, base_yi, base_zi, triad_len, 0, 0, color="red", linewidth=2.5)
         ax.quiver(base_xi, base_yi, base_zi, 0, triad_len, 0, color="green", linewidth=2.5)
-        ax.quiver(base_xi, base_yi, base_zi, 0, 0, triad_len, color="blue",  linewidth=2.5)
+        ax.quiver(base_xi, base_yi, base_zi, 0, 0, triad_len, color="blue", linewidth=2.5)
         ax.legend(loc="upper left", fontsize=9)
         # Tilt camera up a bit so the base (at z=0) doesn't sit on the
         # bottom edge of the figure where it's hard to see.

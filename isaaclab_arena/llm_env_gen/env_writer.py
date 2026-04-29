@@ -285,12 +285,12 @@ def _render_bbox_setup(plan: TabletopAnchorPlan) -> str:
         "        _tbl_max_xyz = [float(_tbl_bbox.max_point[0, i]) for i in range(3)]\n"
         f"        _tbl_margin = {plan.margin_m}\n"
         "        print(\n"
-        "            f\"[bbox] tabletop world AABB: min=({_tbl_min_xyz[0]:.3f}, \"\n"
-        "            f\"{_tbl_min_xyz[1]:.3f}, {_tbl_min_xyz[2]:.3f}) -> \"\n"
-        "            f\"max=({_tbl_max_xyz[0]:.3f}, {_tbl_max_xyz[1]:.3f}, \"\n"
-        "            f\"{_tbl_max_xyz[2]:.3f}); size_xy=\"\n"
-        "            f\"({_tbl_max_xyz[0] - _tbl_min_xyz[0]:.3f}, \"\n"
-        "            f\"{_tbl_max_xyz[1] - _tbl_min_xyz[1]:.3f})\",\n"
+        '            f"[bbox] tabletop world AABB: min=({_tbl_min_xyz[0]:.3f}, "\n'
+        '            f"{_tbl_min_xyz[1]:.3f}, {_tbl_min_xyz[2]:.3f}) -> "\n'
+        '            f"max=({_tbl_max_xyz[0]:.3f}, {_tbl_max_xyz[1]:.3f}, "\n'
+        '            f"{_tbl_max_xyz[2]:.3f}); size_xy="\n'
+        '            f"({_tbl_max_xyz[0] - _tbl_min_xyz[0]:.3f}, "\n'
+        '            f"{_tbl_max_xyz[1] - _tbl_min_xyz[1]:.3f})",\n'
         "            flush=True,\n"
         "        )"
     )
@@ -331,13 +331,13 @@ def _render_robot_pose(rp: RobotPlacement | None) -> str:
         f"        # Robot placement sampled on tabletop edge '{rp.edge}' at fraction "
         f"{rp.fraction:.3f};\n"
         f"        # base sits {rp.offset_m} m outside the edge, gripper aligned with the\n"
-        f"        # cardinal axis pointing back across the table at the objects.\n"
+        "        # cardinal axis pointing back across the table at the objects.\n"
         f"        _robot_x = {x_expr}\n"
         f"        _robot_y = {y_expr}\n"
-        f"        embodiment.set_initial_pose(Pose(\n"
+        "        embodiment.set_initial_pose(Pose(\n"
         f"            position_xyz=(_robot_x, _robot_y, {rp.z_m}),\n"
         f"            rotation_xyzw={rp.rotation_xyzw},\n"
-        f"        ))"
+        "        ))"
     )
 
 

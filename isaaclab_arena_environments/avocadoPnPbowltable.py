@@ -70,10 +70,12 @@ class AvocadoPnPBowlTableEnvironment(ExampleEnvironmentBase):
         # base sits 0.1 m outside the edge, yaw faces the table center.
         _robot_x = _tbl_max_xyz[0] + 0.1
         _robot_y = (1 - 0.4481) * _tbl_min_xyz[1] + 0.4481 * _tbl_max_xyz[1]
-        embodiment.set_initial_pose(Pose(
-            position_xyz=(_robot_x, _robot_y, 0.0),
-            rotation_xyzw=(0.0, 0.0, 1.0, 0.0),
-        ))
+        embodiment.set_initial_pose(
+            Pose(
+                position_xyz=(_robot_x, _robot_y, 0.0),
+                rotation_xyzw=(0.0, 0.0, 1.0, 0.0),
+            )
+        )
 
         avocado_obj = self.asset_registry.get_asset_by_name("avocado01_fruits_veggies_robolab")()
         bowl_obj = self.asset_registry.get_asset_by_name("bowl_ycb_robolab")()
@@ -154,7 +156,7 @@ class AvocadoPnPBowlTableEnvironment(ExampleEnvironmentBase):
                 destination_location=bowl_obj,
                 background_scene=background,
                 episode_length_s=20.0,
-                task_description='Pick up the avocado from the table and place it in the bowl.',
+                task_description="Pick up the avocado from the table and place it in the bowl.",
             ),
         )
 
