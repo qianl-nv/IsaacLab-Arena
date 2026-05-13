@@ -1,0 +1,1119 @@
+# Copyright (c) 2025-2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Decide placement + task dispatch for a resolved scene.
+
+``propose_placement`` is a pure transform from (ResolvedScene, SceneSpec)
+into a ``Placement`` dataclass bundle — no source-string emission, no
+file I/O. The env_writer consumes the bundle and renders it to a Python
+module. Keeping the two concerns separate lets us:
+
+  * Unit-test placement logic without parsing generated Python.
+  * Insert feasibility gates (IK reachability, motion-plan validity)
+    between propose and write, rejecting or tweaking a Placement before
+    any file hits disk.
+  * Swap the renderer later (e.g. emit a JSON scene description
+    instead) without touching the proposer.
+"""
+
+from __future__ import annotations
+
+import math
+import random
+import re
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from .resolver import ResolvedScene
+from .schema import SceneSpec
+
+# ---------------------------------------------------------------------------
+# Config constants
+# ---------------------------------------------------------------------------
+
+# Goal-relation kinds that map to ``PickAndPlaceTask``. ``on`` and ``in`` both
+# describe "put subject at target"; the task's contact-sensor success predicate
+# handles both identically.
+_PICK_AND_PLACE_KINDS = {"on", "in"}
+
+# Goal-relation kinds that map to OpenDoorTask / CloseDoorTask.
+_OPEN_DOOR_KINDS = frozenset({"open"})
+_CLOSE_DOOR_KINDS = frozenset({"closed"})
+
+# Default episode lengths for auto-generated envs.
+_DEFAULT_PICK_AND_PLACE_EPISODE_LENGTH_S = 20.0
+_DEFAULT_OPEN_DOOR_EPISODE_LENGTH_S = 30.0
+
+# Safety inset (meters) applied to the runtime tabletop bbox so items do
+# not spawn right up against the edge. 0.15 m (~half a hand-span) keeps
+# items well inside the table even at the corners and pulls the
+# placement pool's "best" layouts toward the centre, which gives the
+# robot a much better chance at IK reachability.
+_DEFAULT_TABLETOP_MARGIN_M = 0.15
+
+# Per-background tabletop anchor spec. Maps a background's registered
+# name to either:
+#   * None  — the background asset itself is used as the tabletop anchor
+#             (it's a standalone table USD, no sub-prim needed).
+#   * str   — a USD prim path (may contain {ENV_REGEX_NS}) for a
+#             sub-prim that represents the tabletop surface. The writer
+#             emits an ObjectReference to that prim and uses it as the
+#             On-parent + bbox source instead of the whole background.
+#
+# TODO: the bbox returned by ``get_world_bounding_box`` on the plain
+# ``table`` background does NOT account for the 90° Z rotation applied
+# via set_initial_pose, so PositionLimits derived from it clamps the
+# wrong axes. Until that is fixed in the asset layer, prefer an
+# ObjectReference to a tabletop sub-prim where available, and treat
+# rotation-free backgrounds as the low-risk case.
+_BACKGROUND_TABLETOP_ANCHOR: dict[str, str | None] = {
+    # Standalone tables — background itself is the tabletop.
+    "table": None,
+    # Compound / wrapped backgrounds — use the tabletop sub-prim so the
+    # bbox stays clean (matches pick_and_place_maple_table_environment /
+    # gr1_table_multi_object_no_collision patterns).
+    "maple_table_robolab": "{ENV_REGEX_NS}/maple_table_robolab/table",
+    "table_maple_robolab": "{ENV_REGEX_NS}/table_maple_robolab/table",
+    "office_table": "{ENV_REGEX_NS}/office_table/Geometry/sm_tabletop_a01_01/sm_tabletop_a01_top_01",
+    "kitchen": "{ENV_REGEX_NS}/kitchen/Kitchen_Counter/TRS_Base/TRS_Static/Counter_Top_A",
+}
+
+# Background → short family name used in the env slug. Different variants
+# of the same physical surface (e.g. maple_table_robolab / office_table /
+# plain table) all collapse to "table" so the generated env name stays
+# readable ("avocadoPnPbowltable") regardless of which specific USD we
+# pick. Backgrounds not in this map contribute their full registered
+# name (compacted) — tweak here when a new family shows up.
+_BACKGROUND_NAME_ALIASES: dict[str, str] = {
+    "table": "table",
+    "maple_table_robolab": "table",
+    "table_maple_robolab": "table",
+    "office_table": "table",
+    "packing_table": "table",
+    "kitchen": "kitchen",
+    "kitchen_with_open_drawer": "kitchen",
+    "lightwheel_robocasa_kitchen": "kitchen",
+}
+
+# Short verb code per goal-relation kind. Chosen so the generated env name
+# reads like "avocadoPnPbowltable" rather than a 40-character description.
+_VERB_CODES: dict[str, str] = {
+    "on": "PnP",
+    "in": "PnP",
+    "next_to": "Place",
+    "at_position": "Move",
+    "is_anchor": "Anchor",
+    "open": "Open",
+    "closed": "Close",
+}
+
+# Yaw (radians, world frame) applied via RotateAroundSolution so that an
+# openable appliance's door faces the robot at the world origin. The
+# standard background is placed at (0.5, 0.0, 0.0) rotated 90° Z.
+# -π/2 matches the GR1 microwave env orientation (door toward -X ≈ robot).
+_APPLIANCE_FACING_YAW: dict[tuple[str, str], float] = {
+    ("kitchen", "microwave"): -math.pi / 2,
+}
+_DEFAULT_APPLIANCE_FACING_YAW: float = -math.pi / 2
+
+# Backgrounds whose tabletop sub-prim lacks RigidBodyAPI. The anchor
+# ObjectReference must omit object_type=ObjectType.RIGID in these cases.
+_BACKGROUND_TABLETOP_ANCHOR_BASE_TYPE: frozenset[str] = frozenset({"kitchen"})
+
+
+# Approximate world-frame XY bbox of the tabletop **after** the env's
+# default background pose (typically rotated 90° about Z and translated
+# so the table center sits at world (0.5, 0, 0)). These are used by the
+# gen-time reach-aware robot placer (see ``_propose_robot_placement_via_reach``)
+# which has no live sim to query bboxes from. The values are coarse
+# estimates — the reach solver is dominated by the Franka workspace
+# shell shape and is robust to ~10% bbox error. To refine: boot a sim
+# once via run_simulation_app_function and capture
+# tabletop_anchor.get_world_bounding_box() per background, then update
+# this dict.
+#
+# Backgrounds NOT in this dict fall back to the random sampler, since
+# the reach solver needs SOMETHING for the table footprint.
+_BACKGROUND_TABLETOP_XY_BBOX: dict[str, tuple[tuple[float, float], tuple[float, float]]] = {
+    # Robolab maple tables — ~0.90 x 0.60 m, centered at (0.5, 0).
+    "maple_table_robolab": ((0.05, -0.30), (0.95, 0.30)),
+    "table_maple_robolab": ((0.05, -0.30), (0.95, 0.30)),
+    "table": ((0.05, -0.30), (0.95, 0.30)),
+    # Office desk — wider; placeholder until measured.
+    "office_table": ((-0.30, -0.40), (1.30, 0.40)),
+    # Kitchen counter — very wide; placeholder.
+    "kitchen": ((-0.30, -0.50), (1.30, 0.50)),
+}
+
+
+# Edge-name → yaw quaternion (qx, qy, qz, qw) so the robot faces the
+# table centre from the chosen edge. Four cardinal orientations cover
+# the full perimeter of a rectangular tabletop.
+_EDGE_ROTATION_XYZW: dict[str, tuple[float, float, float, float]] = {
+    "x_min": (0.0, 0.0, 0.0, 1.0),  # faces +x (0°)
+    "x_max": (0.0, 0.0, 1.0, 0.0),  # faces -x (180°)
+    "y_min": (0.0, 0.0, 0.7071068, 0.7071068),  # faces +y (+90°)
+    "y_max": (0.0, 0.0, -0.7071068, 0.7071068),  # faces -y (-90°)
+}
+
+# Robot-base sits this far outside the sampled edge. Large enough that
+# the robot-stand footprint does not intersect the table, small enough
+# that objects in the middle stay within Franka's ~0.85 m reach
+# envelope.
+_ROBOT_EDGE_OFFSET_M = 0.1
+
+# Edge-fraction sampling range: drawn uniformly from this band so the
+# robot lands somewhere across the middle two-thirds of the chosen
+# edge but stays clear of either corner.
+_ROBOT_EDGE_FRACTION_RANGE = (0.3, 0.7)
+
+
+# ---------------------------------------------------------------------------
+# Placement data classes
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TabletopAnchorPlan:
+    """How the generated env should anchor the tabletop surface."""
+
+    kind: Literal["none", "background", "reference"]
+    anchor_var: str  # "background" or "tabletop_anchor"
+    prim_path: str | None  # USD prim path when kind == "reference"
+    emit_position_limits: bool  # whether items get bbox-derived PL
+    margin_m: float = _DEFAULT_TABLETOP_MARGIN_M
+    # "RIGID" → emit object_type=ObjectType.RIGID; "BASE" → omit it (prim has no RigidBodyAPI).
+    anchor_object_type: str = "RIGID"
+
+    def header_note(self, background_name: str) -> str:
+        if self.kind == "none":
+            return (
+                f"background {background_name!r} not in _BACKGROUND_TABLETOP_ANCHOR "
+                "— falling back to On(background) without PositionLimits"
+            )
+        descriptor = "background" if self.kind == "background" else "ObjectReference sub-prim"
+        return (
+            f"tabletop anchor = {self.anchor_var} ({descriptor}); PositionLimits derived from get_world_bounding_box()"
+        )
+
+
+@dataclass
+class RelationSpec:
+    """Structured view of one add_relation call to be rendered in the env."""
+
+    kind: Literal["on", "in", "not", "position_limits", "at_position", "rotate_around_solution", "unsupported"]
+    # On / In: parent variable to reference. On also carries a clearance.
+    on_target_var: str | None = None
+    on_clearance_m: float = 0.02
+    in_target_var: str | None = None
+    # Not: the wrapped spec whose satisfaction we forbid. Only "on" and
+    # "in" inner kinds are rendered today.
+    inner: RelationSpec | None = None
+    # PositionLimits: when source == "bbox", runtime-derived; when "static", use explicit bounds.
+    pl_source: Literal["bbox", "static"] = "bbox"
+    # RotateAroundSolution: yaw applied on top of the solver-found position.
+    rotate_yaw_rad: float = 0.0
+    # Unsupported: keep the raw relation dict + a reason so it can be emitted as a TODO.
+    raw_relation: dict[str, Any] = field(default_factory=dict)
+    reason: str = ""
+
+
+@dataclass
+class GoalBindingSpec:
+    """Where an item is expected to end up — derived from goal_added."""
+
+    kind: Literal["on", "in"]
+    target_var: str  # Python var in the generated env
+    target_name: str  # instance_name (or background name) for logs
+
+
+@dataclass
+class PlacementItem:
+    var_name: str  # Python variable in the generated env
+    asset_name: str  # registered asset name for AssetRegistry.get_asset_by_name
+    instance_name: str  # key used by the resolver / LLM
+    relations: list[RelationSpec] = field(default_factory=list)
+    goal_binding: GoalBindingSpec | None = None  # populated by block_initial_goal_satisfaction
+    # True for articulated objects with an open/close goal (e.g. microwave).
+    # The proposer adds RotateAroundSolution to orient their door toward the robot.
+    is_openable: bool = False
+    # Uniform spawn scale baked into the rendered env. 1.0 means "no scale
+    # kwarg emitted"; any other value is rendered as scale=(s, s, s) on the
+    # asset constructor. Set by _propose_items from spec.items[i].scale
+    # (explicit) or :func:`_compute_auto_scale` (auto-fit).
+    scale: float = 1.0
+
+
+@dataclass
+class TaskPlan:
+    """What task to instantiate and how to annotate it."""
+
+    kind: Literal["pick_and_place", "open_door", "close_door", "no_task"]
+    task_import: str  # single ``from ... import ...`` line
+    task_expr: str  # source for the task instance; may span multiple lines
+    goal_comments: list[str]  # source lines documenting goal_added/removed
+    header_note: str  # one-liner for the module docstring
+
+
+@dataclass
+class RobotPlacement:
+    """Where to plant the robot base along one of the four tabletop edges.
+
+    Sampled as ``(edge, fraction)``: the edge is drawn uniformly from
+    ``{x_min, x_max, y_min, y_max}`` and the fraction along that edge
+    is drawn from ``Uniform(0, 1)``. At render time the generated env
+    plants the robot base ``offset_m`` outside that edge, at the
+    sampled fraction between the two corners. The base yaw is one of
+    four cardinals (per-edge) so the gripper is axis-aligned and
+    points across the table at the objects.
+
+    Only meaningful when the env exposes a usable tabletop bbox
+    (``TabletopAnchorPlan.emit_position_limits`` is True).
+    """
+
+    edge: Literal["x_min", "x_max", "y_min", "y_max"]
+    fraction: float  # in [0, 1] — interpolated between the two corners of the edge
+    offset_m: float  # outward offset from the edge (meters)
+    z_m: float  # world-Z of the robot base (meters)
+    rotation_xyzw: tuple[float, float, float, float]
+
+
+@dataclass
+class Placement:
+    """Everything the env_writer needs to render an env module."""
+
+    env_name: str
+    class_name: str
+    task_description: str
+    background_name: str
+    embodiment_default: str
+    items: list[PlacementItem]
+    tabletop_anchor_plan: TabletopAnchorPlan
+    task_plan: TaskPlan
+    extra_scene_assets: list[str]  # extra asset vars in Scene(assets=[...])
+    robot_placement: RobotPlacement | None = None
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+
+def block_initial_goal_satisfaction(placement: Placement, resolved: ResolvedScene) -> Placement:
+    """Attach final-graph-aware constraints that keep the initial state
+    from already satisfying any ``goal_added`` relation.
+
+    For every entry in ``resolved.goal_added``:
+
+      * Record a :class:`GoalBindingSpec` on the subject's
+        ``PlacementItem`` so downstream consumers (task wiring,
+        feasibility gates) can see where it is supposed to end up.
+      * Append a ``RelationSpec(kind="not", inner=<on|in> spec)`` so
+        the generated env calls ``subject.add_relation(Not(In(target)))``.
+        The solver's ``NotRelationLossStrategy`` pushes the initial
+        placement out of the goal region.
+
+    Missing / unresolvable targets are skipped with a trace-friendly
+    ``unsupported`` RelationSpec so the caller can see the reason in
+    the generated file. Returns the mutated Placement for convenience;
+    mutation is in-place.
+    """
+    item_vars = {i.instance_name: i.var_name for i in placement.items}
+    by_instance: dict[str, PlacementItem] = {i.instance_name: i for i in placement.items}
+
+    for goal in resolved.goal_added:
+        kind = goal["kind"]
+        subj = goal["subject"]
+        tgt = goal["target"]
+
+        # Open/close door goals are handled by the task, not placement constraints.
+        if kind in _OPEN_DOOR_KINDS | _CLOSE_DOOR_KINDS:
+            continue
+
+        item = by_instance.get(subj)
+        if item is None:
+            # Unresolved subject — let the proposer's original trace carry it.
+            continue
+
+        # Target may be another item or the background — resolve once.
+        if tgt == placement.background_name:
+            target_var = placement.tabletop_anchor_plan.anchor_var
+        else:
+            target_var = item_vars.get(tgt)
+
+        if target_var is None:
+            item.relations.append(
+                RelationSpec(
+                    kind="unsupported",
+                    raw_relation=goal,
+                    reason=f"block_initial_goal_satisfaction: unknown target {tgt!r}",
+                )
+            )
+            continue
+
+        # Explicit kind dispatch. Each branch builds the inner spec that
+        # Not(...) will wrap; unsupported kinds fall through to the else.
+        if kind == "in":
+            inner = RelationSpec(kind="in", in_target_var=target_var)
+        elif kind == "on":
+            inner = RelationSpec(kind="on", on_target_var=target_var)
+        else:
+            item.relations.append(
+                RelationSpec(
+                    kind="unsupported",
+                    raw_relation=goal,
+                    reason=f"block_initial_goal_satisfaction: no Not(...) mapping for kind {kind!r}",
+                )
+            )
+            continue
+
+        # Record where the item is supposed to end up (first goal wins
+        # when multiple goals touch the same item — Layer 2b can refine).
+        if item.goal_binding is None:
+            item.goal_binding = GoalBindingSpec(kind=kind, target_var=target_var, target_name=tgt)
+
+        item.relations.append(RelationSpec(kind="not", inner=inner))
+
+    return placement
+
+
+@dataclass
+class ReachSolverCfg:
+    """Optional config that switches robot placement from random sampling
+    to a reach-EDT-guided joint solve.
+
+    When set, :func:`propose_placement` calls
+    :func:`_propose_robot_placement_via_reach` instead of the random
+    sampler. The solver uses the precomputed Franka top-down EDT
+    (``npz_path``) plus the table bbox from
+    :data:`_BACKGROUND_TABLETOP_XY_BBOX` to pick the best
+    ``(edge, fraction, offset_m)`` for the goal-bound items.
+    """
+
+    npz_path: str
+    iters: int = 400
+    seed: int = 0
+
+
+def propose_placement(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    attempt: int = 0,
+    seed: int | None = None,
+    reach_solver: ReachSolverCfg | None = None,
+) -> Placement:
+    """Turn a resolved scene into a Placement with no I/O side effects.
+
+    ``attempt`` selects which robot-placement sample to draw — bumping it
+    yields a different angular sample so the auto-retry driver can
+    re-sample after an IK-feasibility failure without reseeding the rest
+    of the pipeline.
+
+    ``seed`` is folded into the robot-placement RNG seed so a different
+    value (typically the user-controlled ``--seed``) yields a different
+    angular sample for the same (env_name, attempt) pair — useful when
+    the default seed keeps placing the robot at an unhelpful corner.
+
+    ``reach_solver`` (optional) switches the sampler from uniform-random
+    to a reach-EDT-guided joint solve. Falls back to the random sampler
+    when the resolved background lacks an entry in
+    :data:`_BACKGROUND_TABLETOP_XY_BBOX`.
+    """
+    background_name = resolved.background.name if resolved.background else spec.background
+
+    env_name = _derive_env_name(resolved, spec)
+    class_name = _derive_class_name(resolved, spec)
+
+    item_vars: dict[str, str] = {instance_name: f"{_safe_var(instance_name)}_obj" for instance_name in resolved.items}
+
+    tabletop_plan = _plan_tabletop_anchor(background_name)
+
+    items = _propose_items(resolved, spec, item_vars, tabletop_plan)
+
+    task_plan = _plan_task(resolved, spec, item_vars, background_name)
+
+    extra_assets: list[str] = []
+    if tabletop_plan.kind == "reference":
+        extra_assets.append("tabletop_anchor")
+
+    robot_placement: RobotPlacement | None = None
+    if tabletop_plan.emit_position_limits:
+        if reach_solver is not None and background_name in _BACKGROUND_TABLETOP_XY_BBOX:
+            robot_placement = _propose_robot_placement_via_reach(
+                background_name=background_name,
+                resolved=resolved,
+                cfg=reach_solver,
+            )
+        else:
+            robot_placement = _propose_robot_placement(env_name, attempt, seed=seed)
+
+    return Placement(
+        env_name=env_name,
+        class_name=class_name,
+        task_description=spec.task_description,
+        background_name=background_name,
+        embodiment_default=resolved.embodiment_name,
+        items=items,
+        tabletop_anchor_plan=tabletop_plan,
+        task_plan=task_plan,
+        extra_scene_assets=extra_assets,
+        robot_placement=robot_placement,
+    )
+
+
+def _propose_robot_placement(env_name: str, attempt: int = 0, seed: int | None = None) -> RobotPlacement:
+    """Sample a robot placement along one of the four tabletop edges.
+
+    Each edge is drawn with equal probability from
+    ``{x_min, x_max, y_min, y_max}`` and the position along the edge
+    is drawn from ``Uniform(*_ROBOT_EDGE_FRACTION_RANGE)`` — currently
+    [0.3, 0.7], so the robot can land anywhere in the middle two
+    thirds of the edge while still avoiding the corners. The seed is
+    ``f"{env_name}#{attempt}#{seed}"`` so a fixed
+    (env_name, attempt, seed) triple stays reproducible; bumping
+    ``attempt`` walks through alternative samples when IK feasibility
+    fails, and varying ``--seed`` shifts the whole sequence.
+
+    The base rotation is one of four cardinal yaws (per-edge), so the
+    gripper is always axis-aligned with the side the robot is on and
+    points across the table at the objects.
+    """
+    rng = random.Random(f"{env_name}#{attempt}#{seed}")
+    edge = rng.choice(list(_EDGE_ROTATION_XYZW.keys()))
+    fraction = rng.uniform(*_ROBOT_EDGE_FRACTION_RANGE)
+    return RobotPlacement(
+        edge=edge,
+        fraction=fraction,
+        offset_m=_ROBOT_EDGE_OFFSET_M,
+        z_m=0.0,
+        rotation_xyzw=_EDGE_ROTATION_XYZW[edge],
+    )
+
+
+def _propose_robot_placement_via_reach(
+    background_name: str,
+    resolved: ResolvedScene,
+    cfg: ReachSolverCfg,
+) -> RobotPlacement:
+    """Pick (edge, fraction, offset_m) by running the joint reach solver.
+
+    Looks up the gen-time table bbox from
+    :data:`_BACKGROUND_TABLETOP_XY_BBOX`, builds a tiny ``DummyObject``
+    scene (table + the goal-bound subject + its target), runs the POC
+    ``joint_solve`` over all 4 cardinal edges in parallel, and returns
+    the lowest-loss placement. Yaw is fixed-cardinal per edge (matches
+    :data:`_EDGE_ROTATION_XYZW`) so no yaw is on the autograd tape.
+
+    Lazy imports keep ``placement_proposer`` from picking up the
+    torch + scipy + matplotlib dependency unless the reach solver is
+    actually requested.
+    """
+    import torch
+
+    from isaaclab_arena.assets.dummy_object import DummyObject
+    from isaaclab_arena.relations.relations import IsAnchor
+    from isaaclab_arena.relations.relations import On as _On
+    from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
+    from isaaclab_arena.utils.pose import Pose as _Pose
+    from isaaclab_arena_examples.relations.joint_reach_solver_poc import EDGE_NAMES, ReachField, joint_solve
+
+    (xy_min, xy_max) = _BACKGROUND_TABLETOP_XY_BBOX[background_name]
+
+    device = torch.device("cpu")
+    reach = ReachField.from_npz(cfg.npz_path, device=device)
+
+    # Default 5cm cube bbox for manipulables — gen-time has no real
+    # USD bboxes, but the reach term is dominated by EDT shell shape,
+    # not exact item size. Same approximation the env-side wiring used.
+    _DEFAULT_HALF = 0.05
+    default_bbox = AxisAlignedBoundingBox(
+        min_point=(-_DEFAULT_HALF, -_DEFAULT_HALF, 0.0),
+        max_point=(+_DEFAULT_HALF, +_DEFAULT_HALF, 2 * _DEFAULT_HALF),
+    )
+
+    cx, cy = (xy_min[0] + xy_max[0]) / 2.0, (xy_min[1] + xy_max[1]) / 2.0
+    table_top_z = 0.05  # nominal — solver uses this only to pick the EDT z-slice
+    table_local_bbox = AxisAlignedBoundingBox(
+        min_point=(xy_min[0] - cx, xy_min[1] - cy, -0.025),
+        max_point=(xy_max[0] - cx, xy_max[1] - cy, +0.025),
+    )
+    table_dummy = DummyObject(name="table", bounding_box=table_local_bbox)
+    table_dummy.set_initial_pose(_Pose(position_xyz=(cx, cy, 0.025), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)))
+    table_dummy.add_relation(IsAnchor())
+
+    # Pick the goal-bound (subject, target) pair as the reach targets.
+    # If unavailable, fall back to the first two items in the resolved scene.
+    reach_target_names: list[str] = []
+    for goal in resolved.goal_added:
+        if goal.get("kind") in {"on", "in"}:
+            for key in ("subject", "target"):
+                name = goal.get(key)
+                if name and name in resolved.items and name not in reach_target_names:
+                    reach_target_names.append(name)
+    if not reach_target_names:
+        reach_target_names = list(resolved.items.keys())[:2]
+    if not reach_target_names:
+        # Degenerate scene — return a centered placement on x_min as a
+        # safe default so the env still renders.
+        return RobotPlacement(
+            edge="x_min",
+            fraction=0.5,
+            offset_m=_ROBOT_EDGE_OFFSET_M,
+            z_m=0.0,
+            rotation_xyzw=_EDGE_ROTATION_XYZW["x_min"],
+        )
+
+    reach_targets: list[DummyObject] = []
+    on_targets: dict[DummyObject, DummyObject] = {}
+    for i, item_name in enumerate(reach_target_names):
+        d = DummyObject(name=item_name, bounding_box=default_bbox)
+        d.set_initial_pose(
+            _Pose(
+                position_xyz=(cx, cy + 0.10 * (i - (len(reach_target_names) - 1) / 2.0), table_top_z + _DEFAULT_HALF),
+                rotation_xyzw=(0.0, 0.0, 0.0, 1.0),
+            )
+        )
+        d.add_relation(_On(table_dummy, clearance_m=0.02))
+        reach_targets.append(d)
+        on_targets[d] = table_dummy
+
+    result = joint_solve(
+        table_anchor=table_dummy,
+        objects=[table_dummy] + reach_targets,
+        reach_targets=reach_targets,
+        on_targets=on_targets,
+        reach_field=reach,
+        table_xy_min=(float(xy_min[0]), float(xy_min[1])),
+        table_xy_max=(float(xy_max[0]), float(xy_max[1])),
+        n_iter=int(cfg.iters),
+        seed=int(cfg.seed),
+        device=device,
+    )
+
+    best = result.best_idx
+    edge = EDGE_NAMES[best]
+    return RobotPlacement(
+        edge=edge,
+        fraction=float(result.fraction[best]),
+        offset_m=float(result.offset_m[best]),
+        z_m=0.0,
+        rotation_xyzw=_EDGE_ROTATION_XYZW[edge],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Name / identifier helpers
+# ---------------------------------------------------------------------------
+
+
+def _safe_var(name: str) -> str:
+    v = re.sub(r"[^a-zA-Z0-9_]", "_", name).strip("_")
+    if not v:
+        return "obj"
+    if v[0].isdigit():
+        v = "_" + v
+    return v
+
+
+def _compact(name: str) -> str:
+    """Lowercase, strip non-alphanumerics — e.g. 'red_bell_pepper' -> 'redbellpepper'."""
+    return re.sub(r"[^a-zA-Z0-9]", "", name).lower() if name else ""
+
+
+def _background_family(resolved: ResolvedScene, spec: SceneSpec) -> str:
+    """Short alias for the background, used in env / class names."""
+    bg_name = resolved.background.name if resolved.background else spec.background
+    return _BACKGROUND_NAME_ALIASES.get(bg_name, _compact(bg_name))
+
+
+def _derive_env_name(resolved: ResolvedScene, spec: SceneSpec) -> str:
+    """Compact env name from the goal diff, e.g. 'avocadoPnPbowltable'."""
+    if resolved.goal_added:
+        diff = resolved.goal_added[0]
+        verb = _VERB_CODES.get(diff["kind"], diff["kind"].capitalize())
+        primary = _compact(diff["subject"])
+        secondary = _compact(diff["target"] or "")  # target is None for open/closed unary goals
+    else:
+        verb = "Env"
+        primary = _compact(next(iter(resolved.items), "llm"))
+        secondary = ""
+    return f"{primary}{verb}{secondary}{_background_family(resolved, spec)}" or "llmEnv"
+
+
+def _derive_class_name(resolved: ResolvedScene, spec: SceneSpec) -> str:
+    """CamelCase variant with each segment capitalized, verb code preserved."""
+    if resolved.goal_added:
+        diff = resolved.goal_added[0]
+        verb = _VERB_CODES.get(diff["kind"], diff["kind"].capitalize())
+        primary = _compact(diff["subject"]).capitalize()
+        secondary = _compact(diff["target"] or "").capitalize()  # target is None for open/closed
+    else:
+        verb = "Env"
+        primary = _compact(next(iter(resolved.items), "llm")).capitalize()
+        secondary = ""
+    return f"{primary}{verb}{secondary}{_background_family(resolved, spec).capitalize()}Environment"
+
+
+# ---------------------------------------------------------------------------
+# Tabletop anchor planning
+# ---------------------------------------------------------------------------
+
+
+def _plan_tabletop_anchor(background_name: str) -> TabletopAnchorPlan:
+    """Decide whether to anchor to the background, an ObjectReference, or nothing."""
+    if background_name not in _BACKGROUND_TABLETOP_ANCHOR:
+        return TabletopAnchorPlan(kind="none", anchor_var="background", prim_path=None, emit_position_limits=False)
+    prim = _BACKGROUND_TABLETOP_ANCHOR[background_name]
+    anchor_object_type = "BASE" if background_name in _BACKGROUND_TABLETOP_ANCHOR_BASE_TYPE else "RIGID"
+    if prim is None:
+        return TabletopAnchorPlan(
+            kind="background",
+            anchor_var="background",
+            prim_path=None,
+            emit_position_limits=True,
+            anchor_object_type=anchor_object_type,
+        )
+    return TabletopAnchorPlan(
+        kind="reference",
+        anchor_var="tabletop_anchor",
+        prim_path=prim,
+        emit_position_limits=True,
+        anchor_object_type=anchor_object_type,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Item + relation planning
+# ---------------------------------------------------------------------------
+
+# Acceptable size band for an item's longest XY extent, expressed as a
+# fraction of the tabletop's shortest side. An item already inside this
+# band is left at scale=1.0 — no rescale at all. Only outliers are
+# pulled back to the nearest band edge.
+#
+# Containers (objects that appear as the target of an in(...) goal) get
+# a wider upper bound so a real-sized bin can keep its authored shape
+# without being shrunk to fit a manipulable's band. Anchors are never
+# rescaled.
+_AUTO_SCALE_ACCEPTABLE_BAND: dict[str, tuple[float, float]] = {
+    "manipulable": (0.05, 0.40),
+    "container": (0.10, 0.70),
+}
+# Hard clamp so a missing/wrong USD bbox can't produce an absurd
+# multiplier when it does fall outside the band.
+_AUTO_SCALE_MIN = 0.1
+_AUTO_SCALE_MAX = 10.0
+# Required ratio of container.longest_xy over contents.longest_xy after
+# scaling, enforced post-pass. 1.5 leaves visual margin so an in(A, B)
+# goal stays geometrically reachable even when A spawns near B's edge.
+_IN_CONTAINER_MARGIN = 1.5
+
+# Module-level cache so we open each USD at most once per process.
+_UNIT_XY_CACHE: dict[type, float] = {}
+
+
+def _unit_xy_extent(asset_cls: type) -> float:
+    """Return the asset's longest XY extent at scale=1.0, or 0.0 if the
+    bbox can't be computed (articulated, missing USD, Pxr error)."""
+    from isaaclab_arena.assets.object_base import ObjectType
+
+    if asset_cls in _UNIT_XY_CACHE:
+        return _UNIT_XY_CACHE[asset_cls]
+
+    if getattr(asset_cls, "object_type", None) == ObjectType.ARTICULATION:
+        _UNIT_XY_CACHE[asset_cls] = 0.0
+        return 0.0
+    try:
+        obj = asset_cls()
+        size = obj.get_bounding_box().size[0]
+        result = max(float(size[0].item()), float(size[1].item()))
+    except Exception as exc:  # noqa: BLE001 — bbox failure must not block placement
+        print(
+            f"[auto_scale] bbox failure for {getattr(asset_cls, 'name', asset_cls)!r}: "
+            f"{exc!r} — treating as unsizable (scale=1.0).",
+            flush=True,
+        )
+        result = 0.0
+    _UNIT_XY_CACHE[asset_cls] = result
+    return result
+
+
+def _compute_auto_scale(
+    asset_cls: type,
+    table_xy_bbox: tuple[tuple[float, float], tuple[float, float]],
+    role: str,
+    *,
+    is_container: bool = False,
+) -> float:
+    """Return a uniform scale that pulls the asset back to the nearest
+    edge of its acceptable band, or 1.0 if it is already in band.
+
+    Skips rescaling for:
+      * anchors (they are the surface — never rescale),
+      * articulated assets (joint geometry breaks under uniform scale
+        and many subclasses do not accept the ``scale`` kwarg),
+      * assets where bbox extraction failed.
+    """
+    from isaaclab_arena.assets.object_base import ObjectType
+
+    if role == "anchor":
+        return 1.0
+    if getattr(asset_cls, "object_type", None) == ObjectType.ARTICULATION:
+        return 1.0
+
+    item_max_xy = _unit_xy_extent(asset_cls)
+    if item_max_xy <= 0:
+        return 1.0
+
+    (xy_min, xy_max) = table_xy_bbox
+    table_min_xy = min(xy_max[0] - xy_min[0], xy_max[1] - xy_min[1])
+    band_kind = "container" if is_container else "manipulable"
+    lo_frac, hi_frac = _AUTO_SCALE_ACCEPTABLE_BAND[band_kind]
+    item_frac = item_max_xy / table_min_xy
+
+    if lo_frac <= item_frac <= hi_frac:
+        return 1.0  # already in band — leave authored scale alone
+
+    if item_frac > hi_frac:
+        target_frac = hi_frac
+        direction = "down"
+    else:
+        target_frac = lo_frac
+        direction = "up"
+
+    raw_scale = (target_frac * table_min_xy) / item_max_xy
+    clamped = max(_AUTO_SCALE_MIN, min(_AUTO_SCALE_MAX, raw_scale))
+    if clamped != raw_scale:
+        print(
+            f"[auto_scale] {getattr(asset_cls, 'name', asset_cls)!r} clamped to {clamped:.3f} "
+            f"(raw {raw_scale:.3f} hit [{_AUTO_SCALE_MIN}, {_AUTO_SCALE_MAX}]); "
+            "set Item.scale explicitly via --review-entities to override.",
+            flush=True,
+        )
+    print(
+        f"[auto_scale] {getattr(asset_cls, 'name', asset_cls)!r} ({band_kind}) sized {direction}: "
+        f"item_frac={item_frac:.2f} → scale={clamped:.3f}",
+        flush=True,
+    )
+    return clamped
+
+
+def _propose_items(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    item_vars: dict[str, str],
+    tabletop_plan: TabletopAnchorPlan,
+) -> list[PlacementItem]:
+    """Build one PlacementItem per resolved item with structured relations."""
+    background_name = resolved.background.name if resolved.background else spec.background
+
+    # Items that are the subject of an open/close door goal need is_openable=True
+    # so that RotateAroundSolution is added to orient the door toward the robot.
+    openable_subjects = {
+        r["subject"]
+        for r in resolved.goal_added + resolved.goal_removed
+        if r["kind"] in _OPEN_DOOR_KINDS | _CLOSE_DOOR_KINDS
+    }
+
+    spec_items_by_instance = {(i.instance_name or i.query): i for i in spec.items}
+    table_xy_bbox = _BACKGROUND_TABLETOP_XY_BBOX.get(background_name)
+
+    # Items that appear as the target of an in(...) goal are containers;
+    # they get the wider band so a real-sized bin keeps its authored
+    # shape. Sourcing from goal_added (final − initial) avoids treating
+    # an "in" relation that already holds at reset as a container goal.
+    container_instances = {
+        goal["target"] for goal in resolved.goal_added if goal["kind"] == "in" and goal.get("target")
+    }
+
+    items: list[PlacementItem] = []
+    for instance_name, cls in resolved.items.items():
+        spec_item = spec_items_by_instance.get(instance_name)
+        explicit_scale = spec_item.scale if spec_item is not None else None
+        is_container = instance_name in container_instances
+        if explicit_scale is not None:
+            item_scale = float(explicit_scale)
+            if item_scale != 1.0:
+                print(
+                    f"[scale] {instance_name!r}: using explicit scale={item_scale:.3f}",
+                    flush=True,
+                )
+        elif table_xy_bbox is not None:
+            role = spec_item.role if spec_item is not None else "foreground"
+            item_scale = _compute_auto_scale(cls, table_xy_bbox, role, is_container=is_container)
+        else:
+            item_scale = 1.0
+
+        items.append(
+            PlacementItem(
+                var_name=item_vars[instance_name],
+                asset_name=cls.name,
+                instance_name=instance_name,
+                relations=[],
+                is_openable=(instance_name in openable_subjects),
+                scale=item_scale,
+            )
+        )
+
+    # Post-pass: enforce container > contents for in(A, B) goals. After
+    # independent rescaling a container can still be too small (e.g. the
+    # contents stayed at scale=1.0 inside the band but the container
+    # also got 1.0). Bump the container's scale up — never shrink — so
+    # contents always fit with margin.
+    by_instance = {i.instance_name: i for i in items}
+    cls_by_instance = {name: cls for name, cls in resolved.items.items()}
+    for goal in resolved.goal_added:
+        if goal["kind"] != "in":
+            continue
+        contents = by_instance.get(goal.get("subject"))
+        container = by_instance.get(goal.get("target"))
+        if contents is None or container is None:
+            continue
+        contents_unit = _unit_xy_extent(cls_by_instance[contents.instance_name])
+        container_unit = _unit_xy_extent(cls_by_instance[container.instance_name])
+        if contents_unit <= 0 or container_unit <= 0:
+            continue  # one of them is articulated / unsizable — skip
+        contents_eff = contents.scale * contents_unit
+        container_eff = container.scale * container_unit
+        if container_eff >= _IN_CONTAINER_MARGIN * contents_eff:
+            continue
+        needed = (_IN_CONTAINER_MARGIN * contents_eff) / container_unit
+        bumped = min(_AUTO_SCALE_MAX, needed)
+        if bumped <= container.scale:
+            continue
+        print(
+            f"[scale] container {container.instance_name!r} bumped {container.scale:.3f} → {bumped:.3f} "
+            f"(contents {contents.instance_name!r} effective {contents_eff:.3f} m, "
+            f"margin {_IN_CONTAINER_MARGIN}x)",
+            flush=True,
+        )
+        container.scale = bumped
+    # Walk the initial scene graph once; append relation specs to the
+    # matching item. Items with no applicable relation get none (their
+    # spot in the scene is purely the On from elsewhere, or the default
+    # spawn pose).
+    by_instance: dict[str, PlacementItem] = {i.instance_name: i for i in items}
+    anchor_var = tabletop_plan.anchor_var
+
+    for rel in resolved.initial_scene_graph:
+        subj = rel["subject"]
+        item = by_instance.get(subj)
+        if item is None:
+            # Unknown subject — record on the first item so the comment
+            # survives rendering; this is strictly a defensive path.
+            continue
+        if rel["kind"] in _OPEN_DOOR_KINDS | _CLOSE_DOOR_KINDS:
+            # State annotations (open/closed) — not placement relations; skip.
+            continue
+        if rel["kind"] == "on":
+            tgt = rel["target"]
+            if tgt == spec.background:
+                target_var = anchor_var
+                is_tabletop = True
+            else:
+                target_var = item_vars.get(tgt)
+                is_tabletop = False
+            if target_var is None:
+                item.relations.append(
+                    RelationSpec(
+                        kind="unsupported",
+                        raw_relation=rel,
+                        reason=f"unknown target {tgt!r}",
+                    )
+                )
+                continue
+            item.relations.append(RelationSpec(kind="on", on_target_var=target_var))
+            if is_tabletop and tabletop_plan.emit_position_limits:
+                item.relations.append(RelationSpec(kind="position_limits", pl_source="bbox"))
+        elif rel["kind"] == "in":
+            tgt = rel["target"]
+            # In targets a container item, not the background. In clamps
+            # XY to the container's footprint and lets gravity resolve Z
+            # on the first physics tick, so no PositionLimits is emitted.
+            target_var = item_vars.get(tgt)
+            if target_var is None:
+                item.relations.append(
+                    RelationSpec(
+                        kind="unsupported",
+                        raw_relation=rel,
+                        reason=f"unknown target {tgt!r} for In",
+                    )
+                )
+                continue
+            item.relations.append(RelationSpec(kind="in", in_target_var=target_var))
+        else:
+            item.relations.append(
+                RelationSpec(
+                    kind="unsupported",
+                    raw_relation=rel,
+                    reason=f"relation kind {rel['kind']!r} has no generator support yet",
+                )
+            )
+
+    # For openable items that received an On(tabletop_anchor) relation, append
+    # RotateAroundSolution so the door faces the robot (at world origin).
+    for item in items:
+        if item.is_openable and any(r.kind == "on" for r in item.relations):
+            facing_yaw = _APPLIANCE_FACING_YAW.get((background_name, item.asset_name), _DEFAULT_APPLIANCE_FACING_YAW)
+            item.relations.append(RelationSpec(kind="rotate_around_solution", rotate_yaw_rad=facing_yaw))
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Task planning
+# ---------------------------------------------------------------------------
+
+
+def _plan_task(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    item_vars: dict[str, str],
+    background_name: str,
+) -> TaskPlan:
+    """Decide which task to emit based on the resolved goal diff."""
+    if len(resolved.goal_added) == 1:
+        g = resolved.goal_added[0]
+        # OpenDoorTask / CloseDoorTask: unary goal on an openable item.
+        if g["kind"] in _OPEN_DOOR_KINDS:
+            subj_var = item_vars.get(g["subject"])
+            if subj_var is not None:
+                return _open_door_plan(resolved, spec, g, subj_var)
+        elif g["kind"] in _CLOSE_DOOR_KINDS:
+            subj_var = item_vars.get(g["subject"])
+            if subj_var is not None:
+                return _close_door_plan(resolved, spec, g, subj_var)
+        # PickAndPlaceTask: exactly one on/in goal between two resolved
+        # items (not the background — PickAndPlaceTask uses the destination
+        # for contact-sensor filtering, and the whole-scene background is a
+        # poor candidate).
+        elif g["kind"] in _PICK_AND_PLACE_KINDS:
+            subj_var = item_vars.get(g["subject"])
+            tgt_var = None
+            if g["target"] != background_name:
+                tgt_var = item_vars.get(g["target"])
+            if subj_var is not None and tgt_var is not None:
+                return _pick_and_place_plan(resolved, spec, g, subj_var, tgt_var)
+    return _no_task_plan(resolved)
+
+
+def _pick_and_place_plan(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    goal: dict[str, Any],
+    subject_var: str,
+    target_var: str,
+) -> TaskPlan:
+    comments = [
+        "        # goal_added (enforced by PickAndPlaceTask success predicate):"
+        f"  {goal['kind']}({goal['subject']}, {goal['target']})"
+    ]
+    for r in resolved.goal_removed:
+        comments.append(
+            "        # goal_removed (implicitly negated when the pick succeeds):"
+            f"  {r['kind']}({r['subject']}, {r['target']})"
+        )
+    return TaskPlan(
+        kind="pick_and_place",
+        task_import="from isaaclab_arena.tasks.pick_and_place_task import PickAndPlaceTask",
+        task_expr=(
+            "PickAndPlaceTask(\n"
+            f"                pick_up_object={subject_var},\n"
+            f"                destination_location={target_var},\n"
+            "                background_scene=background,\n"
+            f"                episode_length_s={_DEFAULT_PICK_AND_PLACE_EPISODE_LENGTH_S},\n"
+            f"                task_description={spec.task_description!r},\n"
+            "            )"
+        ),
+        goal_comments=comments,
+        header_note=(
+            f"PickAndPlaceTask: pick_up={subject_var.removesuffix('_obj')}, "
+            f"destination={target_var.removesuffix('_obj')}"
+        ),
+    )
+
+
+def _open_door_plan(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    goal: dict[str, Any],
+    subject_var: str,
+) -> TaskPlan:
+    comments = [f"        # goal_added: open({goal['subject']}, None) — enforced by OpenDoorTask success predicate"]
+    for r in resolved.goal_removed:
+        comments.append(
+            f"        # goal_removed (implied when door is opened): {r['kind']}({r['subject']}, {r['target']})"
+        )
+    return TaskPlan(
+        kind="open_door",
+        task_import="from isaaclab_arena.tasks.open_door_task import OpenDoorTask",
+        task_expr=(
+            "OpenDoorTask(\n"
+            f"                openable_object={subject_var},\n"
+            f"                episode_length_s={_DEFAULT_OPEN_DOOR_EPISODE_LENGTH_S},\n"
+            f"                task_description={spec.task_description!r},\n"
+            "            )"
+        ),
+        goal_comments=comments,
+        header_note=f"OpenDoorTask: openable={subject_var.removesuffix('_obj')}",
+    )
+
+
+def _close_door_plan(
+    resolved: ResolvedScene,
+    spec: SceneSpec,
+    goal: dict[str, Any],
+    subject_var: str,
+) -> TaskPlan:
+    comments = [f"        # goal_added: closed({goal['subject']}, None) — enforced by CloseDoorTask success predicate"]
+    for r in resolved.goal_removed:
+        comments.append(
+            f"        # goal_removed (implied when door is closed): {r['kind']}({r['subject']}, {r['target']})"
+        )
+    return TaskPlan(
+        kind="close_door",
+        task_import="from isaaclab_arena.tasks.close_door_task import CloseDoorTask",
+        task_expr=(
+            "CloseDoorTask(\n"
+            f"                openable_object={subject_var},\n"
+            f"                episode_length_s={_DEFAULT_OPEN_DOOR_EPISODE_LENGTH_S},\n"
+            f"                task_description={spec.task_description!r},\n"
+            "            )"
+        ),
+        goal_comments=comments,
+        header_note=f"CloseDoorTask: openable={subject_var.removesuffix('_obj')}",
+    )
+
+
+def _no_task_plan(resolved: ResolvedScene) -> TaskPlan:
+    added = [(r["kind"], r["subject"], r["target"]) for r in resolved.goal_added]
+    removed = [(r["kind"], r["subject"], r["target"]) for r in resolved.goal_removed]
+    if not resolved.goal_added:
+        reason = "no goal_added relations in resolved scene"
+    elif len(resolved.goal_added) > 1:
+        reason = f"multi-relation goal not yet supported ({len(resolved.goal_added)} added)"
+    else:
+        g = resolved.goal_added[0]
+        if g["kind"] in _OPEN_DOOR_KINDS | _CLOSE_DOOR_KINDS:
+            reason = f"goal kind {g['kind']!r} — subject {g['subject']!r} did not resolve to a known item"
+        elif g["kind"] not in _PICK_AND_PLACE_KINDS:
+            reason = f"goal kind {g['kind']!r} has no task mapping yet"
+        else:
+            reason = (
+                f"goal {g['kind']}({g['subject']}, {g['target']}) does not resolve "
+                "to two distinct items (target may be the background or unresolved)"
+            )
+    comments = [f"        # NoTask fallback — {reason}."]
+    for kind, subj, tgt in added:
+        comments.append(f"        # TODO(goal_added): {kind}({subj}, {tgt}) — wire success predicate")
+    for kind, subj, tgt in removed:
+        comments.append(f"        # TODO(goal_removed): {kind}({subj}, {tgt}) — wire negation")
+    return TaskPlan(
+        kind="no_task",
+        task_import="from isaaclab_arena.tasks.no_task import NoTask",
+        task_expr="NoTask()",
+        goal_comments=comments,
+        header_note=f"NoTask fallback ({reason}). Goal diff preserved as TODO comments.",
+    )

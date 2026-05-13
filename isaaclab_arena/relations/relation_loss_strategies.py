@@ -18,7 +18,7 @@ from isaaclab_arena.relations.loss_primitives import (
 from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 
 if TYPE_CHECKING:
-    from isaaclab_arena.relations.relations import AtPosition, NextTo, On, PositionLimits, Relation
+    from isaaclab_arena.relations.relations import AtPosition, In, NextTo, Not, On, PositionLimits, Relation
 
 from isaaclab_arena.relations.relations import Side
 
@@ -317,6 +317,166 @@ class OnLossStrategy(RelationLossStrategy):
         total_loss = x_band_loss + y_band_loss + z_loss
         result = relation.relation_loss_weight * total_loss
         return result.squeeze(0) if single_input else result
+
+
+class InLossStrategy(RelationLossStrategy):
+    """Loss strategy for In (containment) relations.
+
+    XY bands match ``OnLossStrategy`` — the child's footprint must stay
+    inside the parent's XY footprint. Z is treated as a *soft*
+    preference: the child is nudged toward spawning slightly above the
+    parent's rim so gravity finishes the deposit on the first physics
+    tick. Without this hint the solver is free to land the child below
+    the container, producing unphysical drops (observed during the
+    avocado-in-bowl bring-up).
+
+    The Z term uses ``slope * z_slope_ratio`` so it stays dominated by
+    the XY bands and by any sibling no-overlap loss. Set
+    ``z_slope_ratio=0.0`` to recover the pure XY-only behaviour.
+    """
+
+    def __init__(
+        self,
+        slope: float = 10.0,
+        z_slope_ratio: float = 0.1,
+        z_margin_m: float = 0.02,
+        debug: bool = False,
+    ):
+        """
+        Args:
+            slope: Gradient magnitude for the XY band losses.
+            z_slope_ratio: Fraction of ``slope`` used for the soft Z
+                preference. Keep well below 1 so Z stays secondary to
+                XY containment. Default 0.1.
+            z_margin_m: Target clearance (meters) between the child's
+                bottom and the parent's rim (parent_world_bbox top).
+                Default 0.02.
+            debug: If True, print a per-component loss breakdown.
+        """
+        self.slope = slope
+        self.z_slope_ratio = z_slope_ratio
+        self.z_margin_m = z_margin_m
+        self.debug = debug
+
+    def compute_loss(
+        self,
+        relation: "In",
+        child_pos: torch.Tensor,
+        child_bbox: AxisAlignedBoundingBox,
+        parent_world_bbox: AxisAlignedBoundingBox,
+    ) -> torch.Tensor:
+        single_input = child_pos.dim() == 1
+        if single_input:
+            child_pos = child_pos.unsqueeze(0)
+
+        parent_x_min = parent_world_bbox.min_point[:, 0]
+        parent_x_max = parent_world_bbox.max_point[:, 0]
+        parent_y_min = parent_world_bbox.min_point[:, 1]
+        parent_y_max = parent_world_bbox.max_point[:, 1]
+        parent_z_max = parent_world_bbox.max_point[:, 2]  # parent rim
+
+        valid_x_min = parent_x_min - child_bbox.min_point[:, 0]
+        valid_x_max = parent_x_max - child_bbox.max_point[:, 0]
+        valid_y_min = parent_y_min - child_bbox.min_point[:, 1]
+        valid_y_max = parent_y_max - child_bbox.max_point[:, 1]
+
+        x_band_loss = linear_band_loss(
+            child_pos[:, 0], lower_bound=valid_x_min, upper_bound=valid_x_max, slope=self.slope
+        )
+        y_band_loss = linear_band_loss(
+            child_pos[:, 1], lower_bound=valid_y_min, upper_bound=valid_y_max, slope=self.slope
+        )
+
+        # Soft Z preference: child bottom sits just above parent rim.
+        target_z = parent_z_max + self.z_margin_m - child_bbox.min_point[:, 2]
+        z_slope = self.slope * self.z_slope_ratio
+        z_loss = single_point_linear_loss(child_pos[:, 2], target_z, slope=z_slope) if z_slope > 0 else 0.0
+
+        if self.debug and child_pos.shape[0] == 1:
+            print(
+                f"    [In] X: child_pos={child_pos[0, 0].item():.4f}, valid_range=[{valid_x_min[0].item():.4f},"
+                f" {valid_x_max[0].item():.4f}], loss={x_band_loss[0].item():.6f}"
+            )
+            print(
+                f"    [In] Y: child_pos={child_pos[0, 1].item():.4f}, valid_range=[{valid_y_min[0].item():.4f},"
+                f" {valid_y_max[0].item():.4f}], loss={y_band_loss[0].item():.6f}"
+            )
+            z_loss_val = z_loss[0].item() if isinstance(z_loss, torch.Tensor) else float(z_loss)
+            print(
+                f"    [In] Z: child_pos={child_pos[0, 2].item():.4f}, target={target_z[0].item():.4f},"
+                f" soft loss={z_loss_val:.6f}"
+            )
+
+        total_loss = x_band_loss + y_band_loss + z_loss
+        result = relation.relation_loss_weight * total_loss
+        return result.squeeze(0) if single_input else result
+
+
+class NotRelationLossStrategy(RelationLossStrategy):
+    """Loss strategy that inverts the satisfaction of an inner relation.
+
+    Treats the inner strategy's returned loss as a "distance from safe":
+    0 when the inner relation holds, larger when it is violated. The
+    Not wrapper adds ``max(0, margin - inner_loss)`` back in (scaled by
+    ``slope``), so the combined loss spikes near the satisfying region
+    and is zero once the child is ``margin`` worth of inner-loss away.
+
+    A single Not strategy is registered for the ``Not`` class; it looks
+    up the inner's strategy at compute time via the same
+    ``RelationSolverParams.strategies`` dict the solver uses for the
+    primitive relations.
+    """
+
+    def __init__(self, margin: float = 0.05, slope: float = 10.0, debug: bool = False):
+        """
+        Args:
+            margin: Minimum inner-loss below which Not contributes a
+                positive loss. Loosely: how far (in inner-loss units)
+                the solver must stay from the satisfying region.
+            slope: Scale on the inverted loss.
+            debug: If True, print the inner/outer loss breakdown.
+        """
+        self.margin = margin
+        self.slope = slope
+        self.debug = debug
+
+    def compute_loss(
+        self,
+        relation: "Not",
+        child_pos: torch.Tensor,
+        child_bbox: AxisAlignedBoundingBox,
+        parent_world_bbox: AxisAlignedBoundingBox,
+        inner_strategy: "RelationLossStrategy | UnaryRelationLossStrategy | None" = None,
+    ) -> torch.Tensor:
+        """Compute Not's loss by inverting the inner strategy's loss.
+
+        ``inner_strategy`` is injected by :class:`RelationSolver` at the
+        call site — we deliberately do NOT cache a reference to the
+        strategies dict on this instance, because it creates a cycle
+        (strategies[Not].strategies[Not] ...) that the configclass
+        validator recurses into.
+        """
+        assert inner_strategy is not None, (
+            "NotRelationLossStrategy.compute_loss requires inner_strategy; "
+            "the solver's Not-dispatch branch passes this in."
+        )
+        inner_loss = inner_strategy.compute_loss(
+            relation.inner,
+            child_pos=child_pos,
+            child_bbox=child_bbox,
+            parent_world_bbox=parent_world_bbox,
+        )
+        # Zero when inner is well-violated; positive when inner is
+        # satisfied. Multiplied by slope and the wrapper's weight.
+        inverted = torch.clamp(self.margin - inner_loss, min=0.0) * self.slope
+
+        if self.debug:
+            print(
+                f"    [Not] inner_loss={inner_loss.mean().item():.6f} "
+                f"margin={self.margin} -> inverted={inverted.mean().item():.6f}"
+            )
+
+        return relation.relation_loss_weight * inverted
 
 
 class NoCollisionLossStrategy:

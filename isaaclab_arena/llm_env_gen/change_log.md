@@ -1,0 +1,816 @@
+# llm_env_gen — change log
+
+## Xinjie Yao — 2026-05-05
+
+### 1. What it can do
+
+- **Two-stage interactive review** — opt-in via
+  `auto_generate_env --review-entities` and / or `--review-graphs`.
+  Stage 1 opens `$EDITOR` after the LLM parse so the user can swap to
+  preferred USD names, fix roles / instance keys, and pin per-item
+  `scale` values; the validator confirms every name resolves in
+  `AssetRegistry`. Stage 2 opens after the resolver and lets the user
+  edit the initial / final scene graphs; the validator rejects unknown
+  subjects/targets, invalid kinds, self-loops, parent conflicts in the
+  initial graph, background-as-containment-child, and reports full
+  strongly-connected components for cycles. Errors are prepended as
+  `// …` comments and the editor re-opens until clean. The two flags
+  are independent — pass one, the other, or both.
+- **Table-relative asset auto-scale** — the placement proposer now
+  rescales each item against the tabletop bbox at gen time. Items
+  whose authored size already lies in an acceptable band (manipulables
+  3-24 cm on a 60-cm table; containers 6-42 cm) are left at scale 1.0,
+  so most YCB assets are untouched. Outliers are pulled to the nearest
+  band edge, clamped to `[0.1, 10.0]`. Containers are auto-detected as
+  the targets of `in(...)` goals; a post-pass enforces
+  `container_eff ≥ 1.5 × contents_eff` so `in(A, B)` stays
+  geometrically possible. Articulated assets and anchors are never
+  rescaled. Per-item `scale` in stage-1 review (`null` = auto, float
+  = override) gives the user the final word.
+
+### 2. What was added
+
+- `isaaclab_arena/llm_env_gen/review.py` (new)
+  - `_resolve_editor` — `$EDITOR` → vim → vi → nano → nvim, gated by
+    `shutil.which` so a missing binary fails before Kit boots instead
+    of crashing in the middle of the loop.
+  - `_open_in_editor` / `_review_loop` — write seed JSON to a temp
+    file (with `// …` instructions / errors), spawn `$EDITOR`, parse
+    on save, re-open with errors prepended until validation passes.
+  - `review_entities(spec)` — Stage 1. Materializes `instance_name`
+    so graph keys stay explicit; auto-rewrites graph references when
+    an item's `instance_name` (or background) is renamed in place;
+    drops relations whose subject/target was removed. Validator
+    checks registry membership, `background` tag, embodiment family,
+    role, identifier-safety of `instance_name`, and per-item `scale`.
+  - `review_graphs(resolved, spec)` — Stage 2. Validators: vocab,
+    kinds, unary `open`/`closed` requires `target=null`, no
+    self-loops, single `on/in` parent in initial, background not a
+    containment subject, every non-background entity must be a
+    subject in initial. Tarjan SCC reports the full cycle, not just
+    one edge. Recomputes `goal_added` / `goal_removed` from the
+    edited graphs.
+
+- `isaaclab_arena/llm_env_gen/auto_generate_env.py`
+  - `--review-entities` and `--review-graphs` CLI flags. Wired right
+    after the background override (pre-resolver) and right after
+    `Resolver().resolve(spec)` (pre-retry-loop) respectively, so the
+    retry loop sees the user-curated state.
+
+- `isaaclab_arena/llm_env_gen/schema.py`
+  - `Item.scale: float | None = None` — Pydantic field. `None` lets
+    the proposer auto-fit; explicit positive float overrides.
+
+- `isaaclab_arena/llm_env_gen/placement_proposer.py`
+  - `_AUTO_SCALE_ACCEPTABLE_BAND` — per-band-kind (`manipulable` /
+    `container`) acceptable ranges as fractions of `table_min_xy`.
+    `_AUTO_SCALE_MIN` / `_AUTO_SCALE_MAX` are hard clamps.
+    `_IN_CONTAINER_MARGIN = 1.5`.
+  - `_unit_xy_extent(asset_cls)` — module-cached longest XY of the
+    asset at scale 1.0, opened via `compute_local_bounding_box_from_usd`.
+    Returns 0.0 (skip) for articulations and Pxr failures.
+  - `_compute_auto_scale(asset_cls, table_xy_bbox, role,
+    is_container=False)` — returns 1.0 when the asset already lies in
+    its band; otherwise pulls it back to the nearest band edge.
+  - `PlacementItem.scale` — concrete float baked into the rendered
+    env. Set during `_propose_items` from `Item.scale` (explicit) or
+    `_compute_auto_scale` (auto). Container detection drives off
+    `resolved.goal_added` (kind == `in`).
+  - Post-pass after item construction: for every `in(A, B)` goal
+    bumps the container's scale (never shrinks) so its longest XY is
+    at least `_IN_CONTAINER_MARGIN ×` the contents'.
+
+- `isaaclab_arena/llm_env_gen/env_writer.py`
+  - `_render_item_decls` emits `scale=(s, s, s)` on the asset
+    constructor only when `scale != 1.0`, so envs with all-default
+    scales render textually identical to before.
+
+## Xinjie Yao — 2026-05-04
+
+### 1. What it can do
+
+- **Reach-aware robot placement at gen time** — opt-in via
+  `auto_generate_env --use-reach-solver`. Replaces the random
+  `(edge, fraction)` sampler with a joint Adam solve that maximizes
+  top-down IK reachability for the goal-bound items against a
+  precomputed Franka workspace EDT. The selected
+  `(edge, fraction, offset_m)` is baked into the rendered env module
+  exactly as today's static placement is — generated env files stay
+  declarative, no torch / scipy / EDT imports, no runtime IK code.
+- **Continuous outward offset** — the robot's standoff from the table
+  edge is now per-placement (was a hardcoded 0.1 m). The reach solver
+  picks it from `[0.05, 0.40]` m so the workspace shell can be slid
+  forward / back to better cover the manipulables. Random-sampled
+  placements still default to 0.1 m.
+- **Joint reach + placement POC** —
+  `isaaclab_arena_examples/relations/joint_reach_solver_poc.py` runs
+  the same solve standalone with no Isaac Sim in the loop, plotting
+  per-edge top-downs + heading arrows + EDT slice + loss curves to a
+  PNG. Used as the library that the gen-time path imports, plus as a
+  sandbox for tuning slopes / loss terms.
+- **Auto-import LLM-generated envs** —
+  `isaaclab_arena_environments/llm_generated/` is now a proper
+  sub-package. Canonical (un-suffixed) files there get registered at
+  import time alongside hand-written envs;
+  `_t<N>`-suffixed trial files are filtered out.
+
+### 2. What was added
+
+- `isaaclab_arena/llm_env_gen/placement_proposer.py`
+  - `_BACKGROUND_TABLETOP_XY_BBOX` — gen-time approximate world XY
+    bboxes per background. Coarse (the reach solver is robust to ~10%
+    bbox error); refinable later by querying live Sim.
+  - `ReachSolverCfg` — dataclass for `(npz_path, iters, seed)`.
+  - `propose_placement(reach_solver=...)` — routes to either the
+    existing random sampler or the new reach-aware sibling. Falls back
+    to random for backgrounds not in the bbox catalog.
+  - `_propose_robot_placement_via_reach` — builds a 3-`DummyObject`
+    scene (table + goal subject + goal target) and runs the POC's
+    `joint_solve` over all 4 cardinal edges in parallel, returns the
+    lowest-loss `RobotPlacement`. Lazy-imports torch + scipy so plain
+    proposer use pays no cost.
+
+- `isaaclab_arena/llm_env_gen/env_writer.py`
+  - `write_env(reach_solver=...)` forwards the config to
+    `propose_placement`.
+  - `_render_robot_pose` rounds `offset_m` to 4 decimals so the
+    rendered Python literal is readable (was raw `repr`).
+
+- `isaaclab_arena/llm_env_gen/auto_generate_env.py`
+  - `--use-reach-solver` / `--reach-npz` / `--reach-solver-iters` /
+    `--reach-solver-seed` CLI flags.
+  - Builds `ReachSolverCfg` once, threads through both the per-attempt
+    `write_env` and the canonical (un-suffixed) `write_env` at the end
+    — without that second forward, the canonical file silently fell
+    back to the random sampler.
+  - Placement log line includes `off=…` so retries can be diagnosed.
+
+- `isaaclab_arena_examples/relations/joint_reach_solver_poc.py`
+  - `ReachField.from_npz` — loads the precomputed reach map and
+    builds an outside-EDT (`scipy.ndimage.distance_transform_edt`).
+  - `joint_solve` — Adam over `(object world XYZ, raw_fraction,
+    raw_offset)` batched across the 4 edges; per-env yaw is a fixed
+    cardinal rotation matrix (constant w.r.t. autograd). Loss terms:
+    `On(table)`, reach (distance-to-reachable EDT, dominant),
+    object-vs-object NoCollision (hard), robot-vs-object NoCollision
+    (soft, ~100× weaker than reach so reachability wins ties).
+  - Visualization: per-env top-downs with heading arrows + EDT slice +
+    loss curves saved to PNG. CLI knobs include `--init_jitter_xy`,
+    `--offset_range`, `--reach_weight`, `--robot_obj_collision_slope`,
+    `--table_size`.
+
+- `tools/franka_reach_top_down.npz` / `.png` — precomputed reach map +
+  visualization. Used by the POC and by the gen-time reach path.
+
+- `isaaclab_arena_environments/__init__.py` —
+  hand-iterates top-level modules + recurses into the explicit
+  `_RECURSE_SUBPACKAGES = {"llm_generated"}` list. Skips subpackages
+  like `mdp/` whose `__init__.py` does
+  `from isaaclab.envs.mdp import *` (which would pull
+  isaaclab + numpy / scipy before SimulationApp boots and trip the
+  OpenBLAS atfork crash inside Kit's startup). Skips `_t<N>`
+  trial-file stragglers from aborted gen runs.
+
+- `isaaclab_arena_environments/llm_generated/__init__.py` — make the
+  directory a proper sub-package.
+
+### 3. Commands
+
+```bash
+# Run the standalone joint-solver POC sandbox (no Isaac Sim).
+/isaac-sim/python.sh \
+  isaaclab_arena_examples/relations/joint_reach_solver_poc.py \
+  --reach_npz tools/franka_reach_top_down.npz \
+  --out_png tools/poc_joint_reach_solver.png
+
+# Auto-generate an env with reach-aware robot placement.
+# Runs in the curobo container (cuRobo IK is the post-gen feasibility oracle).
+docker exec isaaclab_arena-curobo bash -c \
+  'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh \
+   isaaclab_arena/llm_env_gen/auto_generate_env.py \
+   --use-reach-solver --max-attempts 4'
+
+# Bring up the regenerated env in the Kit viewer.
+docker exec isaaclab_arena-latest bash -c \
+  'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh \
+   isaaclab_arena/evaluation/policy_runner.py \
+   --policy_type zero_action --num_steps 200 --viz kit \
+   avocadoPnPbowltable'
+
+# Overlay the reachability shell on the running env.
+docker exec isaaclab_arena-latest bash -c \
+  'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh \
+   tools/viz_reach_map_kit.py --viz kit \
+   --load_npz tools/franka_reach_top_down.npz \
+   --dwell_steps 600 avocadoPnPbowltable'
+```
+
+### 4. TODOs
+
+- `_BACKGROUND_TABLETOP_XY_BBOX` values are coarse estimates. Add a
+  one-shot tool that boots Sim once, captures
+  `tabletop_anchor.get_world_bounding_box()` per background, and
+  rewrites the catalog. The container's SimulationApp init currently
+  segfaults on this host (OpenBLAS atfork inside Kit startup) — the
+  measurement script needs to defer scipy / numpy imports until after
+  Kit boots, or run inside an env-build context where Sim is already
+  up.
+- The reach term assumes top-down grasp orientation
+  (`quat_wxyz=(0,1,0,0)` in the npz). For Open/Close-door tasks the
+  approach is horizontal; either skip the term for those task plans
+  or generate a second NPZ at the door-approach orientation and
+  switch maps based on the resolved task.
+- The robot-vs-object NoCollision currently models only the panda
+  link0 mounting plate (~0.24 × 0.24 × 0.30 m AABB at object height).
+  Modeling the arm sweep over the table as a forward-extending
+  dynamic AABB would let the term meaningfully trade off against
+  reach; today it almost never engages because the stand sits outside
+  the table.
+
+## Xinjie Yao — 2026-04-28
+
+### 1. What it can do
+
+- **Search instead of single-shot retry** — the auto-driver now drives a
+  structured exploration each attempt: even attempts vary only the robot
+  placement, odd attempts only the item placement seed, and the final
+  attempt varies both. When a fix lands you can attribute it to the axis
+  that changed, and the loop has predictable diversity (no two attempts
+  resample the same axis back-to-back).
+- **Save the Kit viewport per attempt** — `--save_render_dir <DIR>` on
+  `auto_generate_env` / `run_reachability_check` captures the scene as
+  `<env_name>_ik_success.png` or `<env_name>_ik_failure_<status>.png`
+  via `omni.kit.viewport.utility.capture_viewport_to_file`. Pumps
+  `omni.kit.app.update()` for up to 60 frames so the async write lands
+  before teardown destroys the viewport.
+- **Stay away from corners by construction** — robot edge sampling is
+  `Uniform(0.3, 0.7)` along the chosen edge, so the base lands somewhere
+  in the middle two-thirds of an edge rather than at a corner where IK
+  reachability is tightest. The seed string folds in `--seed`, so a
+  different `--seed` value shifts the sample sequence end-to-end.
+- **Spread item placement seeds** — `placement_seed = base + item_idx *
+  100`. The placement pool draws `max_placement_attempts=10` candidates
+  from `seed..seed+9`, so naive `+1` strides leave the "best" layout
+  almost identical across consecutive item_idx; a stride of 100 fully
+  decorrelates them.
+- **Auto-zoom the generated env's Kit viewer** onto the table — the
+  generated module installs an `env_cfg_callback` that overrides
+  `env_cfg.viewer` with `lookat = runtime bbox midpoint`,
+  `eye = lookat + (1.0, 1.0, 2.5)`. Replaces the default
+  `(7.5, 7.5, 7.5)` framing that put the EEF outside the visible
+  region.
+- **Diagnose the bbox itself** — every generated env prints the
+  tabletop world AABB at build time (`[bbox] tabletop world AABB:
+  min=(...) -> max=(...); size_xy=(w, h)`) so you can sanity-check the
+  ray-trace assumption that min/max really span the table.
+
+**Assumptions:** Same as the auto_generate_env baseline — generated
+envs use a tabletop background mapped in `_BACKGROUND_TABLETOP_ANCHOR`
+(`maple_table_robolab` is the default override) so
+`get_world_bounding_box` returns the real tabletop corners. The
+viewport capture path requires `--viz kit`; headless runs skip the
+save with a log line. Trial and canonical files share a directory;
+the cleanup glob removes `<canonical_stem>_t*.py` on success — ad-hoc
+files with the same prefix would also be swept.
+
+### 2. What was added
+
+- **`isaaclab_arena/llm_env_gen/auto_generate_env.py`**
+  - `robot_idx` / `item_idx` counters with the alternation rule
+    described above. Each attempt logs the `change_note`
+    (`"baseline"`, `"items only"`, `"robot only"`, `"both varied …"`)
+    so the search trace is human-readable.
+  - Item-seed plumbing: `args_cli.placement_seed = base + item_idx *
+    100`; the base is the user-supplied `--placement_seed` if set,
+    else 0.
+  - Forwards `args_cli.seed` to `write_env` / `propose_placement` so
+    the robot RNG mixes it in.
+  - On success: writes a canonical `<env_name>.py` (no `_tN` suffix)
+    keyed to the winning `robot_idx`, then sweeps every
+    `<canonical_stem>_t*.py` in `out_dir` (this run's trials *and*
+    stragglers from prior failed runs).
+- **`isaaclab_arena/llm_env_gen/placement_proposer.py`**
+  - `_propose_robot_placement(env_name, attempt, seed)` — RNG seed
+    becomes `f"{env_name}#{attempt}#{seed}"` so a fixed
+    (env_name, attempt, seed) triple is reproducible.
+  - `_ROBOT_EDGE_FRACTION_RANGE = (0.3, 0.7)` — uniform sampling band
+    that excludes corners while still covering the middle two-thirds
+    of the edge.
+  - `_DEFAULT_TABLETOP_MARGIN_M = 0.15` — items spawn at least 15 cm
+    from the edge.
+  - `propose_placement(...)` carries the new `seed` parameter through
+    to the robot sampler.
+- **`isaaclab_arena/llm_env_gen/env_writer.py`**
+  - `write_env(..., env_suffix="", seed=None)` — `env_suffix` is
+    appended to the env / class names so each trial registers a
+    unique env (sidesteps Isaac Sim's gym + scene caches that
+    silently inherit a previous attempt's `init_state` after a
+    same-name re-registration on the third attempt onward); `seed`
+    is forwarded into placement proposing.
+  - `_render_module` walks inner relation specs when picking
+    imports, so `Not(In(bowl))` now correctly emits both `Not` and
+    `In` (previously dropped the inner kind, which broke at
+    runtime with `NameError: 'In' is not defined`).
+  - `_render_robot_pose` emits the (edge, fraction) → (x, y, qz, qw)
+    block plus a per-edge cardinal yaw quaternion.
+  - `_render_bbox_setup` adds a runtime print of the tabletop AABB
+    (`[bbox] tabletop world AABB: min=… -> max=…; size_xy=…`).
+  - The generated `get_env(...)` body now installs an
+    `env_cfg_callback` that overrides `env_cfg.viewer` with a
+    bbox-derived eye / lookat tuple — table is centred and the
+    Franka EEF stays in frame.
+- **`isaaclab_arena/llm_env_gen/reachability_utils.py`**
+  - `--save_render_dir DIR` flag on the IK-reachability arg group;
+    reused by both the standalone `run_reachability_check` driver
+    and `auto_generate_env`.
+  - `--dwell_steps` default 300 → 90 (~3 s at 30 Hz).
+- **`isaaclab_arena/llm_env_gen/run_reachability_check.py`**
+  - `check_reachability_for_arena_builder(arena_builder, args_cli)
+    -> int` — extracted from `main()` so the auto-driver can call
+    the IK gate inside its loop without re-booting Isaac Sim.
+  - Finally-clause now calls
+    `teardown_simulation_app(make_new_stage=True)` *before*
+    `env.close()` (mirrors `eval_runner.py`). Without it the next
+    `gym.make()` inherits stale prims and ignores the new env's
+    `init_state`.
+  - `_save_scene_render(env, save_render_dir, env_name, status,
+    feasible)` — captures the active Kit viewport via
+    `omni.kit.viewport.utility.capture_viewport_to_file`, pumps
+    up to 60 `app.update()` frames so the async PNG lands.
+  - `--save_render_dir` triggers no extra setup (no enable_cameras
+    flag, no rgb_array path) — the viewport that `--viz kit` already
+    renders is what gets saved.
+
+### 3. Commands
+
+```bash
+# 10-attempt prompt → IK-feasible env, with viewport snapshots per attempt
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.auto_generate_env \
+    --viz kit --num_envs 1 --max-attempts 10 --seed 17 \
+    --save_render_dir /tmp/auto_renders \
+    --prompt 'franka pick up avocado from the table and place it into a bowl on the table. there are other veggies on the table as distractor'"
+
+# Inspect a trial render afterwards
+ls /tmp/auto_renders                # avocadoPnPbowltable_t0_ik_success.png, ...
+```
+
+### 4. TODOs
+
+- **Vary the canonical robot pose across re-runs of the same prompt.**
+  With a fixed `--seed`, attempt-N's `(env_name, attempt, seed)` triple
+  is stable. That's reproducible by design but means re-running with
+  the same prompt + seed always starts from the same baseline; rotate
+  the seed offset (or expose `--robot_placement_seed` separately from
+  the rest of `--seed`) when you want diversity without changing the
+  rest of the pipeline's randomness.
+- **Sweep stragglers conservatively.** The on-success cleanup glob is
+  `<canonical_stem>_t*.py` — anyone who hand-named a file matching
+  that pattern would lose it. Probably fine in practice but worth a
+  warning if the directory ever contains user-curated artifacts.
+- **Door tasks ignore the new robot sampling.** `OpenDoorTask` /
+  `CloseDoorTask` envs still rely on `RotateAroundSolution` to face
+  the door, but the robot base placement is now drawn the same way as
+  PnP — a cardinal-edge sample without door-aware filtering. Add a
+  filter that prefers edges whose facing direction is consistent with
+  the openable's door axis.
+
+## Xinjie Yao — 2026-04-27
+
+### 1. What it can do
+
+- **Compute the Franka EEF reachability map** with batched cuRobo IK on GPU,
+  standalone (no SimulationApp / Kit boot). 25³ = 15,625 voxels solve in ~24s.
+- **Save reach-map artifacts** to disk: a `.npz` with success / pos_err /
+  rot_err arrays + axis grids, and a 3-D matplotlib voxel render PNG with the
+  robot base origin and an x/y/z axis triad overlaid.
+- **Visualize the reach map inside Kit**, overlaid on a registered Arena env:
+  green/cyan sphere markers at feasible voxels (split by IK pos-error median),
+  red sphere at the robot base. Loads a precomputed `.npz` to skip cuRobo,
+  so the only cost is Kit boot.
+
+**Assumptions:**
+
+- `isaaclab_arena-curobo` container running.
+- For `viz_reach_map_kit.py`: top-level CLI flags must come **before** the env
+  name positional (Arena's env subparser owns args after the env name).
+
+### 2. What was added
+
+**`tools/compute_reach_map.py`** *(new)*
+
+- Pure cuRobo + PyTorch — imports `IKSolver` directly from `curobo.wrap.reacher`
+  with `RobotConfig.from_dict(load_yaml("franka.yml")["robot_cfg"])`. No Isaac
+  Sim env needed, so no SimApp boot.
+- 3-D `torch.linspace` grid in robot base frame (`--x_min / --x_max / --y_min /
+  --y_max / --z_min / --z_max`, default `[-0.4, 1.0] × [-0.9, 0.9] × [0.0, 1.4]`).
+- Top-down EE quaternion (wxyz `[0, 1, 0, 0]`) by default; configurable via
+  `--quat_wxyz`. `--num_seeds` controls cuRobo IK seed count (default 20).
+- `--save_npz <path>`: stores `success`, `pos_err`, `rot_err`, axis grids,
+  and the EE quaternion.
+- `--save_png <path>`: matplotlib `Agg` voxel render colored by IK position
+  error, with a red base marker at the origin, dashed plumb line up through
+  the workspace, and an RGB axis triad. Works headless.
+
+**`tools/viz_reach_map_kit.py`** *(new)*
+
+- Brings up a registered Arena env (e.g. `avocadoPnPbowltable`) under
+  `--viz kit` and scatters `VisualizationMarkers` sphere instances at every
+  feasible voxel in world frame.
+- Two reach-map sphere bins (`tight` green, `loose` cyan) split at the
+  feasible-voxel pos-error median to show robust vs marginal reach.
+- Separate red sphere marker (`/World/Visuals/reach_map_base`, radius 0.06)
+  at the robot's world root pose.
+- `--load_npz <path>`: loads the artifact saved by `compute_reach_map.py` and
+  skips the cuRobo step entirely. Falls back to in-process cuRobo IK if no
+  NPZ is provided.
+- Robot world pose fetched via `wp.to_torch(robot.data.root_pos_w)[0, :3]`
+  and same for `root_quat_w` (Isaac Lab exposes these as warp arrays, not
+  torch tensors). Voxels in base frame are rotated to world via
+  `isaaclab.utils.math.quat_apply` before being passed to `markers.visualize`.
+
+### 3. Commands
+
+```
+# Compute the reach map and save NPZ + PNG (no Kit, ~25s on GPU).
+docker exec isaaclab_arena-curobo bash -c \
+  'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh tools/compute_reach_map.py \
+     --grid 25 \
+     --save_npz tools/franka_reach_top_down.npz \
+     --save_png tools/franka_reach_top_down.png'
+
+# Show the reach map in the Kit viewer overlaid on avocadoPnPbowltable.
+# Note: --load_npz must come BEFORE the env name positional.
+docker exec isaaclab_arena-curobo bash -c \
+  'cd /workspaces/isaaclab_arena && /isaac-sim/python.sh tools/viz_reach_map_kit.py \
+     --viz kit --num_envs 1 \
+     --load_npz tools/franka_reach_top_down.npz \
+     avocadoPnPbowltable --embodiment franka_ik'
+```
+
+### 4. TODOs
+
+- Loop over a small set of EE quaternions (top-down, side approach, ±yaw)
+  inside `compute_reach_map.py` and store *fraction reachable* per voxel —
+  smoother [0, 1] field, suitable as the differentiable proxy `W` for
+  the placement-optimization design.
+- Color the Kit reach markers by manipulability `√det(JJᵀ)` instead of (or in
+  addition to) IK pos-error bins — cuRobo exposes the Jacobian at `q*`.
+- Wire `viz_reach_map_kit.py` to honor the `--quat_wxyz` from the NPZ so the
+  Kit overlay matches the orientation the map was computed for.
+
+## Qian Lin — 2026-04-24
+
+### 1. What it can do
+
+- **Generate open/close door environments** from a natural-language prompt: `llm_env_gen` now produces `OpenDoorTask` or `CloseDoorTask` environments for articulated appliances (microwave, fridge, cabinet).
+- **Relational placement for openable objects**: the microwave is placed ON the counter via the constraint solver (no fixed world position), with `RotateAroundSolution` locking its door to face the robot.
+- **Correct tabletop anchor for kitchen background**: `ObjectReference` for the kitchen counter is created without `ObjectType.RIGID` (the sub-prim lacks `RigidBodyAPI`), preventing the previous `RuntimeError`.
+- **IK reachability check for open-door tasks**: `run_reachability_check.py` auto-detects `OpenDoorTask`/`CloseDoorTask` and checks a horizontal front-approach pose at the door center.
+- **Two generated microwave envs**: `microwaveOpenkitchen` (kitchen background) and `microwaveOpentable` (table background) are registered and runnable with `zero_action` policy.
+
+**Assumptions:**
+- Docker container `isaaclab_arena-curobo` (or `-latest`) must be running.
+- `NV_API_KEY` env var required for LLM generation (`try_schema.py`).
+- `--door_facing_axis -x` is correct for kitchen-background envs (microwave oriented by `RotateAroundSolution(yaw=-π/2)`).
+
+### 2. What was added
+
+**`schema.py`**
+- `RelationKind` extended with `"open"` and `"closed"` literals — Pydantic validation gate for unary door-state relations.
+
+**`placement_proposer.py`**
+- `_OPEN_DOOR_KINDS`, `_CLOSE_DOOR_KINDS`, `_DEFAULT_OPEN_DOOR_EPISODE_LENGTH_S` constants.
+- `_APPLIANCE_FACING_YAW` dict: maps `(background, asset)` → yaw for `RotateAroundSolution`.
+- `_BACKGROUND_TABLETOP_ANCHOR_BASE_TYPE`: backgrounds whose tabletop sub-prim lacks `RigidBodyAPI` (currently `{"kitchen"}`).
+- `TabletopAnchorPlan.anchor_object_type` field (`"RIGID"` or `"BASE"`); `_plan_tabletop_anchor` sets it per background.
+- `RelationSpec.kind` extended with `"rotate_around_solution"`; new `rotate_yaw_rad` field.
+- `PlacementItem.is_openable` flag; `_propose_items` detects openable subjects from goal diff and appends `RotateAroundSolution` after building the `On` relation.
+- `TaskPlan.kind` extended with `"open_door"` and `"close_door"`.
+- `_open_door_plan` and `_close_door_plan` task plan builders; `_plan_task` dispatches on goal kind.
+- `block_initial_goal_satisfaction` skips `open`/`closed` goals (no `Not(...)` wrapping needed).
+- `_derive_env_name` / `_derive_class_name` handle `target=None` for unary goals.
+
+**`env_writer.py`**
+- `_render_anchor_setup` respects `anchor_object_type`: omits `object_type=ObjectType.RIGID` for `BASE`-type anchors.
+- `_render_one_relation` handles `"rotate_around_solution"` → `RotateAroundSolution(yaw_rad=...)`.
+- Dynamic `relation_imports` now includes `RotateAroundSolution` when used.
+
+**`llm_agent.py`**
+- System prompt updated: explains `open`/`closed` unary relations, null target, initial/final graph semantics, and that distractors still need `on(distractor, background)`.
+
+**`reachability_utils.py`**
+- `find_open_close_door_task(arena_env)`: duck-typed task finder for `openable_object` attribute.
+- `get_articulation_world_pos(env, name, env_id)`: root position from `scene.articulations`.
+- `get_scene_object_world_pos(env, name, env_id)`: tries rigid objects, falls back to articulations.
+- `get_object_pos_in_robot_frame` updated to use `get_scene_object_world_pos`.
+- `door_approach_quaternion_wxyz(door_facing_axis)`: quaternion mapping `{-x, +x, -y, +y}` to a horizontal hand approach.
+- `build_curobo_door_approach_pose(...)`: places hand `door_approach_offset` m in front of door center with horizontal orientation.
+- New CLI args: `--door_approach_offset` (default 0.10 m), `--door_facing_axis` (default `-x`).
+
+**`run_reachability_check.py`**
+- `main()` auto-detects task type: tries `find_pick_and_place_task`, falls back to `find_open_close_door_task`.
+- Refactored into `_check_pick_and_place(...)` and `_check_open_door(...)` helper functions.
+- JSON payload and marker names adapted per task type.
+
+**New environment files**
+- `isaaclab_arena_environments/microwaveOpenkitchen.py` — kitchen counter background.
+- `isaaclab_arena_environments/microwaveOpentable.py` — maple table background.
+
+### 3. Commands
+
+```bash
+# Generate an open-door env from prompt (kitchen background)
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema \
+  --prompt 'franka open microwave door on top of a kitchen table. there are other veggies on the table outside of the microwave as distractors' \
+  --background kitchen \
+  --write-env isaaclab_arena_environments/"
+
+# Run zero-action policy on generated microwave env (kitchen)
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py \
+  --policy_type zero_action --num_steps 10 \
+  microwaveOpenkitchen --embodiment franka_ik"
+
+# IK reachability check for open-door task
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh isaaclab_arena/llm_env_gen/run_reachability_check.py \
+  --viz kit --num_envs 1 microwaveOpenkitchen --embodiment franka_ik \
+  --door_approach_offset 0.12 --door_facing_axis -x"
+```
+
+### 4. TODOs
+
+- `isaaclab_arena_environments/microwaveOpenkitchen.py:87` — `# TODO(relation kind 'next_to' has no generator support yet)` for broccoli, sweet_potato, red_bell_pepper next_to microwave
+- `isaaclab_arena_environments/microwaveOpentable.py` — same `next_to` TODOs for distractor veggies
+
+## Xinjie Yao — 2026-04-23
+
+### 1. What it can do
+
+- **Randomize the robot base around the tabletop** on every regenerated env — a new `RobotPlacement` field in `Placement` samples one of the four tabletop edges (`x_min` / `x_max` / `y_min` / `y_max`), picks a fraction in `[0.4, 0.6]` along that edge, plants the base 0.1 m outside, and yaws it to face the table center. The avocado env now emits an `embodiment.set_initial_pose(...)` block driven by the runtime tabletop bbox rather than a hardcoded pose.
+- **Seeded by env name** so regenerating the same env yields the same pose (`random.Random(env_name)`). Different envs → different edges; same prompt → reproducible pose.
+- **Only emitted for tabletop-anchored backgrounds** (gated on `TabletopAnchorPlan.emit_position_limits`) so non-tabletop flows stay untouched.
+- **Faster default viewer dwell** on reachability runs — `--dwell_steps` default dropped from 1500 (~50 s) to 300 (~10 s); bump it back up when you need longer manual inspection.
+
+**Assumptions:** generated env uses a registered embodiment whose `set_initial_pose(Pose)` is wired through `EmbodimentBase._update_scene_cfg_with_robot_initial_pose` (verified for `franka_ik`). `no_embodiment` currently rejects `set_initial_pose` because its `scene_config` has no `robot` — use `franka_ik` for smoke tests that exercise the pose block. The template now materializes `_tbl_min_xyz` / `_tbl_max_xyz` **before** `embodiment = …`, so any downstream renderer must preserve that order.
+
+### 2. What was added
+
+- **`isaaclab_arena/llm_env_gen/placement_proposer.py`**
+  - `RobotPlacement` dataclass — `edge`, `fraction`, `offset_m`, `z_m`, `rotation_xyzw`.
+  - `Placement.robot_placement: RobotPlacement | None` — `None` when the background has no usable tabletop bbox.
+  - `_EDGE_ROTATION_XYZW` — yaw quaternion table keyed by edge name (4 cardinal orientations).
+  - `_ROBOT_EDGE_OFFSET_M = 0.1`, `_ROBOT_EDGE_FRACTION_RANGE = (0.4, 0.6)` — tunables kept at module scope so they're easy to find.
+  - `_propose_robot_placement(env_name)` — seeded sampler wired into `propose_placement`.
+- **`isaaclab_arena/llm_env_gen/env_writer.py`**
+  - `_render_robot_pose(rp)` — emits the `_robot_x` / `_robot_y` / `embodiment.set_initial_pose(...)` block from a `RobotPlacement`, sharing one template across the four edges via compact axis-expr dispatch.
+  - Template reordered: `{bbox_setup}` now renders **before** embodiment creation so the robot-pose block can reference `_tbl_min_xyz` / `_tbl_max_xyz`.
+- **`isaaclab_arena/llm_env_gen/reachability_utils.py`** — `--dwell_steps` default dropped from 1500 to 300 (~10 s); help text updated to say "bump for longer inspection".
+- **`isaaclab_arena/llm_env_gen/run_reachability_check.py`** — shrank the `_make_big_frame` default scale from 0.3 → 0.15 so the reachability target frame is still identifiable against Arena's 0.1 ee_frame markers without dominating the viewport.
+- **`isaaclab_arena_environments/avocadoPnPbowltable.py`** — regenerated under the new pipeline. Sampled edge `x_max` at fraction 0.448 → Franka sits east of the table, yaw 180° facing inward. Verified with the `verify-env-with-zero-action` smoke test (500 steps, Kit viz, `franka_ik`, exit 0).
+
+### 3. Commands
+
+```bash
+# Regenerate an env with a randomized robot placement
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema \
+    --background maple_table_robolab \
+    --write-env isaaclab_arena_environments
+
+# Smoke-test the regenerated env with franka_ik + Kit viz
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh -u -m isaaclab_arena.evaluation.policy_runner \
+    --policy_type zero_action --num_envs 1 --num_steps 500 --viz kit \
+    avocadoPnPbowltable --embodiment franka_ik"
+```
+
+### 4. TODOs
+
+- `no_embodiment` still crashes because its `scene_config` has no `robot` attribute — generated envs now unconditionally call `embodiment.set_initial_pose(...)`. Either guard the emit site on `args_cli.embodiment != "no_embodiment"` or make `NoEmbodiment.set_initial_pose` a no-op so the `verify-env-with-zero-action` skill keeps working.
+- Robot placement currently ignores the pick/destination geometry — a future feasibility gate (IK reachability on both objects) should reject or resample placements where neither object is in the Franka work envelope from the sampled edge.
+
+## Qian Lin — 2026-04-23
+
+### 1. What it can do
+
+- **Check IK reachability** for any Arena pick-and-place environment: given any `PickAndPlaceTask` + Franka embodiment, determine whether the pick object's pose is kinematically reachable (IK, collision-unaware) from the robot's initial configuration.
+- **Check motion-plan feasibility**: if IK passes, run a full cuRobo collision-aware trajectory planner to confirm a collision-free approach path exists to the top-down grasp pose.
+- **Visualize in Rerun**: stream robot collision spheres, EE trajectory, and world meshes to a Rerun viewer via X11, or save a `.rrd` file for offline replay when no display is available.
+- **Tune IK thresholds** at the CLI (`--position_threshold`, `--rotation_threshold`) to probe borderline poses.
+- **Bake cuRobo into the Arena Docker image** with a single rebuild flag (`-c`) — installs `cuda-toolkit-12.8` + cuRobo from pinned source; no manual container patching required.
+
+**Assumptions:** `./docker/run_docker.sh -c -r` builds the `isaaclab_arena:curobo` image. The `install_cuda.sh` script is always present in the Arena source tree. cuRobo must be compiled from source (PyPI stub is non-functional). Rerun viewer version on the host must match the SDK in the container (currently `0.31.3`). Do NOT start `rerun` manually before running visualization — `rr.spawn()` inside the script owns the viewer lifecycle.
+
+### 2. What was added
+
+**`isaaclab_arena/llm_env_gen/check_ik_reachability.py`** (new)
+- Arena-CLI-compatible entry point using the standard subparser pattern
+- `_assert_franka_embodiment`, `_resolve_pick_object_name` — validate env constraints before cuRobo init
+- `_build_curobo_target_pose` — top-down grasp target (TCP offset + configurable axis rotation)
+- `_run_ik_reachability` — calls `motion_gen.ik_solver.solve_single`; returns position/rotation errors
+- `_run_motion_plan` — calls `planner.update_world()` + `planner.plan_motion()`; collision-aware
+- `_log_initial_scene` — unconditionally logs robot spheres + world meshes to Rerun regardless of plan success
+- `--save_rrd PATH` with `rr.spawn` monkey-patch — saves recording to file, bypasses display requirement
+- `--position_threshold` / `--rotation_threshold` CLI overrides for IK diagnostics
+- `--visualize_plan` / `--visualize_spheres` flags (Rerun)
+
+**`docker/Dockerfile.isaaclab_arena`**
+- New `ARG INSTALL_CUROBO=false` block: re-COPYs `install_cuda.sh` (avoiding the GR00T block's unconditional `rm`), installs `cuda-toolkit-12.8`, builds cuRobo from pinned commit, persists `CUDA_HOME` via `/etc/profile.d/cuda.sh`
+
+**`docker/run_docker.sh`**
+- New `-c` flag: sets `INSTALL_CUROBO=true`, tags image as `isaaclab_arena:curobo`, passes `--build-arg INSTALL_CUROBO` to `docker build`
+
+### 3. Commands
+
+```bash
+# Build the Arena Docker image with cuRobo baked in
+./docker/run_docker.sh -c -r
+
+# Run IK-only check (fast, no motion planning)
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh isaaclab_arena/llm_env_gen/check_ik_reachability.py \
+    --headless --num_envs 1 --ik_only avocadoPnPbowltable"
+
+# Full check with Rerun visualization (X11; do NOT start rerun manually)
+docker exec -it isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh isaaclab_arena/llm_env_gen/check_ik_reachability.py \
+    --headless --num_envs 1 --visualize_plan --visualize_spheres \
+    --top_down_offset 0.12 avocadoPnPbowltable"
+
+# Save Rerun recording to file (no display / headless SSH)
+# Then on host: rerun /tmp/plan.rrd
+docker exec isaaclab_arena-curobo bash -c "cd /workspaces/isaaclab_arena && \
+  /isaac-sim/python.sh isaaclab_arena/llm_env_gen/check_ik_reachability.py \
+    --headless --num_envs 1 --visualize_plan --save_rrd /tmp/plan.rrd avocadoPnPbowltable"
+
+# Diagnose rotation convention or relax thresholds for borderline poses
+#   --grasp_axis y          (try if x-axis gives rot_err ~0.7 rad)
+#   --rotation_threshold 0.8 --position_threshold 0.015
+```
+
+## Xinjie Yao — 2026-04-22
+
+### 1. What it can do
+
+- Spawn items **inside containers** via a new `In` containment relation — XY clamped to the parent's footprint, Z nudged just above the parent's rim so gravity completes the deposit. Replaces the long-standing TODO at `isaaclab_arena/relations/relations.py`.
+- Generate envs through a **two-stage pipeline**: `propose_placement` (pure data transform → `Placement` dataclass) feeds `write_env` (thin renderer). Feasibility gates can slot in between without touching the renderer.
+- **Override the LLM's background** at the CLI (`--background maple_table_robolab` is the default) — the full avocado scene swaps cleanly to the maple tabletop with `ObjectReference`-based anchoring and runtime bbox-derived `PositionLimits`.
+- **Stable env names** regardless of the chosen USD — `_BACKGROUND_NAME_ALIASES` folds `maple_table_robolab`, `office_table`, `packing_table`, etc. under `"table"` and kitchen variants under `"kitchen"` for slug generation. The avocado env stays named `avocadoPnPbowltable` no matter which table USD drives it.
+- **Smoke-test any registered env** via the new project-level `verify-env-with-zero-action` skill — Kit-viz by default, `no_embodiment` + `zero_action`, failure-to-fix hint table for the common bring-up errors.
+- **Forbid initial states that already satisfy a goal** via a new `Not(inner)` relation + `block_initial_goal_satisfaction` stage in the proposer — the avocado env now carries `Not(In(bowl))` so the solver starts the avocado on the table, never already inside the bowl. Closes the Layer 2 negative-constraint TODO on `RelationSolver`.
+
+**Assumptions:** Docker container running; `NV_API_KEY` on host for any LLM flow; `openai` pip installed inside the container; generated env files land under `isaaclab_arena_environments/` for auto-discovery; tabletop-style backgrounds are the only ones with a tested anchor / bbox path (`_BACKGROUND_TABLETOP_ANCHOR`); `Not(inner)` only wraps binary `Relation` subclasses (unary inners would need a separate solver dispatch).
+
+### 2. What was added
+
+- **`isaaclab_arena/relations/`**
+  - `In(Relation)` class — XY containment without Z constraint at the relation layer.
+  - `InLossStrategy(slope, z_slope_ratio=0.1, z_margin_m=0.02)` — XY band loss identical to `OnLossStrategy`, plus a soft Z-point term at `parent_rim + z_margin` scaled by `slope * z_slope_ratio`. `z_slope_ratio=0.0` recovers pure XY-only.
+  - `Not(Relation)` wrapper — forwards `inner.parent` so the solver's binary-relation dispatch handles it without special-casing. Binary inners only for now.
+  - `NotRelationLossStrategy(margin, slope)` — inverts the inner strategy's loss via `max(0, margin - inner_loss) * slope`. `inner_strategy` is injected by the solver at call time (no cached back-reference to the strategies dict, which would create a cycle the configclass validator recurses into).
+  - New Not dispatch branch in `RelationSolver._compute_total_loss`: when it sees `Not(inner)` it looks up `_get_strategy(inner)` and threads it through as `inner_strategy=...`.
+  - Registered as `In: InLossStrategy(slope=100.0)` and `Not: NotRelationLossStrategy(margin=0.05, slope=100.0)` in `RelationSolverParams._default_strategies`.
+- **`isaaclab_arena/llm_env_gen/placement_proposer.py`** (new) — typed bundle (`Placement`, `PlacementItem`, `RelationSpec`, `TabletopAnchorPlan`, `TaskPlan`, `GoalBindingSpec`) with `propose_placement()` as the pure transform. Owns naming, anchor lookup, per-item relation planning (including `In`), and task dispatch. `RelationSpec` gains a `"not"` kind whose rendered form is `Not(inner)`, where `inner` is itself a `RelationSpec`.
+- **`block_initial_goal_satisfaction(placement, resolved)`** (new, same module) — Layer 2a stage that walks `resolved.goal_added`, looks up each subject + target, and appends `RelationSpec(kind="not", inner=<on|in>)` to the subject's relations. Explicit `if kind == "in" / elif kind == "on" / else -> unsupported` dispatch so unhandled kinds land as visible TODO comments in the generated env. Also attaches a `GoalBindingSpec` so downstream feasibility gates can read "where should this item end up?"
+- **`isaaclab_arena/llm_env_gen/env_writer.py`** (rewritten) — thin `write_env()` shim now chained as `propose_placement → block_initial_goal_satisfaction → _render_module → write`. Renders `In(...)` and `Not(...)` in addition to `On(...)` / `PositionLimits(...)`, factoring `_relation_call_expr(rel)` so `Not`'s inner is rendered without string surgery.
+- **`isaaclab_arena/llm_env_gen/try_schema.py`** — new `--background` CLI flag (default `"maple_table_robolab"`) that patches `SceneSpec.background` and all matching relation targets after the LLM returns but before resolution.
+- **`_BACKGROUND_NAME_ALIASES`** — alias map that folds background variants into short family names for env slugs.
+- **`isaaclab_arena_environments/avocadoPnPbowltable.py`** — regenerated under the new pipeline: `maple_table_robolab` background + tabletop `ObjectReference` + bbox-derived `PositionLimits` per item + `PickAndPlaceTask` wiring (`pick_up=avocado`, `destination=bowl`) + `avocado_obj.add_relation(Not(In(bowl_obj)))` so the solver never initialises with the goal already satisfied.
+- **`isaaclab_arena_environments/avocadoInBowlTest.py`** (new) — hand-authored test env exercising the `In` relation: bowl on the maple tabletop, avocado spawned `In(bowl)`. Observed init positions place the avocado's XY on the bowl's centre.
+- **`.claude/skills/verify-env-with-zero-action/SKILL.md`** (new, project-level) — smoke-test skill with Kit-viz default and a failure→fix hint table.
+
+### 3. Commands
+
+```
+# Override the LLM's background when regenerating an env
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema \
+    --background maple_table_robolab \
+    --write-env isaaclab_arena_environments
+
+# Verify any registered env with zero_action + Kit viz (200 steps)
+/isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py \
+    --viz kit --policy_type zero_action --num_steps 200 --num_envs 1 \
+    <env_name> --embodiment no_embodiment
+
+# Bring up the hand-authored In-relation test env
+/isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py \
+    --policy_type zero_action --num_steps 5 --num_envs 1 \
+    avocadoInBowlTest --embodiment no_embodiment
+```
+
+### 4. TODOs
+
+- `isaaclab_arena/llm_env_gen/placement_proposer.py` (`_BACKGROUND_TABLETOP_ANCHOR` docstring) — `get_world_bounding_box()` on a plain standalone table background doesn't account for the 90° Z rotation applied by the template, so PL derived from it clamps the wrong axes; prefer `ObjectReference` sub-prim entries until the asset layer handles pose-aware AABBs.
+
+## Qian Lin — 2026-04-22
+
+### 1. What it can do
+
+- Generate a **pick-and-place** task env from a natural-language prompt — when the goal diff is a single `on`/`in` relation between two resolved items, the writer emits a `PickAndPlaceTask` (subject → `pick_up_object`, target → `destination_location`); everything else falls back to `NoTask` with per-goal TODO comments and a docstring note explaining why.
+- Scan a folder (or every asset in `AssetRegistry`) of USD files and emit `object_catalog.json` with dimensions, physics properties, and semantic labels via pure `pxr` — no Isaac Sim runtime required. Read the catalog back with `--list-classes [--by-dataset]`.
+- Register a fresh USD batch end-to-end via the new `isaaclab-arena-assetgen` skill: discover → catalog → `<basename>_object_library.py` with globally-unique `<basename>_<name>` keys → wire into `asset_registry.py` → USD-exists pytest.
+- Run the converted `avocadoPnPbowltable` env with a real success predicate (avocado-in-bowl contact) instead of the old `NoTask` placeholder.
+
+**Assumptions:**
+- Docker container running; `NV_API_KEY` exported on host for any LLM-driven flow.
+- `openai` picked up from the new `RUNTIME_DEPS` entry — requires `pip install -e .` (or image rebuild) inside the container.
+- `isaaclab_arena/llm_env_gen/generate_catalog.py` as committed imports from `isaaclab_arena.scene_gen.catalog_utils`, but the helper was added at `isaaclab_arena/llm_env_gen/catalog_utils.py` — the import (or the module location) must be fixed before the script runs.
+- Uncommitted working-tree edits are needed for the VOMP flow: `isaaclab_arena/assets/registries.py` gets `import isaaclab_arena.assets.vomp_object_library`.
+
+### 2. What was added
+
+- **`isaaclab_arena/llm_env_gen/env_writer.py`**
+  - `_plan_task` / `_pick_and_place_plan` / `_no_task_plan` dispatch driven by `resolved.goal_added` / `goal_removed`.
+  - Constants: `_PICK_AND_PLACE_KINDS = {"on", "in"}`, `_DEFAULT_PICK_AND_PLACE_EPISODE_LENGTH_S = 20.0`.
+  - Generated module docstrings now carry a one-liner `Task wiring: …` so `head -n 20` explains which task got emitted.
+  - Generated envs get inline `# goal_added (...)` / `# goal_removed (...)` comments documenting the success contract.
+- **`isaaclab_arena/llm_env_gen/catalog_utils.py`** (new): `ARENA_ROOT`, `OBJECT_CATALOG_PATH`, `find_usd_files`, `iter_object_files`, `get_usd_rigid_body_info`, `get_dataset_from_path`, `load_catalog`, `print_object_info`. Pure `pxr`, no Isaac Sim runtime.
+- **`isaaclab_arena/llm_env_gen/generate_catalog.py`** (new): CLI with `--objects`, `--output`, `--verbose`, `--list-classes`, `--by-dataset`. Falls back to `AssetRegistry` enumeration when `--objects` is omitted; rewrites absolute paths to repo-relative under `ARENA_ROOT`.
+- **`isaaclab_arena_environments/avocadoPnPbowltable.py`**: retargeted from `NoTask` → `PickAndPlaceTask(pick_up_object=avocado_obj, destination_location=bowl_obj, background_scene=background, episode_length_s=20.0)` with task description preserved and the goal diff captured as comments.
+- **`.claude/skills/`**
+  - Top-level `SKILL.md` index and `isaaclab-arena-assetgen/SKILL.md` workflow.
+  - `references/object_library_template.md` — minimal `LibraryObject` + `@register_asset` template.
+  - New convention: a single `<basename>` drives the library filename, the catalog JSON path, and a `<basename>_<catalog_name>` prefix on every registered object → registry collisions impossible by construction.
+- **`setup.py`**: `openai` added to `RUNTIME_DEPS`, consumed lazily by `isaaclab_arena/llm_env_gen/*`.
+
+### 3. Commands
+
+```
+# Generate a dedicated catalog for a USD batch (skill step 1)
+/isaac-sim/python.sh isaaclab_arena/llm_env_gen/generate_catalog.py \
+    --objects /path/to/usd/root \
+    --output isaaclab_arena/scene_gen/catalogs/<basename>_object_catalog.json \
+    --verbose
+
+# Rescan every USD currently registered in AssetRegistry
+/isaac-sim/python.sh isaaclab_arena/llm_env_gen/generate_catalog.py
+
+# Read back semantic labels from an existing catalog
+/isaac-sim/python.sh isaaclab_arena/llm_env_gen/generate_catalog.py \
+    --list-classes --by-dataset
+
+# Run the converted avocado pick-and-place env
+/isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py \
+    --policy_type zero_action --num_steps 200 --num_envs 1 \
+    avocadoPnPbowltable
+```
+
+## Xinjie Yao — 2026-04-21
+
+### 1. What it can do
+
+- Parse a natural-language scene prompt into a validated `SceneSpec` (Pydantic).
+- Resolve item names to concrete Arena assets with a traceable tag-preference + fallback pipeline.
+- Extract both initial and final scene graphs from one prompt and derive the goal diff.
+- Auto-generate a registered `@register_environment` Arena module with `NoTask`.
+- Bring the generated env up end-to-end with `no_embodiment` + `zero_action`.
+
+**Assumptions:** Docker container running; `NV_API_KEY` set on host; `openai` pip installed inside the container; writer output placed under `isaaclab_arena_environments/` for auto-discovery; the uncommitted `NoEmbodiment` registration fix applied for the no-robot path.
+
+### 2. What was added
+
+- **`isaaclab_arena/llm_env_gen/`**
+  - `schema.py` — `SceneSpec` / `Item` / `Relation` Pydantic models; `identity()` for diffing; `goal_added()` / `goal_removed()` helpers; trivial-task `model_validator`.
+  - `resolver.py` — `Resolver` with exact → substring → difflib fallback; tag preference (not hard filter); `IK_DEFAULTS` for bare robot family names; structured `TraceEvent` log including `diff.goal_added` / `diff.goal_removed`.
+  - `llm_agent.py` — OpenAI-compatible Claude call against NVIDIA inference endpoint; schema injection; robust JSON extraction (fenced / brace-matching fallback).
+  - `try_schema.py` — CLI runner with `--print-schema`, `--print-catalog`, `--write-env`; chains resolver and prints the trace.
+  - `env_writer.py` — `write_env()` renders a complete env module; compact goal-derived naming (`avocadoPnPbowltable`); filename auto-derived when `out_path` is a directory.
+- **`isaaclab_arena/relations/`** — TODO markers on the `In` relation (in `relations.py`) and on the `RelationSolver` negative-constraint requirement.
+- **`docker/run_docker.sh`** — passes host `NV_API_KEY` through to the container when set, so `docker exec` no longer needs `-e`.
+- **`isaaclab_arena_examples/agents/`** — example artifact directory with the committed avocado env.
+- **Uncommitted**: `@register_asset` on `NoEmbodiment` + import in `embodiments/__init__.py`; writer template now emits `IsAnchor` + `set_initial_pose(Pose(...))` for background and ground plane; regenerated env file under `isaaclab_arena_environments/`.
+
+### 3. Commands
+
+```
+# Parse a prompt and show the resolved scene + trace
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema
+
+# Dump the Pydantic schema (no LLM call)
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema --print-schema
+
+# Dump the vocabulary catalog the LLM sees (no LLM call)
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema --print-catalog
+
+# Parse + resolve + write an @register_environment module (dir auto-names the file)
+/isaac-sim/python.sh -m isaaclab_arena.llm_env_gen.try_schema --write-env isaaclab_arena_environments
+
+# Bring up the generated env with no robot, no task
+/isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py \
+    --policy_type zero_action --num_steps 200 --num_envs 1 \
+    avocadoPnPbowltable --embodiment no_embodiment
+
+# Same, with the Kit visualizer
+/isaac-sim/python.sh isaaclab_arena/evaluation/policy_runner.py --viz kit \
+    --policy_type zero_action --num_steps 200 --num_envs 1 \
+    avocadoPnPbowltable --embodiment no_embodiment
+```
+
+### 4. TODOs
+
+- `isaaclab_arena/relations/relations.py:129` — Implement `In` / containment relation (loss over parent's opening footprint, `IsInside` predicate for success checks).
+- `isaaclab_arena/relations/relation_solver.py:31` — Support negative / not-holds constraints on initial placement so `ResolvedScene.goal_added` can be enforced.
+- `isaaclab_arena/llm_env_gen/env_writer.py` (just above `item_decls`) — Support multiple instances of the same library asset (e.g. two bananas in one scene); re-introduce `instance_name=...` with a unique suffix.
+- `isaaclab_arena/llm_env_gen/env_writer.py` (emitted into generated envs when a relation kind isn't supported) — `# TODO({rel['kind']}): no generator support yet for this relation kind.`
