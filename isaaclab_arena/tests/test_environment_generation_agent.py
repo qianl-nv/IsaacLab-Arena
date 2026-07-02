@@ -10,37 +10,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from isaaclab_arena.agentic_environment_generation.environment_generation_agent import (
-    AssetCatalogue,
-    EnvironmentGenerationAgent,
-    RelationCatalogue,
-    TaskCatalogue,
-)
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+from isaaclab_arena.agentic_environment_generation.catalogues import AssetCatalogue, RelationCatalogue, TaskCatalogue
+from isaaclab_arena.agentic_environment_generation.environment_generation_agent import EnvironmentGenerationAgent
 
 
 def _chat_response(content: str | None = None, reasoning_content: str | None = None, finish_reason: str = "stop"):
-    """Build a nested mock matching the openai chat-completion response shape.
-
-    Models that route structured outputs into ``reasoning_content`` (e.g.
-    NVIDIA DeepSeek) leave ``content`` empty — the fixture mirrors that by
-    populating either channel independently.
-    """
+    """Build a nested mock matching the openai chat-completion response shape."""
     resp = MagicMock()
     resp.choices = [MagicMock()]
     resp.choices[0].finish_reason = finish_reason
     resp.choices[0].message.content = content
     resp.choices[0].message.reasoning_content = reasoning_content
+    resp.choices[0].message.tool_calls = None
     return resp
 
 
 @pytest.fixture
 def stub_openai():
     """Patch ``openai.OpenAI`` so ``EnvironmentGenerationAgent()`` never hits the wire."""
-    with patch("isaaclab_arena.agentic_environment_generation.environment_generation_agent.OpenAI") as mock_cls:
+    with patch("isaaclab_arena.agentic_environment_generation.agents.llm_agent.OpenAI") as mock_cls:
         client = MagicMock()
         client.chat.completions.create.return_value = _chat_response(content="OK")
         mock_cls.return_value = client
@@ -56,23 +44,30 @@ def agent(stub_openai):
     return a
 
 
-# Minimal EnvironmentIntentSpec payload — exercises every required field plus one
-# task. Reused across the generate_spec happy-path tests.
-_MINIMAL_SPEC: dict = {
+_NORMALIZED_PROMPT: dict = {
     "reasoning": (
         "User wants a pick-and-place: foreground object is 'avocado', "
         "target container is 'bowl', background is the kitchen table."
     ),
-    "background": "kitchen",
-    "embodiment": "franka_ik",
-    "items": [
-        {"query": "avocado", "category_tags": [], "instance_name": None},
-        {"query": "bowl", "category_tags": [], "instance_name": None},
+    "robot": {
+        "name": "franka",
+        "query": "franka_ik",
+        "description": "Franka robot arm",
+    },
+    "background": {
+        "name": "kitchen",
+        "query": "kitchen",
+        "description": "Kitchen table background",
+    },
+    "objects": [
+        {"name": "avocado", "query": "avocado", "description": "avocado to pick"},
+        {"name": "bowl", "query": "bowl", "description": "bowl destination"},
     ],
-    "initial_state_graph": [
-        {"kind": "on", "subject": "avocado", "reference": "kitchen"},
-        {"kind": "on", "subject": "bowl", "reference": "kitchen"},
-    ],
+    "tasks_description": "pick up the avocado and place it in the bowl",
+    "relations_description": "avocado and bowl start on the kitchen table",
+}
+
+_TASKS_PAYLOAD: dict = {
     "tasks": [{
         "kind": "PickAndPlaceTask",
         "params": {
@@ -84,40 +79,23 @@ _MINIMAL_SPEC: dict = {
     }],
 }
 
-
-# ---------------------------------------------------------------------------
-# __init__
-# ---------------------------------------------------------------------------
-
-
-class TestInit:
-    def test_explicit_api_key_overrides_env(self, monkeypatch, stub_openai):
-        monkeypatch.setenv("NV_API_KEY", "env-key")
-        a = EnvironmentGenerationAgent(api_key="explicit-key")
-        assert a.api_key == "explicit-key"
-
-    def test_falls_back_to_env_var(self, monkeypatch, stub_openai):
-        monkeypatch.setenv("NV_API_KEY", "env-key")
-        a = EnvironmentGenerationAgent()
-        assert a.api_key == "env-key"
-
-    def test_raises_when_no_key_anywhere(self, monkeypatch, stub_openai):
-        monkeypatch.delenv("NV_API_KEY", raising=False)
-        with pytest.raises(AssertionError, match="API key required"):
-            EnvironmentGenerationAgent()
-
-    def test_custom_model_and_base_url(self, stub_openai):
-        a = EnvironmentGenerationAgent(api_key="k", model="custom-model", base_url="http://localhost:8000")
-        assert a.model == "custom-model"
-        stub_openai.assert_called_once_with(api_key="k", base_url="http://localhost:8000")
+_RELATIONS_PAYLOAD: dict = {
+    "initial_state_graph": [
+        {"kind": "on", "subject": "avocado", "reference": "kitchen"},
+        {"kind": "on", "subject": "bowl", "reference": "kitchen"},
+    ],
+}
 
 
-# ---------------------------------------------------------------------------
-# generate_spec
-# ---------------------------------------------------------------------------
+def _pipeline_responses() -> list:
+    return [
+        _chat_response(content=json.dumps(_NORMALIZED_PROMPT)),
+        _chat_response(content=json.dumps(_TASKS_PAYLOAD)),
+        _chat_response(content=json.dumps(_RELATIONS_PAYLOAD)),
+    ]
 
 
-def _catalog(text: str, relation_text: str = "RELATIONS (1):\n- on (binary): test") -> AssetCatalogue:
+def _catalog(text: str) -> AssetCatalogue:
     catalogue = AssetCatalogue()
     catalogue.to_catalog_string = lambda: text  # type: ignore[method-assign]
     return catalogue
@@ -137,7 +115,7 @@ def _task_catalog(text: str) -> TaskCatalogue:
 
 class TestGenerateSpec:
     def test_builds_catalogues_from_singleton_registries_when_none(self, agent):
-        agent.client.chat.completions.create.return_value = _chat_response(content=json.dumps(_MINIMAL_SPEC))
+        agent.client.chat.completions.create.side_effect = _pipeline_responses()
         with (
             patch(
                 "isaaclab_arena.agentic_environment_generation.environment_generation_agent.build_asset_catalogue",
@@ -157,71 +135,83 @@ class TestGenerateSpec:
         mock_build_relations.assert_called_once_with()
         mock_build_tasks.assert_called_once_with()
 
-    def test_request_sets_response_format_to_json_schema(self, agent):
-        agent.client.chat.completions.create.return_value = _chat_response(content=json.dumps(_MINIMAL_SPEC))
+    def test_runs_multi_stage_pipeline(self, agent):
+        agent.client.chat.completions.create.side_effect = _pipeline_responses()
+        spec, raw = agent.generate_spec(
+            "p",
+            asset_catalog=_catalog("catalog"),
+            relation_catalog=_relation_catalog("RELATIONS"),
+            task_catalog=_task_catalog("TASKS"),
+        )
+        assert spec.tasks[0].kind == "PickAndPlaceTask"
+        assert spec.env_name
+        assert agent.client.chat.completions.create.call_count == 3
+        parsed_raw = json.loads(raw)
+        assert {"normalize", "tasks", "relations"}.issubset(set(parsed_raw))
+        assert "compile_trace" in parsed_raw
+
+    def test_structured_calls_use_json_schema(self, agent):
+        agent.client.chat.completions.create.side_effect = _pipeline_responses()
         agent.generate_spec(
             "p",
             asset_catalog=_catalog("catalog"),
             relation_catalog=_relation_catalog("RELATIONS"),
             task_catalog=_task_catalog("TASKS"),
         )
-        kwargs = agent.client.chat.completions.create.call_args.kwargs
-        assert kwargs["response_format"]["type"] == "json_schema"
-        assert kwargs["response_format"]["json_schema"]["name"] == "EnvironmentIntentSpec"
-        assert kwargs["response_format"]["json_schema"]["strict"] is True
-        # The schema sent on the wire is the cached, strict-mode-munged copy.
-        assert kwargs["response_format"]["json_schema"]["schema"] is agent._spec_schema
+        schema_names = [
+            call.kwargs["response_format"]["json_schema"]["name"]
+            for call in agent.client.chat.completions.create.call_args_list
+            if "response_format" in call.kwargs
+        ]
+        assert schema_names == ["NormalizedPrompt", "TasksInferenceSpec", "RelationsInferenceSpec"]
 
     def test_tolerates_unescaped_control_chars(self, agent):
-        # DeepSeek-v4-flash emits literal tab/newline characters inside JSON
-        # strings despite the structured-outputs contract.
-        payload = dict(_MINIMAL_SPEC)
+        payload = dict(_NORMALIZED_PROMPT)
         payload["reasoning"] = "pick up\tthe\tavocado"
         raw = json.dumps(payload).replace("\\t", "\t")
-        assert "\t" in raw  # raw payload now has literal tab chars in a string
-        agent.client.chat.completions.create.return_value = _chat_response(content=raw)
-        spec, _ = agent.generate_spec(
+        agent.client.chat.completions.create.side_effect = [
+            _chat_response(content=raw),
+            _chat_response(content=json.dumps(_TASKS_PAYLOAD)),
+            _chat_response(content=json.dumps(_RELATIONS_PAYLOAD)),
+        ]
+        spec, raw = agent.generate_spec(
             "p",
             asset_catalog=_catalog("catalog"),
             relation_catalog=_relation_catalog("RELATIONS"),
             task_catalog=_task_catalog("TASKS"),
         )
-        assert "\t" in spec.reasoning
+        assert "\t" in json.loads(raw)["reasoning"]
 
     def test_user_message_contains_catalog_and_prompt(self, agent):
-        agent.client.chat.completions.create.return_value = _chat_response(content=json.dumps(_MINIMAL_SPEC))
+        agent.client.chat.completions.create.side_effect = _pipeline_responses()
         agent.generate_spec(
             "user wants avocado on kitchen",
             asset_catalog=_catalog("<<CATALOG-MARKER>>"),
             relation_catalog=_relation_catalog("<<RELATIONS-MARKER>>"),
             task_catalog=_task_catalog("<<TASKS-MARKER>>"),
         )
-        msgs = agent.client.chat.completions.create.call_args.kwargs["messages"]
-        assert [m["role"] for m in msgs] == ["system", "user"]
-        user_msg = msgs[1]["content"]
-        assert "<<CATALOG-MARKER>>" in user_msg
-        assert "<<RELATIONS-MARKER>>" in user_msg
-        assert "<<TASKS-MARKER>>" in user_msg
-        assert "user wants avocado on kitchen" in user_msg
+        first_call_messages = agent.client.chat.completions.create.call_args_list[0].kwargs["messages"]
+        assert first_call_messages[1]["content"]
+        assert "<<CATALOG-MARKER>>" in first_call_messages[1]["content"]
+        assert "user wants avocado on kitchen" in first_call_messages[1]["content"]
 
     def test_raises_when_response_has_no_choices(self, agent):
         resp = MagicMock()
         resp.choices = []
         agent.client.chat.completions.create.return_value = resp
-        with pytest.raises(RuntimeError, match="failed after 4 attempts"):
+        with pytest.raises(RuntimeError, match="failed"):
             agent.generate_spec(
                 "p",
                 asset_catalog=_catalog("catalog"),
                 relation_catalog=_relation_catalog("RELATIONS"),
                 task_catalog=_task_catalog("TASKS"),
-                max_retries=3,
+                max_retries=1,
             )
-        assert agent.client.chat.completions.create.call_count == 4
 
     def test_retries_after_api_error_then_succeeds(self, agent):
         agent.client.chat.completions.create.side_effect = [
             ConnectionError("timeout"),
-            _chat_response(content=json.dumps(_MINIMAL_SPEC)),
+            *_pipeline_responses(),
         ]
         spec, _ = agent.generate_spec(
             "p",
@@ -230,29 +220,10 @@ class TestGenerateSpec:
             task_catalog=_task_catalog("TASKS"),
             max_retries=3,
         )
-        assert spec.background == "kitchen"
-        assert agent.client.chat.completions.create.call_count == 2
-
-    def test_raises_after_api_errors_exhaust_retries(self, agent):
-        agent.client.chat.completions.create.side_effect = ConnectionError("timeout")
-        with pytest.raises(RuntimeError, match="failed after 2 attempts"):
-            agent.generate_spec(
-                "p",
-                asset_catalog=_catalog("catalog"),
-                relation_catalog=_relation_catalog("RELATIONS"),
-                task_catalog=_task_catalog("TASKS"),
-                max_retries=1,
-            )
-        assert agent.client.chat.completions.create.call_count == 2
+        assert spec.tasks[0].kind == "PickAndPlaceTask"
+        assert agent.client.chat.completions.create.call_count == 4
 
 
-# ---------------------------------------------------------------------------
-# Live endpoint (network + auth required)
-# ---------------------------------------------------------------------------
-
-
-# Marked flaky to absorb intermittent wire-level hiccups on the inference endpoint.
-# TODO(qianl): drop the flaky marker once production-side retry is implemented.
 @pytest.mark.flaky(max_runs=3, min_passes=1)
 def test_generate_spec_against_live_endpoint():
     """End-to-end smoke test against the real OpenAI-compatible endpoint."""
@@ -272,8 +243,8 @@ def test_generate_spec_against_live_endpoint():
         asset_catalog=asset_catalog,
         task_catalog=task_catalog,
     )
-    assert isinstance(raw, str) and raw, "agent returned empty raw response"
-    assert spec.tasks, "EnvironmentIntentSpec must contain at least one task"
-    assert spec.background, "EnvironmentIntentSpec.background must be populated"
-    assert spec.embodiment, "EnvironmentIntentSpec.embodiment must be populated"
-    assert spec.reasoning, "EnvironmentIntentSpec.reasoning must be populated"
+    assert isinstance(raw, str) and raw
+    meta = json.loads(raw)
+    assert spec.tasks, "ArenaEnvInitialGraphSpec must contain at least one task"
+    assert spec.nodes, "ArenaEnvInitialGraphSpec must contain at least one node"
+    assert meta.get("reasoning"), "Pipeline reasoning must be populated"

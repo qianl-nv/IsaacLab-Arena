@@ -7,7 +7,7 @@
 
 Usage::
 
-    # Resolve an environment intent spec into an initial environment graph spec and a linked environment graph spec:
+    # Resolve a prompt into an initial environment graph spec and a linked environment graph spec:
     python isaaclab_arena_examples/agentic_environment_generation/environment_generation_runner.py --mode resolve --prompt ...
 
     # Build a gym env from a linked environment graph spec YAML and run the zero-action policy:
@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -33,7 +34,6 @@ from isaaclab_arena.utils.isaaclab_utils.simulation_app import SimulationAppCont
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
-    from isaaclab_arena.agentic_environment_generation.environment_intent_spec import EnvironmentIntentSpec
     from isaaclab_arena.environments.arena_env_graph_spec import ArenaEnvGraphSpec, ArenaEnvInitialGraphSpec
 
 DEFAULT_PROMPT = "Franka picks up a cube from the maple table and places it into a bowl on the table."
@@ -89,14 +89,14 @@ def add_agentic_env_gen_runner_cli_args(parser: argparse.ArgumentParser) -> None
     )
 
 
-def generate_env_intent_spec(args_cli: argparse.Namespace) -> EnvironmentIntentSpec:
-    """Generate an environment intent spec from a prompt."""
-    from isaaclab_arena.agentic_environment_generation.environment_generation_agent import (
-        EnvironmentGenerationAgent,
+def generate_initial_graph_spec(args_cli: argparse.Namespace) -> ArenaEnvInitialGraphSpec:
+    """Generate an initial environment graph spec from a prompt."""
+    from isaaclab_arena.agentic_environment_generation.catalogues import (
         build_asset_catalogue,
         build_relation_catalogue,
         build_task_catalogue,
     )
+    from isaaclab_arena.agentic_environment_generation.environment_generation_agent import EnvironmentGenerationAgent
 
     print(f"\n[runner] prompt: {args_cli.prompt!r}", flush=True)
 
@@ -106,24 +106,16 @@ def generate_env_intent_spec(args_cli: argparse.Namespace) -> EnvironmentIntentS
 
     agent_kwargs = {"model": args_cli.model} if args_cli.model else {}
     agent = EnvironmentGenerationAgent(**agent_kwargs)
-    intent_spec, _raw_response = agent.generate_spec(
+    initial_env_graph_spec, raw = agent.generate_spec(
         args_cli.prompt,
         asset_catalog=asset_catalog,
         relation_catalog=relation_catalog,
         task_catalog=task_catalog,
         temperature=args_cli.temperature,
     )
-    print(f"[runner] agent reasoning: {intent_spec.reasoning}", flush=True)
-    return intent_spec
-
-
-def compile_env_intent_spec(env_intent_spec: EnvironmentIntentSpec) -> ArenaEnvInitialGraphSpec:
-    """Compile an EnvironmentIntentSpec into an initial environment graph spec."""
-    from isaaclab_arena.agentic_environment_generation.intent_compiler import IntentCompiler
-
-    compiler = IntentCompiler()
-    initial_env_graph_spec = compiler.compile(env_intent_spec)
-
+    meta = json.loads(raw)
+    reasoning = meta.get("reasoning", "")
+    print(f"[runner] agent reasoning: {reasoning}", flush=True)
     print(
         f"[runner] compiled → {len(initial_env_graph_spec.nodes)} nodes, "
         f"{len(initial_env_graph_spec.tasks)} tasks, "
@@ -131,11 +123,23 @@ def compile_env_intent_spec(env_intent_spec: EnvironmentIntentSpec) -> ArenaEnvI
         flush=True,
     )
 
-    if compiler.has_resolution_errors:
+    if meta.get("has_resolution_errors"):
         print("[runner] WARNING: resolution errors detected:", flush=True)
-        for event in compiler.resolution_errors:
-            chosen = event.chosen or "<none>"
-            print(f"  {event.stage:34s} {event.query!s:24s} -> {chosen}", flush=True)
+        for event in meta.get("compile_trace", []):
+            if event.get("stage") not in {
+                "item.required_tags.miss",
+                "background.required_tags.miss",
+                "embodiment.required_tags.miss",
+                "item.required_tags.empty_pool",
+                "background.required_tags.empty_pool",
+                "embodiment.required_tags.empty_pool",
+                "relation.initial.unknown_subject",
+                "relation.initial.unknown_reference",
+                "task.unknown_param",
+            }:
+                continue
+            chosen = event.get("chosen") or "<none>"
+            print(f"  {event.get('stage', ''):34s} {event.get('query', '')!s:24s} -> {chosen}", flush=True)
     else:
         print("[runner] all assets resolved without errors.", flush=True)
 
@@ -154,14 +158,9 @@ def link_env_graph_spec(initial_env_graph_spec: ArenaEnvInitialGraphSpec) -> Are
 
 
 def resolve_env_spec(args_cli: argparse.Namespace) -> Path:
-    """Resolve an environment intent spec into an initial environment graph spec and a linked environment graph spec."""
-    # step 1: generate the environment intent spec
-    env_intent_spec = generate_env_intent_spec(args_cli)
-    # step 2: compile the environment intent spec into an initial environment graph spec
-    initial_env_graph_spec = compile_env_intent_spec(env_intent_spec)
-    # step 3: link the initial environment graph spec into a fully wired environment graph spec
+    """Resolve a prompt into an initial environment graph spec and a linked environment graph spec."""
+    initial_env_graph_spec = generate_initial_graph_spec(args_cli)
     linked_env_graph_spec = link_env_graph_spec(initial_env_graph_spec)
-    # step 4: write the initial and linked environment graph specs to YAML files
     initial_path, linked_path = write_env_graph_specs(initial_env_graph_spec, linked_env_graph_spec, args_cli.out_dir)
     print(f"[runner] wrote initial environment graph spec → {initial_path}", flush=True)
     print(f"[runner] wrote linked environment graph spec  → {linked_path}", flush=True)
@@ -213,10 +212,7 @@ def build_env_and_run_policy(linked_env_graph_spec_path: Path, args_cli: argpars
     Must be called inside an active :class:`SimulationAppContext`: ``to_arena_env`` opens USD
     assets and ``make_registered`` creates the simulation context.
     """
-    # step 5: build the gym env from the linked environment graph spec
     env = build_env_from_linked_env_graph_spec(linked_env_graph_spec_path, args_cli)
-
-    # step 6: run the zero-action policy for the given number of steps
     run_zero_action_policy(env, args_cli.num_steps)
 
 
@@ -238,7 +234,6 @@ def main() -> int:
             build_env_and_run_policy(args_cli.linked_env_graph_spec_yaml, args_cli)
         return 0
 
-    # resolve and build in one process.
     else:
         with SimulationAppContext(args_cli):
             linked_env_graph_spec_path = resolve_env_spec(args_cli)

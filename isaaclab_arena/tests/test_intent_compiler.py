@@ -18,7 +18,7 @@ Covers :class:`~intent_compiler.IntentCompiler` graph-wiring logic:
 
 from __future__ import annotations
 
-from isaaclab_arena.agentic_environment_generation.environment_intent_spec import EnvironmentIntentSpec, Item
+from isaaclab_arena.agentic_environment_generation.agents.prompt_normalization_agent import AssetSpec, NormalizedPrompt
 from isaaclab_arena.agentic_environment_generation.intent_compiler import IntentCompiler
 from isaaclab_arena.environments.arena_env_graph_types import ArenaEnvGraphNodeType, SpatialRelationSpec, TaskSpec
 from isaaclab_arena.tests._asset_matcher_test_helpers import FakeAsset, make_registry
@@ -29,21 +29,24 @@ def _make_compiler(assets: list[FakeAsset] | None = None) -> IntentCompiler:
     return IntentCompiler(registry=make_registry(assets))
 
 
-def _make_scene(
+def _make_inputs(
     background: str = "maple_table",
     embodiment: str = "franka_ik",
-    items: list[Item] | None = None,
+    items: list[AssetSpec] | None = None,
     initial_state_graph: list[SpatialRelationSpec] | None = None,
     tasks: list[TaskSpec] | None = None,
-) -> EnvironmentIntentSpec:
-    """Build an :class:`EnvironmentIntentSpec` with sane defaults."""
-    return EnvironmentIntentSpec(
-        reasoning="test scene",
-        background=background,
-        embodiment=embodiment,
-        items=items or [],
-        initial_state_graph=initial_state_graph or [],
-        tasks=tasks
+) -> tuple[NormalizedPrompt, list[TaskSpec], list[SpatialRelationSpec]]:
+    """Build pipeline inputs with sane defaults."""
+    return (
+        NormalizedPrompt(
+            reasoning="test scene",
+            robot=AssetSpec(name=embodiment, query=embodiment, description="robot"),
+            background=AssetSpec(name=background, query=background, description="background"),
+            objects=items or [],
+            tasks_description="test",
+            relations_description="test",
+        ),
+        tasks
         or [
             TaskSpec(
                 kind="PickAndPlaceTask",
@@ -55,13 +58,19 @@ def _make_scene(
                 description="placeholder",
             )
         ],
+        initial_state_graph or [],
     )
+
+
+def _compile(compiler: IntentCompiler, env_name: str | None = None, **kwargs):
+    normalized, tasks, graph = _make_inputs(**kwargs)
+    return compiler.compile(normalized, tasks, graph, env_name=env_name)
 
 
 def _clean_scene_kwargs() -> dict:
     """Scene where every node resolves and every task param references a known node."""
     return dict(
-        items=[Item(query="bowl", category_tags=["bowl"])],
+        items=[AssetSpec(name="bowl", query="bowl", description="bowl")],
         tasks=[
             TaskSpec(
                 kind="PickAndPlaceTask",
@@ -77,10 +86,10 @@ def _clean_scene_kwargs() -> dict:
 
 
 def test_item_instance_name_overrides_query_for_node_id():
-    # ``instance_name`` becomes the graph node id; ``name`` still reflects the
-    # resolved asset, allowing the same asset to appear under different ids.
-    items = [Item(query="bowl", category_tags=["bowl"], instance_name="serving_bowl")]
-    spec = _make_compiler().compile(_make_scene(items=items))
+    # ``AssetSpec.name`` becomes the graph node id while ``name`` on the node
+    # reflects the resolved registry asset.
+    items = [AssetSpec(name="serving_bowl", query="bowl", description="bowl")]
+    spec = _compile(_make_compiler(), items=items)
     assert "serving_bowl" in spec.nodes_by_id
     assert "bowl" not in spec.nodes_by_id
     assert spec.nodes_by_id["serving_bowl"].name == "bowl_ycb_robolab"
@@ -92,7 +101,7 @@ def test_background_with_wrong_tag_omitted():
         FakeAsset(name="maple_table", tags=["object"]),  # wrong tag
     ]
     compiler = _make_compiler(assets)
-    spec = compiler.compile(_make_scene(background="maple_table"))
+    spec = _compile(compiler, background="maple_table")
     assert "maple_table" not in spec.nodes_by_id
     assert any(e.stage == "background.required_tags.empty_pool" for e in compiler.trace)
     assert compiler.has_resolution_errors is True
@@ -104,7 +113,7 @@ def test_embodiment_required_tag_pool_empty_records_error():
         FakeAsset(name="cracker_box", tags=["object"]),
     ]
     compiler = _make_compiler(assets)
-    spec = compiler.compile(_make_scene(embodiment="franka_ik"))
+    spec = _compile(compiler, embodiment="franka_ik")
     assert not any(n.type.value == "embodiment" for n in spec.nodes)
     assert any(e.stage == "embodiment.required_tags.empty_pool" for e in compiler.trace)
     assert compiler.has_resolution_errors is True
@@ -116,7 +125,7 @@ def test_item_required_tag_pool_empty_records_error():
         FakeAsset(name="franka_ik", tags=["embodiment"]),
     ]
     compiler = _make_compiler(assets)
-    spec = compiler.compile(_make_scene(items=[Item(query="bowl", category_tags=["bowl"])]))
+    spec = _compile(compiler, items=[AssetSpec(name="bowl", query="bowl", description="bowl")])
     assert "bowl" not in spec.nodes_by_id
     assert any(e.stage == "item.required_tags.empty_pool" for e in compiler.trace)
     assert compiler.has_resolution_errors is True
@@ -124,8 +133,8 @@ def test_item_required_tag_pool_empty_records_error():
 
 def test_resolve_happy_path():
     items = [
-        Item(query="bowl", category_tags=["bowl"]),
-        Item(query="avocado", category_tags=["fruit"]),
+        AssetSpec(name="bowl", query="bowl", description="bowl"),
+        AssetSpec(name="avocado", query="avocado", description="avocado"),
     ]
     initial = [
         SpatialRelationSpec(kind="is_anchor", subject="maple_table"),
@@ -143,7 +152,7 @@ def test_resolve_happy_path():
             description="put avocado in bowl",
         )
     ]
-    spec = _make_compiler().compile(_make_scene(items=items, initial_state_graph=initial, tasks=tasks))
+    spec = _compile(_make_compiler(), items=items, initial_state_graph=initial, tasks=tasks)
 
     assert spec.env_name == "llm_gen_maple_table_PickAndPlaceTask"
 
@@ -182,22 +191,22 @@ def test_resolve_happy_path():
 
 
 def test_resolve_overrides_env_name():
-    spec = _make_compiler().compile(_make_scene(), env_name="my_custom_env")
+    spec = _compile(_make_compiler(), env_name="my_custom_env")
     assert spec.env_name == "my_custom_env"
 
 
 def test_resolve_clears_trace_between_calls():
     compiler = _make_compiler()
-    compiler.compile(_make_scene())
+    _compile(compiler)
     n_after_first = len(compiler.trace)
     assert n_after_first > 0
 
-    compiler.compile(_make_scene())
+    _compile(compiler)
     assert len(compiler.trace) == n_after_first
 
 
 def test_resolve_with_empty_initial_state_graph():
-    spec = _make_compiler().compile(_make_scene(initial_state_graph=[]))
+    spec = _compile(_make_compiler(), initial_state_graph=[])
     assert spec.initial_state_spec.id == "state_initial"
     assert spec.initial_state_spec.spatial_constraints == []
     assert spec.initial_state_spec.task_constraints == []
@@ -205,23 +214,25 @@ def test_resolve_with_empty_initial_state_graph():
 
 def test_has_resolution_errors_false_on_clean_run():
     compiler = _make_compiler()
-    compiler.compile(_make_scene(**_clean_scene_kwargs()))
+    _compile(compiler, **_clean_scene_kwargs())
     assert compiler.resolution_errors == []
     assert compiler.has_resolution_errors is False
 
 
 def test_has_resolution_errors_true_when_item_unresolvable():
     kwargs = _clean_scene_kwargs()
-    kwargs["items"] = kwargs["items"] + [Item(query="zzz_no_match_anywhere", category_tags=["object"])]
+    kwargs["items"] = kwargs["items"] + [
+        AssetSpec(name="zzz_no_match_anywhere", query="zzz_no_match_anywhere", description="zzz_no_match_anywhere")
+    ]
     compiler = _make_compiler()
-    compiler.compile(_make_scene(**kwargs))
+    _compile(compiler, **kwargs)
     assert compiler.has_resolution_errors is True
     assert [e.stage for e in compiler.resolution_errors] == ["item.required_tags.miss"]
 
 
-def test_has_resolution_errors_false_when_only_tag_relaxation():
+def test_item_matches_in_required_pool_without_preferred_tags():
     kwargs = _clean_scene_kwargs()
-    kwargs["items"] = [Item(query="cracker", category_tags=["fruit"])]
+    kwargs["items"] = [AssetSpec(name="cracker", query="cracker", description="cracker")]
     kwargs["tasks"] = [
         TaskSpec(
             kind="PickAndPlaceTask",
@@ -234,22 +245,23 @@ def test_has_resolution_errors_false_when_only_tag_relaxation():
         )
     ]
     compiler = _make_compiler()
-    compiler.compile(_make_scene(**kwargs))
-    assert "item.preferred_tags.miss" in [e.stage for e in compiler.trace]
+    spec = _compile(compiler, **kwargs)
+    assert spec.nodes_by_id["cracker"].name == "cracker_box"
+    assert not any("preferred_tags" in e.stage for e in compiler.trace if e.stage.startswith("item."))
     assert compiler.has_resolution_errors is False
 
 
 def test_has_resolution_errors_true_when_embodiment_unknown():
     compiler = _make_compiler()
-    compiler.compile(_make_scene(embodiment="totally_unknown_robot"))
+    _compile(compiler, embodiment="totally_unknown_robot")
     assert "embodiment.required_tags.miss" in [e.stage for e in compiler.trace]
     assert compiler.has_resolution_errors is True
 
 
 def test_spatial_constraint_binary_relation_id_and_fields():
-    items = [Item(query="cracker_box", category_tags=["graspable"])]
+    items = [AssetSpec(name="cracker_box", query="cracker_box", description="cracker_box")]
     initial = [SpatialRelationSpec(kind="on", subject="cracker_box", reference="maple_table")]
-    spec = _make_compiler().compile(_make_scene(items=items, initial_state_graph=initial))
+    spec = _compile(_make_compiler(), items=items, initial_state_graph=initial)
     constraint = spec.initial_state_spec.spatial_constraints[0]
     assert constraint.reference == "maple_table"
     assert constraint.subject == "cracker_box"
@@ -260,7 +272,7 @@ def test_spatial_constraint_binary_relation_id_and_fields():
 
 def test_spatial_constraint_unary_relation_id_and_fields():
     initial = [SpatialRelationSpec(kind="is_anchor", subject="maple_table")]
-    spec = _make_compiler().compile(_make_scene(initial_state_graph=initial))
+    spec = _compile(_make_compiler(), initial_state_graph=initial)
     constraint = spec.initial_state_spec.spatial_constraints[0]
     assert constraint.kind == "is_anchor"
     assert constraint.subject == "maple_table"
@@ -271,7 +283,7 @@ def test_spatial_constraint_unary_relation_id_and_fields():
 def test_spatial_constraint_unknown_subject_skipped():
     initial = [SpatialRelationSpec(kind="on", subject="not_a_node", reference="maple_table")]
     compiler = _make_compiler()
-    spec = compiler.compile(_make_scene(initial_state_graph=initial))
+    spec = _compile(compiler, initial_state_graph=initial)
     assert spec.initial_state_spec.spatial_constraints == []
     assert any(e.stage == "relation.initial.unknown_subject" for e in compiler.trace)
 
@@ -279,13 +291,13 @@ def test_spatial_constraint_unknown_subject_skipped():
 def test_spatial_constraint_unknown_reference_skipped():
     initial = [SpatialRelationSpec(kind="on", subject="maple_table", reference="missing_node")]
     compiler = _make_compiler()
-    spec = compiler.compile(_make_scene(initial_state_graph=initial))
+    spec = _compile(compiler, initial_state_graph=initial)
     assert spec.initial_state_spec.spatial_constraints == []
     assert any(e.stage == "relation.initial.unknown_reference" for e in compiler.trace)
 
 
 def test_spatial_constraint_params_passed_through():
-    items = [Item(query="cracker_box", category_tags=["graspable"])]
+    items = [AssetSpec(name="cracker_box", query="cracker_box", description="cracker_box")]
     initial = [
         SpatialRelationSpec(
             kind="at_position",
@@ -293,7 +305,7 @@ def test_spatial_constraint_params_passed_through():
             params={"position_xyz": [0.1, 0.2, 0.3]},
         ),
     ]
-    spec = _make_compiler().compile(_make_scene(items=items, initial_state_graph=initial))
+    spec = _compile(_make_compiler(), items=items, initial_state_graph=initial)
     constraint = spec.initial_state_spec.spatial_constraints[0]
     assert constraint.kind == "at_position"
     assert constraint.params == {"position_xyz": (0.1, 0.2, 0.3)}
@@ -313,15 +325,15 @@ def test_multiple_tasks_preserved_in_order():
         TaskSpec(kind="OpenDoorTask", params={"openable_object": "bowl"}, description="d2"),
         TaskSpec(kind="CloseDoorTask", params={"openable_object": "bowl"}, description="d3"),
     ]
-    items = [Item(query="bowl", category_tags=["bowl"])]
-    spec = _make_compiler().compile(_make_scene(items=items, tasks=tasks))
+    items = [AssetSpec(name="bowl", query="bowl", description="bowl")]
+    spec = _compile(_make_compiler(), items=items, tasks=tasks)
     assert len(spec.tasks) == 3
     assert [t.kind for t in spec.tasks] == ["PickAndPlaceTask", "OpenDoorTask", "CloseDoorTask"]
     assert [t.description for t in spec.tasks] == ["d1", "d2", "d3"]
 
 
 def test_bare_query_resolved_to_one_instance():
-    items = [Item(query="bowl", category_tags=["bowl"], instance_name=f"bowl_{i}") for i in range(1, 4)]
+    items = [AssetSpec(name=f"bowl_{i}", query="bowl", description="bowl") for i in range(1, 4)]
     instance_ids = {"bowl_1", "bowl_2", "bowl_3"}
     initial = [
         SpatialRelationSpec(kind="is_anchor", subject="maple_table"),
@@ -339,7 +351,7 @@ def test_bare_query_resolved_to_one_instance():
         )
     ]
     compiler = _make_compiler()
-    spec = compiler.compile(_make_scene(items=items, initial_state_graph=initial, tasks=tasks))
+    spec = _compile(compiler, items=items, initial_state_graph=initial, tasks=tasks)
 
     assert compiler.has_resolution_errors is False
 
@@ -356,7 +368,7 @@ def test_bare_query_resolved_to_one_instance():
 
 
 def test_task_unknown_param_emits_error_trace():
-    items = [Item(query="bowl", category_tags=["bowl"])]
+    items = [AssetSpec(name="bowl", query="bowl", description="bowl")]
     tasks = [
         TaskSpec(
             kind="PickAndPlaceTask",
@@ -369,7 +381,7 @@ def test_task_unknown_param_emits_error_trace():
         )
     ]
     compiler = _make_compiler()
-    compiler.compile(_make_scene(items=items, tasks=tasks))
+    _compile(compiler, items=items, tasks=tasks)
     assert compiler.has_resolution_errors is True
     assert "task.unknown_param" in [e.stage for e in compiler.resolution_errors]
 
@@ -377,7 +389,7 @@ def test_task_unknown_param_emits_error_trace():
 def test_task_param_already_node_id_preserved_without_resolve_trace():
     # A param that already names a resolved node passes through unchanged and emits neither a
     # ``task.resolved_param`` nor a ``task.unknown_param`` trace (only a known id, nothing to sample).
-    items = [Item(query="bowl", category_tags=["bowl"])]
+    items = [AssetSpec(name="bowl", query="bowl", description="bowl")]
     tasks = [
         TaskSpec(
             kind="PickAndPlaceTask",
@@ -390,7 +402,7 @@ def test_task_param_already_node_id_preserved_without_resolve_trace():
         )
     ]
     compiler = _make_compiler()
-    spec = compiler.compile(_make_scene(items=items, tasks=tasks))
+    spec = _compile(compiler, items=items, tasks=tasks)
     assert spec.tasks[0].params == {
         "pick_up_object": "bowl",
         "destination_location": "bowl",
@@ -404,7 +416,7 @@ def test_task_param_already_node_id_preserved_without_resolve_trace():
 
 def test_non_string_task_param_passed_through_untouched():
     # Only string params are candidates for node-id resolution; scalars are left as-is.
-    items = [Item(query="bowl", category_tags=["bowl"])]
+    items = [AssetSpec(name="bowl", query="bowl", description="bowl")]
     tasks = [
         TaskSpec(
             kind="PickAndPlaceTask",
@@ -417,5 +429,5 @@ def test_non_string_task_param_passed_through_untouched():
             description="d",
         )
     ]
-    spec = _make_compiler().compile(_make_scene(items=items, tasks=tasks))
+    spec = _compile(_make_compiler(), items=items, tasks=tasks)
     assert spec.tasks[0].params["episode_length_s"] == 20.0

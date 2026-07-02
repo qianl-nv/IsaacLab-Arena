@@ -6,7 +6,7 @@
 """Run the agent on a prompt and dump the compiled ArenaEnvInitialGraphSpec.
 
 Examples:
-    # Print the Pydantic EnvironmentIntentSpec JSON schema (no agent call):
+    # Print the Pydantic NormalizedPrompt JSON schema (no agent call):
     python isaaclab_arena_examples/agentic_environment_generation/try_environment_intent_schema.py --print-schema
 
     # Print the catalog sent to the agent (no agent call):
@@ -22,15 +22,13 @@ from __future__ import annotations
 import argparse
 import json
 
-from isaaclab_arena.agentic_environment_generation.asset_matcher import IntentResolutionTraceEvent
-from isaaclab_arena.agentic_environment_generation.environment_generation_agent import (
-    EnvironmentGenerationAgent,
+from isaaclab_arena.agentic_environment_generation.agents.prompt_normalization_agent import NormalizedPrompt
+from isaaclab_arena.agentic_environment_generation.catalogues import (
     build_asset_catalogue,
     build_relation_catalogue,
     build_task_catalogue,
 )
-from isaaclab_arena.agentic_environment_generation.environment_intent_spec import EnvironmentIntentSpec
-from isaaclab_arena.agentic_environment_generation.intent_compiler import IntentCompiler
+from isaaclab_arena.agentic_environment_generation.environment_generation_agent import EnvironmentGenerationAgent
 from isaaclab_arena.agentic_environment_generation.spec_io import DEFAULT_AGENTIC_OUTPUT_DIR, save_initial_graph_spec
 from isaaclab_arena.environments.arena_env_graph_spec import ArenaEnvInitialGraphSpec
 
@@ -42,12 +40,6 @@ SEQUENTIAL_PROMPT = (
     "franka opens a microwave, picks up avocado on the table, place it into the microwave and close the microwave door."
     " There are other utensils on the table as distractor"
 )
-
-
-def _format_trace_event(event: IntentResolutionTraceEvent) -> str:
-    chosen = event.chosen if event.chosen is not None else "<none>"
-    extra = f"  [{event.note}]" if event.note else ""
-    return f"  {event.stage:34s} {event.query!s:24s} -> {chosen}{extra}"
 
 
 def print_initial_graph(spec: ArenaEnvInitialGraphSpec) -> None:
@@ -79,18 +71,6 @@ def print_initial_graph(spec: ArenaEnvInitialGraphSpec) -> None:
             print(f"    description: {task.description}")
 
 
-def print_resolution_trace(compiler: IntentCompiler) -> None:
-    """Print compiler trace events and any resolution errors."""
-    print("\n=== trace ===")
-    for event in compiler.trace:
-        print(_format_trace_event(event))
-
-    if compiler.has_resolution_errors:
-        print("\n=== resolution errors ===")
-        for event in compiler.resolution_errors:
-            print(_format_trace_event(event))
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prompt", type=str, default=DEFAULT_PROMPT)
@@ -101,7 +81,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.print_schema:
-        print(json.dumps(EnvironmentIntentSpec.model_json_schema(), indent=2))
+        print(json.dumps(NormalizedPrompt.model_json_schema(), indent=2))
         return
 
     asset_catalog = build_asset_catalogue()
@@ -127,19 +107,16 @@ def main() -> None:
     print("=== raw agent response ===")
     print(raw)
 
-    # Surface the forced chain-of-thought field.
+    meta = json.loads(raw)
     print("\n=== agent reasoning ===")
-    print(spec.reasoning)
+    print(meta.get("reasoning", ""))
 
-    print("\n=== parsed EnvironmentIntentSpec ===")
-    print(spec.model_dump_json(indent=2))
+    print("\n=== parsed ArenaEnvInitialGraphSpec ===")
+    print(json.dumps(spec.to_dict(), indent=2))
 
-    compiler = IntentCompiler()
-    env_graph_spec = compiler.compile(spec)
-    print_initial_graph(env_graph_spec)
-    print_resolution_trace(compiler)
+    print_initial_graph(spec)
 
-    out_path, linked_path = save_initial_graph_spec(env_graph_spec, DEFAULT_AGENTIC_OUTPUT_DIR)
+    out_path, linked_path = save_initial_graph_spec(spec, DEFAULT_AGENTIC_OUTPUT_DIR)
     print(f"\n=== wrote ArenaEnvInitialGraphSpec YAML to {out_path} ===")
     print(f"=== wrote linked ArenaEnvGraphSpec YAML to {linked_path} ===")
 

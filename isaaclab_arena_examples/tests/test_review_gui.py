@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import yaml
 from pathlib import Path
@@ -301,25 +302,17 @@ class TestRunGenerationPipeline:
     ):
         session_state["out_dir"] = str(tmp_path)
         mock_agent = MagicMock()
-        mock_intent = MagicMock(reasoning="picked assets")
-        mock_agent.generate_spec.return_value = (mock_intent, "{}")
+        mock_agent.generate_spec.return_value = (
+            valid_spec,
+            json.dumps({"reasoning": "picked assets", "compile_trace": [], "has_resolution_errors": False}),
+        )
         session_state["generation_agent"] = mock_agent
 
         mock_catalogues = MagicMock()
-        mock_compiler = MagicMock()
-        mock_compiler.compile.return_value = valid_spec
-        mock_compiler.trace = []
-        mock_compiler.has_resolution_errors = False
 
-        with (
-            patch(
-                "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.get_catalogue_bundle",
-                return_value=mock_catalogues,
-            ),
-            patch(
-                "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.IntentCompiler",
-                return_value=mock_compiler,
-            ),
+        with patch(
+            "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.get_catalogue_bundle",
+            return_value=mock_catalogues,
         ):
             ok, message = run_generation_pipeline("pick up a cube")
 
@@ -338,24 +331,18 @@ class TestRunGenerationPipeline:
     ):
         session_state["out_dir"] = str(tmp_path)
         mock_agent = MagicMock()
-        mock_intent = MagicMock(reasoning="picked assets")
-        mock_agent.generate_spec.return_value = (mock_intent, "{}")
+        mock_agent.generate_spec.return_value = (
+            valid_spec,
+            json.dumps({"reasoning": "picked assets", "compile_trace": [], "has_resolution_errors": False}),
+        )
         session_state["generation_agent"] = mock_agent
 
         mock_catalogues = MagicMock()
-        mock_compiler = MagicMock()
-        mock_compiler.compile.return_value = valid_spec
-        mock_compiler.trace = []
-        mock_compiler.has_resolution_errors = False
 
         with (
             patch(
                 "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.get_catalogue_bundle",
                 return_value=mock_catalogues,
-            ),
-            patch(
-                "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.IntentCompiler",
-                return_value=mock_compiler,
             ),
             patch(
                 "isaaclab_arena_examples.agentic_environment_generation.review_gui.generation_panel.try_save_initial_graph_spec",

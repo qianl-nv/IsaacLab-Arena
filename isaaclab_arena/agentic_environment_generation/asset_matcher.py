@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import get_close_matches
 
+from isaaclab_arena.agentic_environment_generation.agents.prompt_normalization_agent import AssetSpec, NormalizedPrompt
 from isaaclab_arena.assets.registries import AssetRegistry
 
 
@@ -41,13 +42,13 @@ ASSET_ERROR_STAGES: frozenset[str] = frozenset({
 
 def match_asset(
     registry: AssetRegistry,
-    query: str,
+    asset: AssetSpec,
     trace_prefix: str,
     trace: list[IntentResolutionTraceEvent],
     required_tags: list[str] | None = None,
     preferred_tags: list[str] | None = None,
-) -> str | None:
-    """Match a free-text ``query`` to a registered asset key.
+) -> AssetSpec:
+    """Match ``asset.query`` to a registered asset key and return an updated :class:`AssetSpec`.
 
     Resolution proceeds in three stages:
 
@@ -58,27 +59,30 @@ def match_asset(
 
     Args:
         registry: Registry to look up asset names in.
-        query: Asset name as emitted by the agent.
+        asset: Asset description whose ``query`` field drives matching.
         trace_prefix: Prefix for trace event stages (e.g. ``"item"``,
             ``"background"``, ``"embodiment"``).
         trace: Mutable list that receives one :class:`IntentResolutionTraceEvent`
             per resolution step. Matcher events are appended to the trace in order.
-
         required_tags: Tags every candidate must carry (e.g. ``["object"]``).
         preferred_tags: Additional tags that narrow the first-pass pool
-            (e.g. item ``category_tags`` or ``["default"]`` for embodiments).
-            When ``None`` or empty, stage 2 is skipped and matching falls
-            through directly to the required-tag pool.
+            (e.g. ``["default"]`` for embodiments). When ``None`` or empty,
+            stage 2 is skipped and matching falls through directly to the
+            required-tag pool.
 
     Returns:
-        The resolved asset key, or ``None`` when no match is found.
+        A copy of ``asset`` with ``registry_name`` set when a match is found.
     """
+    if asset.registry_name is not None:
+        return asset
+
     required_tags = required_tags or []
+    query = asset.query
     candidates = sorted(registry.get_assets_with_all_tags(required_tags))
     # 1. Exact name match in a pool of assets with only the required tags.
     if query in candidates:
         trace.append(IntentResolutionTraceEvent(f"{trace_prefix}.exact", query, query))
-        return query
+        return asset.model_copy(update={"registry_name": query})
 
     # 2. Fuzzy matching in a pool narrowed by required + preferred tags.
     if preferred_tags:
@@ -91,15 +95,54 @@ def match_asset(
             note=f"tags={required_tags + preferred_tags}, pool size={len(preferred_candidates)}",
         )
         if chosen is not None:
-            return chosen
+            return asset.model_copy(update={"registry_name": chosen})
 
     # 3. Fuzzy matching in a pool of assets with only the required tags.
-    return _fuzzy_match(
+    chosen = _fuzzy_match(
         candidates,
         query,
         trace_prefix=f"{trace_prefix}.required_tags",
         trace=trace,
         note=f"tags={required_tags}, pool size={len(candidates)}",
+    )
+    return asset.model_copy(update={"registry_name": chosen})
+
+
+def match_normalized_prompt(
+    normalized: NormalizedPrompt,
+    registry: AssetRegistry,
+    trace: list[IntentResolutionTraceEvent],
+) -> NormalizedPrompt:
+    """Resolve every :class:`AssetSpec` in ``normalized`` against ``registry``."""
+    return NormalizedPrompt(
+        reasoning=normalized.reasoning,
+        robot=match_asset(
+            registry,
+            normalized.robot,
+            "embodiment",
+            trace,
+            required_tags=["embodiment"],
+            preferred_tags=["default"],
+        ),
+        background=match_asset(
+            registry,
+            normalized.background,
+            "background",
+            trace,
+            required_tags=["background"],
+        ),
+        objects=[
+            match_asset(
+                registry,
+                obj,
+                "item",
+                trace,
+                required_tags=["object"],
+            )
+            for obj in normalized.objects
+        ],
+        tasks_description=normalized.tasks_description,
+        relations_description=normalized.relations_description,
     )
 
 

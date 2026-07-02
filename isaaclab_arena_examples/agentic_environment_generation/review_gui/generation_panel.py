@@ -5,24 +5,25 @@
 
 from __future__ import annotations
 
+import json
 import traceback
 import yaml
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
 from isaaclab_arena.agentic_environment_generation.asset_matcher import ASSET_ERROR_STAGES
-from isaaclab_arena.agentic_environment_generation.environment_generation_agent import (
+from isaaclab_arena.agentic_environment_generation.catalogues import (
     AssetCatalogue,
-    EnvironmentGenerationAgent,
     RelationCatalogue,
     TaskCatalogue,
     build_asset_catalogue,
     build_relation_catalogue,
     build_task_catalogue,
 )
+from isaaclab_arena.agentic_environment_generation.environment_generation_agent import EnvironmentGenerationAgent
 from isaaclab_arena.agentic_environment_generation.intent_compiler import IntentCompiler
 from isaaclab_arena.environments.arena_env_graph_spec import ArenaEnvInitialGraphSpec
 from isaaclab_arena_examples.agentic_environment_generation.review_gui.editor_panel import (
@@ -109,7 +110,7 @@ def _apply_generated_yaml(yaml_text: str, *, spec: ArenaEnvInitialGraphSpec | No
 
 
 def run_generation_pipeline(prompt: str) -> tuple[bool, str]:
-    """Call the LLM, compile intent in-process, and load YAML into the editor."""
+    """Call the LLM, compile in-process, and load YAML into the editor."""
     prompt = prompt.strip()
     if not prompt:
         return False, "Enter a prompt describing the environment."
@@ -128,7 +129,7 @@ def run_generation_pipeline(prompt: str) -> tuple[bool, str]:
         return False, traceback.format_exc()
 
     try:
-        intent, _raw = agent.generate_spec(
+        spec, raw = agent.generate_spec(
             prompt,
             asset_catalog=catalogues.asset_catalogue,
             relation_catalog=catalogues.relation_catalogue,
@@ -138,12 +139,11 @@ def run_generation_pipeline(prompt: str) -> tuple[bool, str]:
         return False, traceback.format_exc()
 
     try:
-        compiler = IntentCompiler()
-        spec = compiler.compile(intent)
+        meta = json.loads(raw)
         yaml_text = yaml.safe_dump(spec.to_dict(), sort_keys=False)
-        trace = [asdict(event) for event in compiler.trace]
-        has_resolution_errors = compiler.has_resolution_errors
-        reasoning = intent.reasoning
+        trace = meta.get("compile_trace", [])
+        has_resolution_errors = meta.get("has_resolution_errors", False)
+        reasoning = meta.get("reasoning", "")
     except Exception:
         return False, traceback.format_exc()
 

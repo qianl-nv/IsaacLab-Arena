@@ -14,16 +14,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
 
-from isaaclab_arena.agentic_environment_generation.environment_generation_agent import (
-    build_relation_catalogue,
-    build_task_catalogue,
-)
-from isaaclab_arena.agentic_environment_generation.environment_intent_spec import (
-    EnvironmentIntentSpec,
+from isaaclab_arena.agentic_environment_generation.catalogues import build_relation_catalogue, build_task_catalogue
+from isaaclab_arena.agentic_environment_generation.task_validation import (
     required_task_init_param_names,
+    validate_agent_tasks,
 )
+from isaaclab_arena.environments.arena_env_graph_types import TaskSpec
 from isaaclab_arena.relations.relations import IsAnchor, On
 
 
@@ -99,11 +96,11 @@ def test_required_task_init_param_names_match_task_constructors():
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_generation_agent.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.catalogues.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_generation_agent.agent_ready_task_names",
+    "isaaclab_arena.agentic_environment_generation.catalogues.agent_ready_task_names",
     return_value=frozenset({"PickAndPlaceTask", "OpenDoorTask", "CloseDoorTask"}),
 )
 def test_task_catalogue_lists_required_init_params(_mock_ready, _mock_registry):
@@ -118,11 +115,11 @@ def test_task_catalogue_lists_required_init_params(_mock_ready, _mock_registry):
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_generation_agent.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.catalogues.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_generation_agent.agent_ready_task_names",
+    "isaaclab_arena.agentic_environment_generation.catalogues.agent_ready_task_names",
     return_value=frozenset({"PickAndPlaceTask", "OpenDoorTask", "CloseDoorTask"}),
 )
 def test_task_catalogue_lists_only_agent_ready_tasks(_mock_ready, _mock_registry):
@@ -131,7 +128,7 @@ def test_task_catalogue_lists_only_agent_ready_tasks(_mock_ready, _mock_registry
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_generation_agent.ObjectRelationLibraryRegistry",
+    "isaaclab_arena.agentic_environment_generation.catalogues.ObjectRelationLibraryRegistry",
     side_effect=lambda: _mock_relation_registry(),
 )
 def test_relation_catalogue_matches_object_relation_registry(_mock_registry):
@@ -143,101 +140,72 @@ def test_relation_catalogue_matches_object_relation_registry(_mock_registry):
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_intent_spec.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.task_validation.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
-def test_environment_intent_spec_rejects_non_string_task_param(_mock_registry):
-    payload = {
-        "reasoning": "test",
-        "background": "kitchen",
-        "embodiment": "franka_ik",
-        "items": [],
-        "initial_state_graph": [],
-        "tasks": [{
-            "kind": "PickAndPlaceTask",
-            "params": {
+def test_validate_agent_tasks_rejects_non_string_task_param(_mock_registry):
+    tasks = [
+        TaskSpec(
+            kind="PickAndPlaceTask",
+            params={
                 "pick_up_object": 42,
                 "destination_location": "bowl",
                 "background_scene": "kitchen",
             },
-            "description": "pick and place",
-        }],
-    }
-    with pytest.raises(ValidationError, match="must be a non-empty string"):
-        EnvironmentIntentSpec.model_validate(payload)
+            description="pick and place",
+        )
+    ]
+    with pytest.raises(AssertionError, match="must be a non-empty string"):
+        validate_agent_tasks(tasks)
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_intent_spec.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.task_validation.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
-def test_environment_intent_spec_rejects_missing_task_params(_mock_registry):
-    payload = {
-        "reasoning": "test",
-        "background": "kitchen",
-        "embodiment": "franka_ik",
-        "items": [],
-        "initial_state_graph": [],
-        "tasks": [{
-            "kind": "PickAndPlaceTask",
-            "params": {"pick_up_object": "cube"},
-            "description": "pick and place",
-        }],
-    }
-    with pytest.raises(ValidationError, match="missing required param"):
-        EnvironmentIntentSpec.model_validate(payload)
+def test_validate_agent_tasks_rejects_missing_task_params(_mock_registry):
+    tasks = [
+        TaskSpec(
+            kind="PickAndPlaceTask",
+            params={"pick_up_object": "cube"},
+            description="pick and place",
+        )
+    ]
+    with pytest.raises(AssertionError, match="missing required param"):
+        validate_agent_tasks(tasks)
 
 
 @patch(
-    "isaaclab_arena.agentic_environment_generation.environment_intent_spec.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.task_validation.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
-def test_environment_intent_spec_rejects_non_agent_ready_task(_mock_registry):
-    payload = {
-        "reasoning": "test",
-        "background": "kitchen",
-        "embodiment": "franka_ik",
-        "items": [],
-        "initial_state_graph": [],
-        "tasks": [{
-            "kind": "RotateRevoluteJointTask",
-            "params": {"revolute_joint": "knob"},
-            "description": "rotate a joint",
-        }],
-    }
-    with pytest.raises(ValidationError, match="not agent-ready"):
-        EnvironmentIntentSpec.model_validate(payload)
+def test_validate_agent_tasks_rejects_non_agent_ready_task(_mock_registry):
+    tasks = [
+        TaskSpec(
+            kind="RotateRevoluteJointTask",
+            params={"revolute_joint": "knob"},
+            description="rotate a joint",
+        )
+    ]
+    with pytest.raises(AssertionError, match="not agent-ready"):
+        validate_agent_tasks(tasks)
 
 
 @patch(
-    "isaaclab_arena.environments.arena_env_graph_types.ObjectRelationLibraryRegistry",
-    side_effect=lambda: _mock_relation_registry(),
-)
-@patch(
-    "isaaclab_arena.agentic_environment_generation.environment_intent_spec.TaskRegistry",
+    "isaaclab_arena.agentic_environment_generation.task_validation.TaskRegistry",
     side_effect=lambda: _mock_task_registry(),
 )
-def test_environment_intent_spec_accepts_valid_task_params(_mock_task_registry, _mock_relation_registry):
-    payload = {
-        "reasoning": "test",
-        "background": "kitchen",
-        "embodiment": "franka_ik",
-        "items": [{"query": "cube", "category_tags": []}],
-        "initial_state_graph": [{
-            "kind": "on",
-            "subject": "cube",
-            "reference": "kitchen",
-            "params": {},
-        }],
-        "tasks": [{
-            "kind": "PickAndPlaceTask",
-            "params": {
+def test_validate_agent_tasks_accepts_valid_task_params(_mock_registry):
+    tasks = [
+        TaskSpec(
+            kind="PickAndPlaceTask",
+            params={
                 "pick_up_object": "cube",
                 "destination_location": "bowl",
                 "background_scene": "kitchen",
             },
-            "description": "pick up the cube and place it in the bowl",
-        }],
-    }
-    spec = EnvironmentIntentSpec.model_validate(payload)
-    assert spec.tasks[0].params["pick_up_object"] == "cube"
+            description="pick up the cube and place it in the bowl",
+        )
+    ]
+    validate_agent_tasks(tasks)
+    assert tasks[0].params["pick_up_object"] == "cube"

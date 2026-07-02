@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import random
 
+from isaaclab_arena.agentic_environment_generation.agents.prompt_normalization_agent import AssetSpec, NormalizedPrompt
 from isaaclab_arena.agentic_environment_generation.asset_matcher import (
     ASSET_ERROR_STAGES,
     IntentResolutionTraceEvent,
-    match_asset,
+    match_normalized_prompt,
 )
 from isaaclab_arena.agentic_environment_generation.default_params import INITIAL_STATE_SPEC_ID
-from isaaclab_arena.agentic_environment_generation.environment_intent_spec import EnvironmentIntentSpec
 from isaaclab_arena.assets.registries import AssetRegistry
 from isaaclab_arena.environments.arena_env_graph_spec import ArenaEnvInitialGraphSpec
 from isaaclab_arena.environments.arena_env_graph_types import (
@@ -27,7 +27,7 @@ from isaaclab_arena.environments.arena_env_graph_types import (
 
 
 class IntentCompiler:
-    """Compiles an agent intent spec into a validated :class:`ArenaEnvInitialGraphSpec`."""
+    """Compiles matched pipeline outputs into a validated :class:`ArenaEnvInitialGraphSpec`."""
 
     INTENT_ERROR_STAGES: frozenset[str] = frozenset({
         "relation.initial.unknown_subject",
@@ -56,16 +56,23 @@ class IntentCompiler:
 
     def compile(
         self,
-        spec: EnvironmentIntentSpec,
+        normalized: NormalizedPrompt,
+        tasks: list[TaskSpec],
+        initial_state_graph: list[SpatialRelationSpec],
         env_name: str | None = None,
+        *,
+        already_matched: bool = False,
     ) -> ArenaEnvInitialGraphSpec:
-        """Compile an :class:`EnvironmentIntentSpec` into an :class:`ArenaEnvInitialGraphSpec`.
+        """Compile pipeline outputs into an :class:`ArenaEnvInitialGraphSpec`.
 
         Args:
-            spec: Agent-produced intent spec describing the scene, initial relations,
-                and task chain.
+            normalized: Prompt-normalization output with asset queries and node ids.
+            tasks: Agent-emitted sequential task chain.
+            initial_state_graph: Agent-emitted starting-state spatial relations.
             env_name: Override for the graph's ``env_name`` field.  When ``None``
                 the name is derived as ``llm_gen_{background}_{first_task_kind}``.
+            already_matched: When ``False`` (default), run deterministic asset
+                matching before building nodes.
 
         Returns:
             An :class:`ArenaEnvInitialGraphSpec` ready for YAML round-tripping or
@@ -73,51 +80,33 @@ class IntentCompiler:
         """
         self.trace = []
 
+        if not already_matched:
+            normalized = match_normalized_prompt(normalized, self.registry, self.trace)
+
         nodes: list[ArenaEnvGraphNodeSpec] = []
 
-        background_node = self._resolve_asset_node(
-            query=spec.background,
-            trace_prefix="background",
-            node_type=ArenaEnvGraphNodeType.BACKGROUND,
-            required_tags=["background"],
-        )
+        background_node = self._node_from_asset(normalized.background, ArenaEnvGraphNodeType.BACKGROUND)
         if background_node is not None:
             nodes.append(background_node)
 
-        embodiment_node = self._resolve_asset_node(
-            query=spec.embodiment,
-            trace_prefix="embodiment",
-            node_type=ArenaEnvGraphNodeType.EMBODIMENT,
-            required_tags=["embodiment"],
-            preferred_tags=["default"],
-        )
+        embodiment_node = self._node_from_asset(normalized.robot, ArenaEnvGraphNodeType.EMBODIMENT)
         if embodiment_node is not None:
             nodes.append(embodiment_node)
 
-        # Map each item query to the node ids it produced, so a bare query reference
-        # (e.g. 'banana' when the scene holds banana_1..banana_5) can be resolved
-        # to one concrete instance.
         query_to_instances: dict[str, list[str]] = {}
-        for item in spec.items:
-            item_node = self._resolve_asset_node(
-                query=item.query,
-                trace_prefix="item",
-                node_type=ArenaEnvGraphNodeType.OBJECT,
-                required_tags=["object"],
-                preferred_tags=item.category_tags,
-                instance_name=item.instance_name,
-            )
+        for obj in normalized.objects:
+            item_node = self._node_from_asset(obj, ArenaEnvGraphNodeType.OBJECT)
             if item_node is not None:
                 nodes.append(item_node)
-                query_to_instances.setdefault(item.query, []).append(item_node.id)
+                query_to_instances.setdefault(obj.query, []).append(item_node.id)
 
         known_ids = {node.id for node in nodes}
 
-        initial_state_spec = self._build_initial_state_spec(spec.initial_state_graph, known_ids, query_to_instances)
-        resolved_tasks = self._resolve_task_params_to_node_ids(spec.tasks, known_ids, query_to_instances)
+        initial_state_spec = self._build_initial_state_spec(initial_state_graph, known_ids, query_to_instances)
+        resolved_tasks = self._resolve_task_params_to_node_ids(tasks, known_ids, query_to_instances)
 
         return ArenaEnvInitialGraphSpec(
-            env_name=env_name or self._derive_env_name(spec),
+            env_name=env_name or self._derive_env_name(normalized, tasks),
             nodes=nodes,
             tasks=resolved_tasks,
             initial_state_spec=initial_state_spec,
@@ -138,44 +127,19 @@ class IntentCompiler:
         return random.choice(instances) if instances else None
 
     @staticmethod
-    def _derive_env_name(spec: EnvironmentIntentSpec) -> str:
-        first_kind = spec.tasks[0].kind if spec.tasks else "task"
-        return f"llm_gen_{spec.background}_{first_kind}"
+    def _derive_env_name(normalized: NormalizedPrompt, tasks: list[TaskSpec]) -> str:
+        background_key = normalized.background.registry_name or normalized.background.name
+        first_kind = tasks[0].kind if tasks else "task"
+        return f"llm_gen_{background_key}_{first_kind}"
 
     @staticmethod
-    def _agent_node_id(query: str, *, instance_name: str | None = None) -> str:
-        """Return the graph node id for an agent-emitted asset reference.
-
-        The id stays as the agent's string so task params and spatial relations
-        can reference it. ``instance_name`` overrides ``query`` for duplicate items.
-        """
-        return instance_name or query
-
-    def _resolve_asset_node(
-        self,
-        query: str,
-        trace_prefix: str,
-        node_type: ArenaEnvGraphNodeType,
-        required_tags: list[str],
-        preferred_tags: list[str] | None = None,
-        instance_name: str | None = None,
-    ) -> ArenaEnvGraphNodeSpec | None:
-        """Match ``query`` to a registered asset and build the corresponding graph node, or None.
-
-        Args:
-            query: Agent-emitted asset reference (e.g. 'banana', 'maple table').
-            trace_prefix: Trace stage prefix passed to ``match_asset`` (e.g. 'item', 'background').
-            node_type: Node type to tag the resulting node with.
-            required_tags: Tags an asset must carry to be a match candidate.
-            preferred_tags: Tags that bias fuzzy matching when set.
-            instance_name: Overrides ``query`` as the node id for duplicate items.
-        """
-        asset_name = match_asset(self.registry, query, trace_prefix, self.trace, required_tags, preferred_tags)
-        if asset_name is None:
+    def _node_from_asset(asset: AssetSpec, node_type: ArenaEnvGraphNodeType) -> ArenaEnvGraphNodeSpec | None:
+        """Build a graph node from a matched :class:`AssetSpec`, or ``None`` when unmatched."""
+        if asset.registry_name is None:
             return None
         return ArenaEnvGraphNodeSpec(
-            id=self._agent_node_id(query, instance_name=instance_name),
-            name=asset_name,
+            id=asset.name,
+            name=asset.registry_name,
             type=node_type,
         )
 
@@ -287,10 +251,10 @@ class IntentCompiler:
         resolves to no node is left unchanged and flagged with a ``task.unknown_param``
         error trace (so :attr:`has_resolution_errors` reports it).
 
-        The input ``tasks`` (and the ``EnvironmentIntentSpec`` they belong to) are left
-        unmodified: each task is copied with a fresh ``params`` dict, so a second
-        ``compile`` of the same spec re-samples from scratch instead of finding already
-        resolved ids in ``known_ids`` and silently diverging.
+        The input ``tasks`` are left unmodified: each task is copied with a fresh
+        ``params`` dict, so a second ``compile`` of the same inputs re-samples from
+        scratch instead of finding already resolved ids in ``known_ids`` and silently
+        diverging.
 
         Args:
             tasks: Agent-emitted task specs.
