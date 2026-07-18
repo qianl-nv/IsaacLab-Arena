@@ -37,6 +37,7 @@ from isaaclab_arena.progress_tracking.progress_tracker import (
 from isaaclab_arena.recording.common_terms import CoreEpisodeRecorderTermCfg, VariationEpisodeRecorderTermCfg
 from isaaclab_arena.recording.episode_recorder_manager import EpisodeRecorderTermCfg
 from isaaclab_arena.recording.progress_terms import ProgressEpisodeRecorderTermCfg
+from isaaclab_arena.relations.collision_mode import CollisionMode
 from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
 from isaaclab_arena.relations.placement_events import PLACEMENT_RESET_EVENT_NAME
 from isaaclab_arena.relations.relation_solver_params import RelationSolverParams
@@ -91,7 +92,11 @@ class ArenaEnvBuilder:
         if placer_params is None:
             placer_params = ObjectPlacerParams(
                 placement_seed=self.cfg.placement_seed,
-                solver_params=RelationSolverParams(verbose=False, save_position_history=False),
+                solver_params=RelationSolverParams(
+                    verbose=False,
+                    save_position_history=False,
+                    collision_mode=CollisionMode(self.cfg.relation_collision_mode),
+                ),
             )
             if self.cfg.resolve_on_reset is not None:
                 placer_params.resolve_on_reset = self.cfg.resolve_on_reset
