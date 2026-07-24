@@ -92,17 +92,26 @@ class DroidEmbodimentBase(EmbodimentBase, ABC):
         """Return ``pos`` shifted up by the stand-height-driven robot base offset."""
         return (pos[0], pos[1], pos[2] + self._robot_base_z_offset)
 
+    def layout_pose_to_scene_writes(self, layout_pose: Pose) -> list[tuple[str, Pose]]:
+        """Return lifted robot and stand poses for one solver layout pose."""
+        lifted_position = self._lift_z(layout_pose.position_xyz)
+        robot_pose = Pose(position_xyz=lifted_position, rotation_xyzw=layout_pose.rotation_xyzw)
+        stand_pose = Pose(position_xyz=lifted_position, rotation_xyzw=layout_pose.rotation_xyzw)
+        return [("robot", robot_pose), ("stand", stand_pose)]
+
     def _update_scene_cfg_with_robot_initial_pose(self, scene_config: Any, pose: Pose) -> Any:
         # We override the default initial pose setting function in order to also set the initial pose
         # of the stand, and to re-apply the stand-height lift on top of the requested pose (the base
         # implementation overwrites init_state.pos with the raw pose).
-        scene_config = super()._update_scene_cfg_with_robot_initial_pose(scene_config, pose)
         if scene_config is None or not hasattr(scene_config, "robot"):
             raise RuntimeError("scene_config must be populated with a `robot` before calling `set_robot_initial_pose`.")
-        scene_config.robot.init_state.pos = self._lift_z(pose.position_xyz)
-        scene_config.stand.init_state.pos = self._lift_z(pose.position_xyz)
-        scene_config.stand.init_state.rot = pose.rotation_xyzw
-
+        for scene_name, write_pose in self.layout_pose_to_scene_writes(pose):
+            if scene_name == "robot":
+                scene_config.robot.init_state.pos = write_pose.position_xyz
+                scene_config.robot.init_state.rot = write_pose.rotation_xyzw
+            elif scene_name == "stand":
+                scene_config.stand.init_state.pos = write_pose.position_xyz
+                scene_config.stand.init_state.rot = write_pose.rotation_xyzw
         return scene_config
 
     def set_initial_joint_pose(self, initial_joint_pose: list[float]) -> None:

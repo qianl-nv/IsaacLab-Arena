@@ -154,12 +154,12 @@ def test_dynamic_spawn_pose_event_params_use_runtime_assets():
     assert "placement_pool" in event_cfg.params
 
 
-def test_static_embodiment_placement_uses_coordinated_reset():
+def test_static_embodiment_placement_uses_pose_per_env_reset():
     from isaaclab_arena.environments.relation_solver_interface import _apply_relation_placement_result
     from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
     from isaaclab_arena.tests.dummy_embodiment import DummyEmbodiment
     from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
-    from isaaclab_arena.utils.pose import Pose
+    from isaaclab_arena.utils.pose import PosePerEnv
 
     desk = _make_desk()
     robot = DummyEmbodiment(
@@ -182,12 +182,12 @@ def test_static_embodiment_placement_uses_coordinated_reset():
     )
 
     initial_pose = robot.get_initial_pose()
-    assert isinstance(initial_pose, Pose)
-    assert initial_pose.position_xyz == (0.1, 0.2, 0.0)
-    assert event_cfg is not None
-    runtime_robot = event_cfg.params["assets"][1]
-    assert runtime_robot in event_cfg.params["layouts"][0].positions
-    assert event_cfg.params["layouts"][1].positions[runtime_robot] == (0.3, 0.4, 0.0)
+    assert isinstance(initial_pose, PosePerEnv)
+    assert len(initial_pose.poses) == 2
+    assert initial_pose.poses[0].position_xyz == (0.1, 0.2, 0.0)
+    assert initial_pose.poses[1].position_xyz == (0.3, 0.4, 0.0)
+    assert event_cfg is None
+    assert robot.has_pose_reset_event()
 
 
 def test_static_initial_poses_reject_layout_missing_non_anchor():

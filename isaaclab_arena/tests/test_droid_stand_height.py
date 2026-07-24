@@ -56,6 +56,13 @@ def _test_droid_stand_height(simulation_app) -> bool:
         assert abs(scene_cfg.robot.init_state.pos[2] - (0.5 + expected_offset)) < 1e-6
         assert abs(scene_cfg.stand.init_state.pos[2] - (0.5 + expected_offset)) < 1e-6
 
+        layout_pose = Pose(position_xyz=(0.2, 0.1, 0.3), rotation_xyzw=(0.0, 0.0, 0.0, 1.0))
+        writes = posed_emb.layout_pose_to_scene_writes(layout_pose)
+        assert writes == [
+            ("robot", Pose(position_xyz=(0.2, 0.1, 0.3 + expected_offset), rotation_xyzw=(0.0, 0.0, 0.0, 1.0))),
+            ("stand", Pose(position_xyz=(0.2, 0.1, 0.3 + expected_offset), rotation_xyzw=(0.0, 0.0, 0.0, 1.0))),
+        ]
+
         # The YAML-spec path instantiates the embodiment via asset_class(**params); a scalar
         # stand_height_m from YAML applies just the same.
         registry_emb = AssetRegistry().get_asset_by_name("droid_abs_joint_pos")(stand_height_m=_CUSTOM_STAND_HEIGHT_M)

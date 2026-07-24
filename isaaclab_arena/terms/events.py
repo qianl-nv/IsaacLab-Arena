@@ -12,6 +12,9 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab_arena.utils.pose import Pose
 from isaaclab_arena.utils.velocity import Velocity
 
+SceneWritePoseSpecs = list[tuple[str, Pose]]
+PerEnvSceneWritePoseSpecs = list[SceneWritePoseSpecs]
+
 
 def set_object_pose(
     env: ManagerBasedEnv,
@@ -35,6 +38,61 @@ def set_object_pose(
         asset.write_root_velocity_to_sim(vel, env_ids=env_ids)
     else:
         asset.write_root_velocity_to_sim(torch.zeros(num_envs, 6, device=env.device), env_ids=env_ids)
+
+
+def write_scene_asset_pose_at_env(
+    env: ManagerBasedEnv,
+    env_id: int,
+    scene_name: str,
+    pose: Pose,
+) -> None:
+    """Write one scene asset root pose for a single environment index."""
+    scene_asset = env.scene[scene_name]
+    env_id_tensor = torch.tensor([env_id], device=env.device)
+    pose_tensor = pose.to_tensor(device=env.device).unsqueeze(0)
+    pose_tensor[0, :3] += env.scene.env_origins[env_id, :]
+    if hasattr(scene_asset, "write_root_pose_to_sim"):
+        scene_asset.write_root_pose_to_sim(pose_tensor, env_ids=env_id_tensor)
+        if hasattr(scene_asset, "write_root_velocity_to_sim"):
+            scene_asset.write_root_velocity_to_sim(
+                torch.zeros(1, 6, device=env.device),
+                env_ids=env_id_tensor,
+            )
+        return
+    if hasattr(scene_asset, "set_world_poses"):
+        scene_asset.set_world_poses(
+            pose_tensor[:, :3],
+            pose_tensor[:, 3:],
+            indices=env_id_tensor.cpu(),
+        )
+        return
+    raise TypeError(f"Scene asset '{scene_name}' does not support pose writes.")
+
+
+def reset_placement_asset_pose(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    write_pose_specs: SceneWritePoseSpecs,
+) -> None:
+    """Reset one fixed layout pose across all requested environments."""
+    if env_ids is None:
+        return
+    for cur_env in env_ids.tolist():
+        for scene_name, pose in write_pose_specs:
+            write_scene_asset_pose_at_env(env, cur_env, scene_name, pose)
+
+
+def reset_placement_asset_pose_per_env(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    write_pose_list: PerEnvSceneWritePoseSpecs,
+) -> None:
+    """Reset per-environment layout poses for one placement asset."""
+    if env_ids is None:
+        return
+    for cur_env in env_ids.tolist():
+        for scene_name, pose in write_pose_list[cur_env]:
+            write_scene_asset_pose_at_env(env, cur_env, scene_name, pose)
 
 
 def set_object_pose_per_env(

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from isaaclab.envs import ManagerBasedRLMimicEnv
 from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg
@@ -15,8 +15,13 @@ from isaaclab_arena.embodiments.common.arm_mode import ArmMode
 from isaaclab_arena.relations.placement_asset import PlacementAsset
 from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 from isaaclab_arena.utils.cameras import ArenaCameraCfg, make_camera_observation_cfg
-from isaaclab_arena.utils.configclass import combine_configclass_instances
+from isaaclab_arena.utils.configclass import combine_configclass_instances, make_configclass
 from isaaclab_arena.utils.pose import Pose, PosePerEnv, PoseRange
+
+if TYPE_CHECKING:
+    from isaaclab.managers import EventTermCfg
+
+ROBOT_POSE_RESET_EVENT_NAME = "robot_reset_pose"
 
 
 class EmbodimentBase(PlacementAsset):
@@ -52,6 +57,7 @@ class EmbodimentBase(PlacementAsset):
         self.mimic_env: Any | None = None
         self.xr: Any | None = None
         self.termination_cfg: Any | None = None
+        self.pose_event_cfg: EventTermCfg | None = None
 
     def get_bounding_box(self) -> AxisAlignedBoundingBox:
         """Return root-relative bounds computed from the articulation's USD geometry."""
@@ -67,14 +73,70 @@ class EmbodimentBase(PlacementAsset):
         # TODO(zihaox): Account for configured initial joint positions in bounds and collision meshes.
         return compute_local_bounding_box_from_usd(spawn.usd_path, scale)
 
-    def set_initial_pose(self, pose: Pose | PoseRange | PosePerEnv) -> None:
-        """Set the embodiment root pose."""
-        assert isinstance(pose, Pose), "Embodiments require one root Pose"
+    def _get_initial_pose_as_pose(self) -> Pose | None:
+        """Return a single pose for scene construction and bounding-box helpers."""
+        initial_pose = self.get_initial_pose()
+        if initial_pose is None:
+            return None
+        if isinstance(initial_pose, PosePerEnv):
+            return initial_pose.poses[0]
+        if isinstance(initial_pose, PoseRange):
+            return initial_pose.get_midpoint()
+        return initial_pose
+
+    def _set_pose_state(self, pose: Pose | PoseRange | PosePerEnv) -> None:
+        """Update the stored pose and materialize the scene construction config."""
+        assert not isinstance(pose, PoseRange), "Embodiments do not support PoseRange initial poses"
         self.initial_pose = pose
+        initial_pose = self._get_initial_pose_as_pose()
+        if initial_pose is not None and self.scene_config is not None:
+            self.scene_config = self._update_scene_cfg_with_robot_initial_pose(self.scene_config, initial_pose)
+
+    def set_initial_pose(self, pose: Pose | PoseRange | PosePerEnv) -> None:
+        """Set the embodiment root pose and rebuild the pose reset event."""
+        self._set_pose_state(pose)
+        self.pose_event_cfg = self._init_pose_event_cfg()
+
+    def set_spawn_pose(self, pose: Pose) -> None:
+        """Set the scene-construction pose without rebuilding the pose reset event."""
+        assert self.scene_config is not None, "scene_config must be populated before setting the spawn pose"
+        self._set_pose_state(pose)
 
     def supports_per_env_initial_pose(self) -> bool:
-        """Return False because embodiment configs store one root pose."""
-        return False
+        """Return True because embodiment reset events can restore per-environment poses."""
+        return True
+
+    def has_pose_reset_event(self) -> bool:
+        """Return whether the embodiment owns a root-pose reset event."""
+        return self.pose_event_cfg is not None
+
+    def _build_write_pose_specs(self, pose: Pose) -> list[tuple[str, Pose]]:
+        """Return precomputed scene writes for one layout pose."""
+        return self.layout_pose_to_scene_writes(pose)
+
+    def _init_pose_event_cfg(self) -> EventTermCfg | None:
+        """Build the reset event that restores this embodiment's root pose."""
+        from isaaclab.managers import EventTermCfg
+
+        from isaaclab_arena.terms.events import reset_placement_asset_pose, reset_placement_asset_pose_per_env
+
+        initial_pose = self.get_initial_pose()
+        if initial_pose is None:
+            return None
+        if isinstance(initial_pose, PosePerEnv):
+            write_pose_list = [self._build_write_pose_specs(pose) for pose in initial_pose.poses]
+            return EventTermCfg(
+                func=reset_placement_asset_pose_per_env,
+                mode="reset",
+                params={"write_pose_list": write_pose_list},
+            )
+        if isinstance(initial_pose, Pose):
+            return EventTermCfg(
+                func=reset_placement_asset_pose,
+                mode="reset",
+                params={"write_pose_specs": self._build_write_pose_specs(initial_pose)},
+            )
+        return None
 
     def set_joint_initial_pos(self, joint_pos: Mapping[str, float]) -> None:
         """Update the robot's initial joint positions by joint name."""
@@ -84,8 +146,9 @@ class EmbodimentBase(PlacementAsset):
         robot.init_state.joint_pos.update(joint_pos)
 
     def get_scene_cfg(self) -> Any:
-        if self.initial_pose is not None:
-            self.scene_config = self._update_scene_cfg_with_robot_initial_pose(self.scene_config, self.initial_pose)
+        initial_pose = self._get_initial_pose_as_pose()
+        if initial_pose is not None:
+            self.scene_config = self._update_scene_cfg_with_robot_initial_pose(self.scene_config, initial_pose)
         if self.enable_cameras:
             if self.camera_config is not None:
                 return combine_configclass_instances(
@@ -119,7 +182,17 @@ class EmbodimentBase(PlacementAsset):
         return self.command_config
 
     def get_events_cfg(self) -> Any:
-        return self.event_config
+        from isaaclab.managers import EventTermCfg
+
+        if self.pose_event_cfg is None:
+            return self.event_config
+        pose_event_cfg = make_configclass(
+            "EmbodimentPoseEventCfg",
+            [(ROBOT_POSE_RESET_EVENT_NAME, EventTermCfg, self.pose_event_cfg)],
+        )()
+        if self.event_config is None:
+            return pose_event_cfg
+        return combine_configclass_instances("EmbodimentEventsCfg", self.event_config, pose_event_cfg)
 
     def get_mimic_env(self) -> ManagerBasedRLMimicEnv:
         return self.mimic_env
@@ -152,8 +225,10 @@ class EmbodimentBase(PlacementAsset):
         assert scene_config is not None, "scene_config must be populated before setting the root pose"
         robot = scene_config.robot
         assert robot is not None, "scene_config.robot must be populated before setting the root pose"
-        robot.init_state.pos = pose.position_xyz
-        robot.init_state.rot = pose.rotation_xyzw
+        for scene_name, write_pose in self.layout_pose_to_scene_writes(pose):
+            if scene_name == self.get_embodiment_name_in_scene():
+                robot.init_state.pos = write_pose.position_xyz
+                robot.init_state.rot = write_pose.rotation_xyzw
         return scene_config
 
     def get_recorder_term_cfg(self) -> RecorderManagerBaseCfg:

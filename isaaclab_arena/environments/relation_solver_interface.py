@@ -11,11 +11,7 @@ from typing import TYPE_CHECKING
 
 from isaaclab_arena.relations.collision_mode import CollisionMode, get_object_collision_mode
 from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
-from isaaclab_arena.relations.placement_events import (
-    get_pose_from_layout,
-    place_assets_from_layouts,
-    solve_and_place_objects,
-)
+from isaaclab_arena.relations.placement_events import get_pose_from_layout, solve_and_place_objects
 from isaaclab_arena.relations.pooled_object_placer import PooledObjectPlacer
 from isaaclab_arena.relations.relations import get_anchor_objects
 from isaaclab_arena.utils.pose import PosePerEnv
@@ -147,23 +143,17 @@ def _apply_relation_placement_result(
             anchor_assets=anchor_assets,
         )
 
-    # Objects can store PosePerEnv, so their reset events restore fixed per-env
-    # poses. Scenes containing any asset without per-env pose support use one
-    # coordinated event to restore layouts[env_id].
-    if all(asset.supports_per_env_initial_pose() for asset in assets):
-        _apply_static_initial_poses(
-            assets=assets,
-            placement_pool=placement_pool,
-            anchor_assets=anchor_assets,
-            num_envs=num_envs,
-        )
-        return None
-    return _apply_static_spawn_pose(
+    # All placement assets restore fixed per-environment poses through their own reset events.
+    assert all(
+        asset.supports_per_env_initial_pose() for asset in assets
+    ), "Relation placement requires every non-anchor asset to support PosePerEnv."
+    _apply_static_initial_poses(
         assets=assets,
         placement_pool=placement_pool,
         anchor_assets=anchor_assets,
         num_envs=num_envs,
     )
+    return None
 
 
 def _apply_dynamic_spawn_pose(
@@ -185,30 +175,6 @@ def _apply_dynamic_spawn_pose(
         params={
             "assets": assets,
             "placement_pool": placement_pool,
-        },
-    )
-
-
-def _apply_static_spawn_pose(
-    assets: list[PlacementAsset],
-    placement_pool: PooledObjectPlacer,
-    anchor_assets: set[PlacementAsset],
-    num_envs: int,
-) -> EventTermCfg:
-    """Return a coordinated reset event that restores one fixed layout per environment."""
-    from isaaclab.managers import EventTermCfg
-
-    layouts = placement_pool.sample_with_replacement(num_envs)
-    # Scene configs hold one pose per asset, so construction uses one valid layout.
-    # The reset event installs layouts[env_id] before the first environment step.
-    construction_layout = layouts[0]
-    _seed_spawn_config_from_layout(assets, anchor_assets, construction_layout)
-    return EventTermCfg(
-        func=place_assets_from_layouts,
-        mode="reset",
-        params={
-            "assets": assets,
-            "layouts": layouts,
         },
     )
 

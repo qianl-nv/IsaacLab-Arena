@@ -67,6 +67,10 @@ class PlacementAsset(Asset, ABC):
         """Set the root pose used when constructing the scene."""
         self.set_initial_pose(pose)
 
+    def layout_pose_to_scene_writes(self, layout_pose: Pose) -> list[tuple[str, Pose]]:
+        """Return scene keys and world-frame poses to write for one solved layout pose."""
+        return [(self.get_scene_name(), layout_pose)]
+
     def has_pose_reset_event(self) -> bool:
         """Return whether the asset owns a root-pose reset event."""
         return False

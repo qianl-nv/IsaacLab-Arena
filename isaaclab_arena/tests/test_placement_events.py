@@ -273,6 +273,30 @@ def test_static_layout_event_writes_embodiment_to_configured_scene_asset():
         )
 
 
+def test_reset_placement_asset_pose_per_env_writes_multi_scene_assets():
+    from isaaclab_arena.terms.events import reset_placement_asset_pose_per_env
+    from isaaclab_arena.utils.pose import Pose
+
+    env = _make_mock_env(num_envs=2)
+    write_pose_list = [
+        [
+            ("robot", Pose(position_xyz=(0.1, 0.2, 0.3))),
+            ("stand", Pose(position_xyz=(0.1, 0.2, 0.3))),
+        ],
+        [
+            ("robot", Pose(position_xyz=(0.4, 0.5, 0.6))),
+            ("stand", Pose(position_xyz=(0.4, 0.5, 0.6))),
+        ],
+    ]
+
+    reset_placement_asset_pose_per_env(env, torch.tensor([1]), write_pose_list=write_pose_list)
+
+    robot_pose = env._assets["robot"].write_root_pose_to_sim.call_args.args[0]
+    stand_pose = env._assets["stand"].write_root_pose_to_sim.call_args.args[0]
+    assert torch.allclose(robot_pose[0, :3], torch.tensor([0.4, 0.5, 0.6]))
+    assert torch.allclose(stand_pose[0, :3], torch.tensor([0.4, 0.5, 0.6]))
+
+
 def test_static_layout_event_rejects_missing_non_anchor_assets():
     from isaaclab_arena.relations.placement_events import place_assets_from_layouts
     from isaaclab_arena.relations.placement_result import PlacementResult
