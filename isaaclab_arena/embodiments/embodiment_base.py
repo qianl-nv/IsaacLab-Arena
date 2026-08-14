@@ -181,6 +181,9 @@ class EmbodimentBase(PlaceableAsset):
     def get_action_cfg(self) -> Any:
         return self.action_config
 
+    def apply_physics_backend(self, env_cfg: Any, backend: str) -> None:
+        """Apply embodiment settings required by the selected physics backend."""
+
     def get_observation_cfg(self) -> Any:
         if self.enable_cameras:
             if self.camera_config is not None:

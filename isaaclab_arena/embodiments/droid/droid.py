@@ -33,7 +33,10 @@ from isaaclab.utils.configclass import configclass
 from isaaclab_arena.assets.nucleus import ARENA_NUCLEUS_DIR
 from isaaclab_arena.assets.register import register_asset
 from isaaclab_arena.embodiments.common.arm_mode import ArmMode
-from isaaclab_arena.embodiments.droid.actions import BinaryJointPositionZeroToOneAction
+from isaaclab_arena.embodiments.droid.actions import (
+    BinaryJointPositionZeroToOneAction,
+    NewtonDroidDifferentialInverseKinematicsAction,
+)
 from isaaclab_arena.embodiments.droid.observations import arm_joint_pos, ee_pos, ee_quat, gripper_pos
 from isaaclab_arena.embodiments.embodiment_base import EmbodimentBase
 from isaaclab_arena.embodiments.franka.franka import franka_stack_events
@@ -75,6 +78,15 @@ _DROID_JOINT_NAMES = (
     "left_inner_finger_knuckle_joint",
     "left_inner_finger_joint",
 )
+_DROID_GRIPPER_MIMIC_SIGNS = {
+    "finger_joint": 1.0,
+    "left_inner_finger_joint": -1.0,
+    "left_inner_finger_knuckle_joint": -1.0,
+    "right_outer_knuckle_joint": 1.0,
+    "right_inner_finger_joint": 1.0,
+    "right_inner_finger_knuckle_joint": -1.0,
+}
+_DROID_GRIPPER_JOINT_NAMES = tuple(_DROID_GRIPPER_MIMIC_SIGNS)
 
 
 class DroidEmbodimentBase(EmbodimentBase, ABC):
@@ -172,6 +184,42 @@ class DroidEmbodimentBase(EmbodimentBase, ABC):
 
     def get_command_body_name(self) -> str:
         return self.action_config.arm_action.body_name
+
+    def apply_physics_backend(self, env_cfg, backend: str) -> None:
+        """Apply the DROID configuration required by Newton."""
+        if backend != "newton":
+            return
+
+        from isaaclab_arena.embodiments.droid.newton import ensure_newton_compatible_droid_usd
+
+        robot_cfg = env_cfg.scene.robot
+        robot_cfg.actuators["gripper"] = ImplicitActuatorCfg(
+            joint_names_expr=list(_DROID_GRIPPER_JOINT_NAMES),
+            effort_limit_sim=5.0,
+            velocity_limit_sim=1.0,
+            stiffness=20.0,
+            damping=5.0,
+            armature=0.1,
+        )
+        robot_cfg.spawn.usd_path = ensure_newton_compatible_droid_usd(robot_cfg.spawn.usd_path)
+        # Newton's pinned importer treats disableGravity as scene-wide. Keep world
+        # gravity active and use the per-body MuJoCo compensation authored above.
+        robot_cfg.spawn.rigid_props.disable_gravity = False
+
+        env_cfg.scene.ee_frame.target_frames[0].prim_path = "{ENV_REGEX_NS}/Robot/Gripper/Robotiq_2F_85/base_link"
+
+        gripper_action = env_cfg.actions.gripper_action
+        gripper_action.joint_names = list(_DROID_GRIPPER_JOINT_NAMES)
+        gripper_action.open_command_expr = dict.fromkeys(_DROID_GRIPPER_JOINT_NAMES, 0.0)
+        gripper_action.close_command_expr = {name: sign * 0.7 for name, sign in _DROID_GRIPPER_MIMIC_SIGNS.items()}
+
+        randomize_joint_state = env_cfg.events.randomize_franka_joint_state
+        if randomize_joint_state is not None:
+            randomize_joint_state.params["asset_cfg"] = SceneEntityCfg("robot", joint_names=["panda_joint.*"])
+
+        if self.name == "droid_differential_ik":
+            env_cfg.actions.arm_action.body_name = "base_link"
+            env_cfg.actions.arm_action.class_type = NewtonDroidDifferentialInverseKinematicsAction
 
 
 @register_asset

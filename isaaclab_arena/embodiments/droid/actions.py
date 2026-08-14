@@ -6,6 +6,16 @@
 import torch
 
 from isaaclab.envs.mdp.actions.binary_joint_actions import BinaryJointPositionAction
+from isaaclab.envs.mdp.actions.task_space_actions import DifferentialInverseKinematicsAction
+
+
+class NewtonDroidDifferentialInverseKinematicsAction(DifferentialInverseKinematicsAction):
+    """Use differential IK with Newton's DROID Jacobian layout."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        # Newton places the arm columns before the floating-base columns for this asset.
+        self._jacobi_joint_ids = self._joint_ids
 
 
 class BinaryJointPositionZeroToOneAction(BinaryJointPositionAction):

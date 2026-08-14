@@ -431,6 +431,8 @@ class ArenaEnvBuilder:
             if presets == "newton":
                 env_cfg.scene.replicate_physics = True
 
+            embodiment.apply_physics_backend(env_cfg, presets)
+
         env_kwargs: dict[str, Any] = {"variation_recorder": variation_recorder}
         return env_cfg, env_kwargs
 
