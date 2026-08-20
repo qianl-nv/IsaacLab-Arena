@@ -28,6 +28,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.sensors.camera.camera_cfg import CameraCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg, OffsetCfg
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.configclass import configclass
 
 from isaaclab_arena.assets.nucleus import ARENA_NUCLEUS_DIR
@@ -47,10 +48,19 @@ if TYPE_CHECKING:
     import trimesh
 
 _DROID_ROBOT_PRIM = RobotPrimSpec(
-    robot_usd_path=f"{ARENA_NUCLEUS_DIR}/Arena/assets/robot_library/droid/franka_robotiq_2f_85_flattened.usd",
+    robot_usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots_Multiphysics/FrankaRobotics/FrankaPanda/franka/franka.usda",
     root_prim_path="/panda",
     robot_base_prim_name="panda_link0",
     stand_prim_name="stand_instanceable",
+    variants=(("Gripper", "robotiq_2f_85"),),
+    joint_local_pos1_overrides=(
+        ("panda_link7/panda_hand_joint", (0.0, 0.0, 0.0)),
+        ("Robotiq_2F_85/base_link/AssemblerFixedJoint", (-0.018174022, 0.0, 0.0)),
+    ),
+    joint_local_rot1_overrides=(
+        ("panda_link7/panda_hand_joint", (0.70710677, 0.0, 0.70710677, 0.0)),
+        ("Robotiq_2F_85/base_link/AssemblerFixedJoint", (1.0, 0.0, 0.0, 0.0)),
+    ),
 )
 _DROID_STAND_PRIM = StandPrimSpec(
     stand_usd_path=f"{ARENA_NUCLEUS_DIR}/Arena/assets/object_library/srl_robolab_assets/robots/franka_stand_grey.usda",
@@ -353,17 +363,19 @@ class DroidSceneCfg:
                 ),
             ),
             FrameTransformerCfg.FrameCfg(
-                prim_path="{ENV_REGEX_NS}/Robot/Gripper/Robotiq_2F_85/right_inner_finger",
+                prim_path="{ENV_REGEX_NS}/Robot/Robotiq_2F_85/right_inner_finger",
                 name="tool_rightfinger",
                 offset=OffsetCfg(
-                    pos=(0.0, 0.0, 0.046),
+                    pos=(0.02790616, 0.0, -0.01816124),
+                    rot=(0.70710678, 0.0, 0.70710678, 0.0),
                 ),
             ),
             FrameTransformerCfg.FrameCfg(
-                prim_path="{ENV_REGEX_NS}/Robot/Gripper/Robotiq_2F_85/left_inner_finger",
+                prim_path="{ENV_REGEX_NS}/Robot/Robotiq_2F_85/left_inner_finger",
                 name="tool_leftfinger",
                 offset=OffsetCfg(
-                    pos=(0.0, 0.0, 0.046),
+                    pos=(0.02790616, 0.0, -0.01816124),
+                    rot=(0.70710678, 0.0, 0.70710678, 0.0),
                 ),
             ),
         ],
@@ -514,7 +526,7 @@ class DroidCameraCfg(ArenaCameraCfg):
         offset=CameraCfg.OffsetCfg(pos=(0.05, -0.57, 0.66), rot=(0.399, -0.195, -0.393, 0.805), convention="opengl"),
     )
     wrist_camera: CameraCfg = CameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/Gripper/Robotiq_2F_85/base_link/wrist_camera",
+        prim_path="{ENV_REGEX_NS}/Robot/Robotiq_2F_85/base_link/wrist_camera",
         height=720,
         width=1280,
         data_types=["rgb"],
@@ -525,6 +537,8 @@ class DroidCameraCfg(ArenaCameraCfg):
             vertical_aperture=3.024,
         ),
         offset=CameraCfg.OffsetCfg(
-            pos=(0.011, -0.031, -0.074), rot=(0.570, 0.576, -0.409, -0.420), convention="opengl"
+            pos=(-0.09209835, 0.031, -0.00715995),
+            rot=(0.704190109, -0.692107554, -0.110220413, 0.113819526),
+            convention="opengl",
         ),
     )

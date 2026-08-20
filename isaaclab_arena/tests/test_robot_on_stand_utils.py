@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 import traceback
 from pathlib import Path
@@ -34,7 +35,7 @@ def _assert_compose_on_stand_usd(
     stand_footprint_xy_m: tuple[float, float] | None = None,
     check_orient_180z: bool = False,
 ) -> str:
-    from pxr import Usd, UsdGeom
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
     from isaaclab_arena.embodiments.robot_on_stand_utils import compose_on_stand_usd
 
@@ -49,6 +50,18 @@ def _assert_compose_on_stand_usd(
 
     stage = Usd.Stage.Open(usd_path)
     assert stage is not None
+    root_prim = stage.GetPrimAtPath(robot_spec.root_prim_path)
+    for variant_set, selection in robot_spec.variants:
+        assert root_prim.GetVariantSet(variant_set).GetVariantSelection() == selection
+    for joint_path, position in robot_spec.joint_local_pos1_overrides:
+        joint = UsdPhysics.Joint(stage.GetPrimAtPath(f"{robot_spec.root_prim_path}/{joint_path}"))
+        assert Gf.IsClose(joint.GetLocalPos1Attr().Get(), Gf.Vec3f(*position), 1e-6)
+    for joint_path, rotation in robot_spec.joint_local_rot1_overrides:
+        joint = UsdPhysics.Joint(stage.GetPrimAtPath(f"{robot_spec.root_prim_path}/{joint_path}"))
+        actual = joint.GetLocalRot1Attr().Get()
+        expected = Gf.Quatf(*rotation)
+        assert abs(actual.GetReal() - expected.GetReal()) < 1e-6
+        assert Gf.IsClose(actual.GetImaginary(), expected.GetImaginary(), 1e-6)
     stand_prim = stage.GetPrimAtPath(robot_spec.stand_prim_path)
     assert stand_prim.IsValid(), f"missing stand prim at {robot_spec.stand_prim_path!r}"
     robot_base = stage.GetPrimAtPath(robot_spec.robot_base_prim_path)
@@ -239,6 +252,114 @@ def _test_franka_on_stand_usd_compose(simulation_app) -> bool:
     return True
 
 
+def _test_droid_new_usd_matches_legacy_kinematics(simulation_app) -> bool:
+    """New DROID arm, fingertips, and wrist camera match the legacy USD at two joint poses."""
+    from isaaclab.assets import Articulation
+    from isaaclab.sim import SimulationCfg, SimulationContext
+    from isaaclab.utils.assets import retrieve_file_path
+    from pxr import Gf
+
+    from isaaclab_arena.assets.nucleus import ARENA_NUCLEUS_DIR
+    from isaaclab_arena.embodiments.droid.droid import (
+        DroidAbsoluteJointPositionEmbodiment,
+        DroidCameraCfg,
+        DroidSceneCfg,
+    )
+
+    sim = SimulationContext(SimulationCfg(dt=1 / 120, device="cuda:0"))
+    legacy_cfg = DroidSceneCfg().robot.replace(prim_path="/World/legacy")
+    legacy_cfg.spawn.usd_path = retrieve_file_path(
+        f"{ARENA_NUCLEUS_DIR}/Arena/assets/robot_library/droid/franka_robotiq_2f_85_flattened.usd"
+    )
+    current_cfg = DroidAbsoluteJointPositionEmbodiment().scene_config.robot.replace(prim_path="/World/current")
+    current_cfg.init_state.pos = (2.0, 0.0, 0.0)
+    legacy_cfg.actuators["gripper"].damping = 5.0
+    current_cfg.actuators["gripper"].damping = 5.0
+    legacy = Articulation(legacy_cfg)
+    current = Articulation(current_cfg)
+
+    sim.reset()
+    dt = sim.get_physics_dt()
+    camera_offset = DroidCameraCfg().wrist_camera.offset
+
+    def body_matrix(robot: Articulation, body_name: str) -> np.ndarray:
+        body_id = robot.body_names.index(body_name)
+        position = robot.data.body_pos_w.torch[0, body_id].detach().cpu().double().tolist()
+        w, x, y, z = robot.data.body_quat_w.torch[0, body_id].detach().cpu().double().tolist()
+        transform = Gf.Matrix4d()
+        transform.SetTransform(Gf.Rotation(Gf.Quatd(w, Gf.Vec3d(x, y, z))), Gf.Vec3d(*position))
+        return np.array(transform)
+
+    def offset_matrix(position, rotation_xyzw=(0.0, 0.0, 0.0, 1.0)) -> np.ndarray:
+        x, y, z, w = rotation_xyzw
+        transform = Gf.Matrix4d()
+        transform.SetTransform(Gf.Rotation(Gf.Quatd(w, Gf.Vec3d(x, y, z))), Gf.Vec3d(*position))
+        return np.array(transform)
+
+    legacy_fingertip_offset = offset_matrix((0.0, 0.0, 0.046))
+    current_fingertip_offsets = {
+        "left": offset_matrix((0.02790616, 0.0, -0.01816124), (0.70710678, 0.0, 0.70710678, 0.0)),
+        "right": offset_matrix((0.02790616, 0.0, -0.01816124), (0.70710678, 0.0, 0.70710678, 0.0)),
+    }
+    legacy_wrist_camera_offset = offset_matrix((0.011, -0.031, -0.074), (0.570, 0.576, -0.409, -0.420))
+    current_wrist_camera_offset = offset_matrix(camera_offset.pos, camera_offset.rot)
+    arm_joint_ids = {robot: robot.find_joints("panda_joint[1-7]")[0] for robot in (legacy, current)}
+    finger_joint_ids = {robot: robot.find_joints("finger_joint")[0] for robot in (legacy, current)}
+    arm_pose = legacy.data.default_joint_pos.torch[:, arm_joint_ids[legacy]].clone()
+
+    for wrist_delta, finger_angle in ((0.0, 0.2), (0.0, 0.6)):
+        target_arm_pose = arm_pose.clone()
+        target_arm_pose[:, -1] += wrist_delta
+        for robot in (legacy, current):
+            joint_pos = robot.data.joint_pos.torch.clone()
+            joint_pos[:, arm_joint_ids[robot]] = target_arm_pose
+            robot.write_joint_state_to_sim(joint_pos, torch.zeros_like(joint_pos))
+            robot.set_joint_position_target(target_arm_pose, joint_ids=arm_joint_ids[robot])
+            robot.set_joint_position_target(
+                torch.tensor([[finger_angle]], device=robot.device),
+                joint_ids=finger_joint_ids[robot],
+            )
+        for _ in range(240):
+            legacy.write_data_to_sim()
+            current.write_data_to_sim()
+            sim.step(render=False)
+            legacy.update(dt)
+            current.update(dt)
+
+        np.testing.assert_allclose(
+            legacy.data.joint_pos.torch[:, finger_joint_ids[legacy]].cpu(),
+            current.data.joint_pos.torch[:, finger_joint_ids[current]].cpu(),
+            atol=1e-3,
+        )
+        legacy_link7 = body_matrix(legacy, "panda_link7")
+        current_link7 = body_matrix(current, "panda_link7")
+        legacy_link0 = body_matrix(legacy, "panda_link0")
+        current_link0 = body_matrix(current, "panda_link0")
+        np.testing.assert_allclose(
+            legacy_link7 @ np.linalg.inv(legacy_link0),
+            current_link7 @ np.linalg.inv(current_link0),
+            atol=2e-3,
+        )
+
+        for side in ("left", "right"):
+            legacy_finger = body_matrix(legacy, f"{side}_inner_finger")
+            current_finger = body_matrix(current, f"{side}_inner_finger")
+            np.testing.assert_allclose(
+                (legacy_fingertip_offset @ legacy_finger @ np.linalg.inv(legacy_link7))[3, :3],
+                (current_fingertip_offsets[side] @ current_finger @ np.linalg.inv(current_link7))[3, :3],
+                atol=5e-3,
+            )
+
+        legacy_base = body_matrix(legacy, "base_link")
+        current_base = body_matrix(current, "base_link")
+        np.testing.assert_allclose(
+            legacy_wrist_camera_offset @ legacy_base @ np.linalg.inv(legacy_link7),
+            current_wrist_camera_offset @ current_base @ np.linalg.inv(current_link7),
+            atol=5e-3,
+        )
+    return True
+
+
 def _test_droid_stand_and_externals_under_link0(simulation_app) -> bool:
     """Droid runtime: stand and external cameras under ``panda_link0``; root write moves link0."""
     from isaaclab_arena.cli.isaaclab_arena_cli import arena_env_builder_cfg_from_argparse, get_isaaclab_arena_cli_parser
@@ -287,6 +408,11 @@ def test_droid_on_stand_usd_compose():
 def test_franka_on_stand_usd_compose():
     result = run_function_with_persistent_simulation_app(_test_franka_on_stand_usd_compose)
     assert result, f"Test {test_franka_on_stand_usd_compose.__name__} failed"
+
+
+def test_droid_new_usd_matches_legacy_kinematics():
+    result = run_function_with_persistent_simulation_app(_test_droid_new_usd_matches_legacy_kinematics)
+    assert result, f"Test {test_droid_new_usd_matches_legacy_kinematics.__name__} failed"
 
 
 @pytest.mark.with_cameras

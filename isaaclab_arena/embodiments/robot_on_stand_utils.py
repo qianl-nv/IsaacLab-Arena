@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from isaaclab.utils.assets import retrieve_file_path
-from pxr import Gf, Usd, UsdGeom
+from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
 from isaaclab_arena.assets.asset_cache import get_arena_asset_cache_dir
 
@@ -33,6 +33,9 @@ class RobotPrimSpec:
     root_prim_path: str
     robot_base_prim_name: str
     stand_prim_name: str
+    variants: tuple[tuple[str, str], ...] = ()
+    joint_local_pos1_overrides: tuple[tuple[str, tuple[float, float, float]], ...] = ()
+    joint_local_rot1_overrides: tuple[tuple[str, tuple[float, float, float, float]], ...] = ()
 
     @property
     def robot_base_prim_path(self) -> str:
@@ -117,6 +120,16 @@ def _compose_on_stand_usd_cached(
         root = stage.DefinePrim(robot.root_prim_path, "Xform")
         robot_resolved = retrieve_file_path(robot.robot_usd_path)
         root.GetReferences().AddReference(robot_resolved, robot.root_prim_path)
+        for variant_set, selection in robot.variants:
+            root.GetVariantSets().SetSelection(variant_set, selection)
+        for joint_path, position in robot.joint_local_pos1_overrides:
+            joint_prim = stage.GetPrimAtPath(f"{robot.root_prim_path}/{joint_path}")
+            assert joint_prim.IsA(UsdPhysics.Joint), f"missing physics joint at {joint_prim.GetPath()}"
+            UsdPhysics.Joint(joint_prim).GetLocalPos1Attr().Set(Gf.Vec3f(*position))
+        for joint_path, rotation in robot.joint_local_rot1_overrides:
+            joint_prim = stage.GetPrimAtPath(f"{robot.root_prim_path}/{joint_path}")
+            assert joint_prim.IsA(UsdPhysics.Joint), f"missing physics joint at {joint_prim.GetPath()}"
+            UsdPhysics.Joint(joint_prim).GetLocalRot1Attr().Set(Gf.Quatf(*rotation))
         stage.SetDefaultPrim(root)
 
         _add_stand(stage, robot, stand, stand_height_m, stand_footprint_xy_m)
