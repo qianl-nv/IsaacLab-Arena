@@ -14,6 +14,7 @@ from isaaclab.sim.spawners.spawner_cfg import SpawnerCfg
 
 from isaaclab_arena.assets.object_base import ObjectBase, ObjectType
 from isaaclab_arena.assets.object_utils import detect_object_type
+from isaaclab_arena.assets.rooted_object import RootedObjectBase
 from isaaclab_arena.relations.relations import RelationBase
 from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 from isaaclab_arena.utils.pose import Pose
@@ -21,7 +22,7 @@ from isaaclab_arena.utils.usd.rigid_bodies import find_shallowest_rigid_body
 from isaaclab_arena.utils.usd_helpers import compute_local_bounding_box_from_usd, has_light, open_stage
 
 
-class Object(ObjectBase):
+class Object(RootedObjectBase):
     """Pick-up object config for a pick-and-place environment."""
 
     def __init__(

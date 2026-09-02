@@ -10,7 +10,10 @@ HEADLESS = True
 
 def _test_object_initial_pose_update(simulation_app):
 
+    from isaaclab.assets import AssetBaseCfg
+
     from isaaclab_arena.assets.registries import AssetRegistry
+    from isaaclab_arena.scene.scene import Scene
     from isaaclab_arena.utils.pose import Pose
 
     asset_registry = AssetRegistry()
@@ -26,6 +29,16 @@ def _test_object_initial_pose_update(simulation_app):
     # Now lets check that the initial pose has been updated and that the debug visualization is still disabled.
     assert rigid_object.get_initial_pose() == new_initial_pose
     assert rigid_object.object_cfg.debug_vis is False
+    cfg_name, object_cfg = rigid_object.get_object_cfg()
+    assert cfg_name == rigid_object.name
+    assert object_cfg is rigid_object.object_cfg
+    assert isinstance(object_cfg, AssetBaseCfg)
+    event_name, event_cfg = rigid_object.get_event_cfg()
+    assert event_name == rigid_object.name
+    assert event_cfg is not None
+    scene_object_cfg = getattr(Scene(assets=[rigid_object]).get_scene_cfg(), rigid_object.name)
+    assert scene_object_cfg.prim_path == rigid_object.object_cfg.prim_path
+    assert scene_object_cfg.debug_vis is False
 
     return True
 
