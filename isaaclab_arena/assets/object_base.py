@@ -39,6 +39,7 @@ class ObjectBase(PlaceableAsset, ABC):
         super().__init__(name=name, **kwargs)
         self.prim_path = prim_path or f"{{ENV_REGEX_NS}}/{self.name}"
         self.object_type = object_type
+        self.reset_pose = True
 
     def set_prim_path(self, prim_path: str) -> None:
         self.prim_path = prim_path
@@ -47,12 +48,22 @@ class ObjectBase(PlaceableAsset, ABC):
         return self.prim_path
 
     @abstractmethod
-    def get_object_cfg(self) -> tuple[str, AssetBaseCfg]:
-        """Return the scene key and concrete Isaac Lab config."""
+    def get_object_cfg(self, physics_preset: str | None = None) -> tuple[str, AssetBaseCfg]:
+        """Return the scene key and concrete config for a physics preset."""
 
     def get_event_cfg(self) -> tuple[str, EventTermCfg | None]:
         """Return the reset event initialized and owned by ``PlaceableAsset``."""
         return self.name, self._pose_event_cfg
+
+    def disable_reset_pose(self) -> None:
+        """Disable this object's pose reset event."""
+        self.reset_pose = False
+        self._pose_event_cfg = self._build_reset_event()
+
+    def enable_reset_pose(self) -> None:
+        """Enable this object's pose reset event when supported."""
+        self.reset_pose = True
+        self._pose_event_cfg = self._build_reset_event()
 
     def get_contact_sensor_cfg(self, contact_against_object: ObjectBase | None = None) -> ContactSensorCfg:
         """Return a contact sensor config when this object representation supports one."""

@@ -36,8 +36,8 @@ class RootedObjectBase(ObjectBase):
         self._base_frame_view: FrameView | None = None
         self._base_frame_view_stage = None
 
-    def get_object_cfg(self) -> tuple[str, AssetBaseCfg]:
-        """Return the scene key and eagerly materialized rooted-object config."""
+    def get_object_cfg(self, physics_preset: str | None = None) -> tuple[str, AssetBaseCfg]:  # noqa: ARG002
+        """Return the preset-independent rooted-object config."""
         return self.name, self.object_cfg
 
     def _close_base_frame_view(self) -> None:
@@ -172,6 +172,10 @@ class RootedObjectBase(ObjectBase):
     ) -> ContactSensorCfg:
         """Build a contact sensor config for a rigid rooted object."""
         assert self.object_type == ObjectType.RIGID, "Contact sensor is only supported for rigid objects"
+        if contact_against_object is not None:
+            assert (
+                contact_against_object.object_type != ObjectType.DEFORMABLE
+            ), "Contact sensor filtering against deformable objects is not supported"
         filter_prim_paths = [contact_against_object.get_prim_path()] if contact_against_object else []
         return ContactSensorCfg(
             prim_path=self.prim_path,

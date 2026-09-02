@@ -1,0 +1,297 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Configuration and backend smoke tests for deformables."""
+
+import importlib.util
+
+import pytest
+
+from isaaclab_arena.tests.utils.persistent_simulation_app import run_function_with_persistent_simulation_app
+
+HEADLESS = True
+PYTETWILD_AVAILABLE = importlib.util.find_spec("pytetwild") is not None
+
+
+def _make_soft_cube(physics_preset, initial_pose=None):
+    import isaaclab.sim as sim_utils
+    from isaaclab_newton.sim.schemas import NewtonDeformableBodyPropertiesCfg
+    from isaaclab_newton.sim.spawners.materials import NewtonDeformableBodyMaterialCfg
+    from isaaclab_physx.sim.schemas import PhysxCollisionCfg, PhysxDeformableBodyPropertiesCfg
+    from isaaclab_physx.sim.spawners.materials import PhysxDeformableBodyMaterialCfg
+
+    from isaaclab_arena.assets.deformable_object import DeformableObject
+
+    if physics_preset == "physx":
+        deformable_props = PhysxDeformableBodyPropertiesCfg()
+        collision_props = [PhysxCollisionCfg(rest_offset=0.0025, contact_offset=0.01)]
+        physics_material = PhysxDeformableBodyMaterialCfg(
+            youngs_modulus=8.0e4,
+            poissons_ratio=0.4,
+            density=300.0,
+        )
+    else:
+        deformable_props = NewtonDeformableBodyPropertiesCfg()
+        collision_props = None
+        physics_material = NewtonDeformableBodyMaterialCfg(
+            k_mu=8.0e4 / (2.0 * (1.0 + 0.4)),
+            k_lambda=8.0e4 * 0.4 / ((1.0 + 0.4) * (1.0 - 2.0 * 0.4)),
+            density=300.0,
+            particle_radius=0.01,
+        )
+    return DeformableObject(
+        name="soft_cube",
+        spawner_cfg=sim_utils.MeshCuboidCfg(
+            size=(0.1, 0.1, 0.1),
+            deformable_props=deformable_props,
+            collision_props=collision_props,
+            physics_material=physics_material,
+        ),
+        initial_pose=initial_pose,
+    )
+
+
+def _test_backend_specific_deformable_config(simulation_app) -> bool:
+    import isaaclab.sim as sim_utils
+    from isaaclab.assets import DeformableObjectCfg
+    from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
+    from isaaclab_newton.sim.schemas import NewtonDeformableBodyPropertiesCfg
+    from isaaclab_newton.sim.spawners.materials import NewtonDeformableBodyMaterialCfg
+    from isaaclab_physx.sim.schemas import PhysxDeformableBodyPropertiesCfg
+    from isaaclab_physx.sim.spawners.materials import PhysxDeformableBodyMaterialCfg
+
+    from isaaclab_arena.assets.deformable_object import DeformableObject
+    from isaaclab_arena.assets.object import Object
+    from isaaclab_arena.assets.object_base import ObjectType
+    from isaaclab_arena.relations.relations import IsAnchor
+    from isaaclab_arena.scene.scene import Scene
+    from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
+    from isaaclab_arena.utils.pose import Pose, PoseRange
+
+    pose = Pose(position_xyz=(0.1, -0.2, 0.3), rotation_xyzw=(0.0, 0.0, 0.0, 1.0))
+    soft_cube = _make_soft_cube("physx", initial_pose=pose)
+    cfg_name, physx_cfg = soft_cube.get_object_cfg("physx")
+
+    assert cfg_name == soft_cube.name
+    assert isinstance(physx_cfg, DeformableObjectCfg)
+    assert isinstance(physx_cfg.spawn.deformable_props, PhysxDeformableBodyPropertiesCfg)
+    assert isinstance(physx_cfg.spawn.physics_material, PhysxDeformableBodyMaterialCfg)
+    assert physx_cfg.spawn.physics_material.youngs_modulus == pytest.approx(8.0e4)
+    assert physx_cfg.spawn.physics_material.poissons_ratio == pytest.approx(0.4)
+    assert physx_cfg.spawn.physics_material.density == pytest.approx(300.0)
+    assert physx_cfg.init_state.pos == pose.position_xyz
+    assert physx_cfg.init_state.rot == pose.rotation_xyzw
+    assert soft_cube.object_type is ObjectType.DEFORMABLE
+    assert soft_cube.get_object_cfg()[1] is physx_cfg
+    assert soft_cube.get_event_cfg()[1] is not None
+    soft_cube.disable_reset_pose()
+    assert soft_cube.get_event_cfg()[1] is None
+    soft_cube.enable_reset_pose()
+    assert soft_cube.get_event_cfg()[1] is not None
+
+    newton_cube = _make_soft_cube("newton", initial_pose=pose)
+    _, newton_cfg = newton_cube.get_object_cfg("newton")
+    assert isinstance(newton_cfg.spawn.deformable_props, NewtonDeformableBodyPropertiesCfg)
+    assert isinstance(newton_cfg.spawn.physics_material, NewtonDeformableBodyMaterialCfg)
+    expected_mu = 8.0e4 / (2.0 * (1.0 + 0.4))
+    expected_lambda = 8.0e4 * 0.4 / ((1.0 + 0.4) * (1.0 - 2.0 * 0.4))
+    assert newton_cfg.spawn.physics_material.k_mu == pytest.approx(expected_mu)
+    assert newton_cfg.spawn.physics_material.k_lambda == pytest.approx(expected_lambda)
+    assert newton_cfg.spawn.physics_material.density == pytest.approx(300.0)
+    assert newton_cube.get_object_cfg("newton")[1] is newton_cfg
+
+    authored_usd = DeformableObject(
+        name="authored_soft_body",
+        spawner_cfg=UsdFileCfg(usd_path="/tmp/authored_soft_body.usd"),
+        local_bounding_box=AxisAlignedBoundingBox(
+            min_point=(-0.05, -0.05, -0.05),
+            max_point=(0.05, 0.05, 0.05),
+        ),
+    )
+    assert authored_usd.physics_preset is None
+    assert authored_usd.get_object_cfg("physx")[1] is authored_usd.object_cfg
+    assert authored_usd.get_object_cfg("newton")[1] is authored_usd.object_cfg
+
+    updated_pose = Pose(position_xyz=(0.4, 0.0, 0.5))
+    soft_cube.set_initial_pose(updated_pose)
+    assert soft_cube.get_object_cfg("physx")[1] is physx_cfg
+    assert physx_cfg.init_state.pos == updated_pose.position_xyz
+    with pytest.raises(AssertionError, match="fixed Pose or PosePerEnv"):
+        soft_cube.set_initial_pose(PoseRange())
+    with pytest.raises(ValueError, match="configured for 'physx'"):
+        soft_cube.get_object_cfg("newton")
+
+    soft_cube.add_relation(IsAnchor())
+    scene = Scene(assets=[soft_cube])
+    assert scene.get_objects_with_relations() == [soft_cube]
+
+    rigid = Object(
+        name="rigid",
+        object_type=ObjectType.RIGID,
+        spawner_cfg=sim_utils.MeshCuboidCfg(size=(0.1, 0.1, 0.1)),
+    )
+    with pytest.raises(NotImplementedError, match="does not support contact sensors"):
+        soft_cube.get_contact_sensor_cfg(rigid)
+    with pytest.raises(AssertionError, match="against deformable objects"):
+        rigid.get_contact_sensor_cfg(soft_cube)
+    return True
+
+
+def _test_builder_forwards_deformable_preset(simulation_app) -> bool:
+    from isaaclab_newton.sim.schemas import NewtonDeformableBodyPropertiesCfg
+    from isaaclab_physx.sim.schemas import PhysxDeformableBodyPropertiesCfg
+
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+    from isaaclab_arena.scene.scene import Scene
+
+    for preset, properties_type in (
+        ("physx", PhysxDeformableBodyPropertiesCfg),
+        ("newton", NewtonDeformableBodyPropertiesCfg),
+    ):
+        soft_cube = _make_soft_cube(preset)
+        arena_env = IsaacLabArenaEnvironment(
+            name=f"{preset}_deformable_config",
+            scene=Scene(assets=[soft_cube]),
+        )
+        builder = ArenaEnvBuilder(
+            arena_env,
+            ArenaEnvBuilderCfg(num_envs=1, presets=preset, solve_relations=False),
+        )
+        env_cfg, _ = builder.compose_manager_cfg()
+        assert isinstance(env_cfg.scene.soft_cube.spawn.deformable_props, properties_type)
+    return True
+
+
+def _test_deformable_nodal_reset_terms(simulation_app) -> bool:
+    import torch
+    from types import SimpleNamespace
+
+    from isaaclab_arena.terms.events import set_deformable_object_pose, set_deformable_object_pose_per_env
+    from isaaclab_arena.utils.pose import Pose
+    from isaaclab_arena.utils.velocity import Velocity
+
+    class FakeAsset:
+        def __init__(self):
+            default_state = torch.zeros((2, 2, 6))
+            default_state[0, :, :3] = torch.tensor([[-0.05, 0.0, 0.5], [0.05, 0.0, 0.5]])
+            default_state[1, :, :3] = torch.tensor([[9.95, 0.0, 0.5], [10.05, 0.0, 0.5]])
+            self.data = SimpleNamespace(default_nodal_state_w=SimpleNamespace(torch=default_state))
+            self.cfg = SimpleNamespace(init_state=SimpleNamespace(rot=(0.0, 0.0, 0.0, 1.0)))
+            self.written_state = default_state.clone()
+            self.reset_env_ids = None
+
+        def write_nodal_state_to_sim_index(self, nodal_state, env_ids):
+            self.written_state[env_ids] = nodal_state
+
+        def reset(self, env_ids):
+            self.reset_env_ids = env_ids.clone()
+
+    class FakeScene(dict):
+        def __init__(self, asset):
+            super().__init__(soft_cube=asset)
+            self.env_origins = torch.tensor([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+
+    asset = FakeAsset()
+    env = SimpleNamespace(scene=FakeScene(asset), device=torch.device("cpu"))
+    asset_cfg = SimpleNamespace(name="soft_cube")
+    env_ids = torch.tensor([0, 1])
+
+    fixed_pose = Pose(position_xyz=(1.0, 2.0, 3.0))
+    set_deformable_object_pose(
+        env,
+        env_ids,
+        asset_cfg,
+        fixed_pose,
+        Velocity(linear_xyz=(0.1, 0.2, 0.3)),
+    )
+    torch.testing.assert_close(
+        asset.written_state[..., :3].mean(dim=1),
+        torch.tensor([[1.0, 2.0, 3.0], [11.0, 2.0, 3.0]]),
+    )
+    torch.testing.assert_close(asset.written_state[..., 3:], torch.tensor([0.1, 0.2, 0.3]).expand(2, 2, 3))
+
+    poses = [Pose(position_xyz=(0.0, 1.0, 2.0)), Pose(position_xyz=(3.0, 4.0, 5.0))]
+    set_deformable_object_pose_per_env(env, env_ids, asset_cfg, poses)
+    torch.testing.assert_close(
+        asset.written_state[..., :3].mean(dim=1),
+        torch.tensor([[0.0, 1.0, 2.0], [13.0, 4.0, 5.0]]),
+    )
+    torch.testing.assert_close(asset.written_state[..., 3:], torch.zeros((2, 2, 3)))
+    torch.testing.assert_close(asset.reset_env_ids, env_ids)
+    return True
+
+
+def _test_deformable_smoke(simulation_app, physics_preset: str) -> bool:
+    import torch
+
+    from isaaclab.assets import DeformableObjectCfg
+
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+    from isaaclab_arena.scene.scene import Scene
+    from isaaclab_arena.utils.pose import Pose, PosePerEnv
+
+    poses = PosePerEnv(
+        poses=[
+            Pose(position_xyz=(0.0, 0.0, 0.5), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)),
+            Pose(position_xyz=(0.2, 0.0, 0.6), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)),
+        ]
+    )
+    soft_cube = _make_soft_cube(physics_preset, initial_pose=poses)
+    arena_env = IsaacLabArenaEnvironment(
+        name=f"{physics_preset}_deformable_smoke",
+        scene=Scene(assets=[soft_cube]),
+    )
+    builder = ArenaEnvBuilder(
+        arena_env,
+        ArenaEnvBuilderCfg(num_envs=2, presets=physics_preset, solve_relations=False),
+    )
+    env_cfg, env_kwargs = builder.compose_manager_cfg()
+    assert isinstance(env_cfg.scene.soft_cube, DeformableObjectCfg)
+    env = builder.make_registered(env_cfg, env_kwargs)
+    env.reset()
+
+    try:
+        nodal_state = soft_cube.get_nodal_state(env)
+        assert torch.isfinite(nodal_state).all()
+        expected = torch.tensor([pose.position_xyz for pose in poses.poses], device=env.unwrapped.device)
+        centroids = nodal_state[..., :3].mean(dim=1) - env.unwrapped.scene.env_origins
+        torch.testing.assert_close(centroids, expected, atol=2.0e-3, rtol=0.0)
+
+        displaced = nodal_state.clone()
+        displaced[..., 0] += 0.25
+        env.unwrapped.scene[soft_cube.name].write_nodal_state_to_sim_index(displaced)
+        env.reset()
+        restored = soft_cube.get_nodal_state(env)
+        restored_centroids = restored[..., :3].mean(dim=1) - env.unwrapped.scene.env_origins
+        torch.testing.assert_close(restored_centroids, expected, atol=2.0e-3, rtol=0.0)
+    finally:
+        env.close()
+    return True
+
+
+def test_backend_specific_deformable_config():
+    assert run_function_with_persistent_simulation_app(_test_backend_specific_deformable_config, headless=HEADLESS)
+
+
+def test_builder_forwards_deformable_preset():
+    assert run_function_with_persistent_simulation_app(_test_builder_forwards_deformable_preset, headless=HEADLESS)
+
+
+def test_deformable_nodal_reset_terms():
+    assert run_function_with_persistent_simulation_app(_test_deformable_nodal_reset_terms, headless=HEADLESS)
+
+
+@pytest.mark.skipif(not PYTETWILD_AVAILABLE, reason="requires Isaac Lab's optional tetrahedralization dependencies")
+@pytest.mark.parametrize("physics_preset", ["physx", "newton"])
+def test_deformable_smoke(physics_preset: str):
+    assert run_function_with_persistent_simulation_app(
+        _test_deformable_smoke,
+        headless=HEADLESS,
+        physics_preset=physics_preset,
+    )

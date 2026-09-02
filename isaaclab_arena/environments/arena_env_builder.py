@@ -238,7 +238,7 @@ class ArenaEnvBuilder:
         scene_cfg = combine_configclass_instances(
             "SceneCfg",
             self.interactive_scene_cfg,
-            self.arena_env.scene.get_scene_cfg(),
+            self.arena_env.scene.get_scene_cfg(self.cfg.presets),
             embodiment.get_scene_cfg(),
             task.get_scene_cfg(),
         )
