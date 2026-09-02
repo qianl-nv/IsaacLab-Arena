@@ -19,6 +19,8 @@ def _test_object_initial_pose_update(simulation_app):
     asset_registry = AssetRegistry()
     # Get a rigid object
     rigid_object = asset_registry.get_asset_by_name("cracker_box")()
+    assert rigid_object.spawn_source.usd_path == rigid_object.usd_path
+    assert rigid_object.spawn_source.scale == rigid_object.scale
     # Disable debug visualization, this is True by default.
     rigid_object.object_cfg.debug_vis = False
 

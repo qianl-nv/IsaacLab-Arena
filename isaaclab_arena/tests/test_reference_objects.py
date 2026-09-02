@@ -45,8 +45,10 @@ def _object_reference_with_cached_bbox(parent_pose: Pose | None, relative_pose: 
     from isaaclab_arena.assets.object_reference import ObjectReference
 
     obj_ref = ObjectReference.__new__(ObjectReference)
-    obj_ref.parent_asset = SimpleNamespace(initial_pose=parent_pose)
-    obj_ref.initial_pose_relative_to_parent = relative_pose
+    obj_ref.reference_source = SimpleNamespace(
+        parent_asset=SimpleNamespace(initial_pose=parent_pose),
+        initial_pose_relative_to_parent=relative_pose,
+    )
     obj_ref._bounding_box = bbox
     return obj_ref
 
@@ -73,12 +75,14 @@ def test_object_reference_caches_parent_usd_prim_path(monkeypatch):
     calls = {"open_count": 0}
     obj_ref = ObjectReference.__new__(ObjectReference)
     obj_ref.prim_path = "{ENV_REGEX_NS}/kitchen/counter"
-    obj_ref._parent_scale = (1.0, 1.0, 1.0)
-    parent = SimpleNamespace(usd_path="/tmp/kitchen.usd", name="kitchen")
+    parent = SimpleNamespace(
+        name="kitchen",
+        spawn_source=SimpleNamespace(usd_path="/tmp/kitchen.usd", scale=(1.0, 1.0, 1.0)),
+    )
 
     class OpenStage:
         def __init__(self, path):
-            assert path == parent.usd_path
+            assert path == parent.spawn_source.usd_path
 
         def __enter__(self):
             calls["open_count"] += 1
@@ -98,12 +102,9 @@ def test_object_reference_caches_parent_usd_prim_path(monkeypatch):
         lambda prim, stage: Pose(),
     )
 
-    (
-        obj_ref._prim_path_in_parent_usd,
-        pose,
-    ) = obj_ref._get_referenced_prim_path_and_pose_relative_to_parent(parent)
+    prim_path_in_parent_usd, pose = obj_ref._get_referenced_prim_path_and_pose_relative_to_parent(parent)
 
-    assert obj_ref.prim_path_in_parent_usd == "/World/counter"
+    assert prim_path_in_parent_usd == "/World/counter"
     assert pose == Pose()
     assert calls["open_count"] == 1
 
@@ -117,9 +118,12 @@ def test_object_reference_get_collision_mesh_extracts_referenced_prim(monkeypatc
     expected_mesh = trimesh.creation.box(extents=(0.2, 0.1, 0.05))
     calls = {}
     obj_ref = ObjectReference.__new__(ObjectReference)
-    obj_ref.parent_asset = SimpleNamespace(usd_path="/tmp/kitchen.usd", name="kitchen")
+    obj_ref.reference_source = SimpleNamespace(
+        parent_asset=SimpleNamespace(spawn_source=SimpleNamespace(usd_path="/tmp/kitchen.usd")),
+        parent_scale=(2.0, 1.0, 1.0),
+        prim_path_in_parent_usd="/World/counter",
+    )
     obj_ref.prim_path = "{ENV_REGEX_NS}/kitchen/counter"
-    obj_ref._parent_scale = (2.0, 1.0, 1.0)
     obj_ref._collision_mesh = None
     obj_ref._collision_mesh_loaded = False
 
@@ -138,11 +142,6 @@ def test_object_reference_get_collision_mesh_extracts_referenced_prim(monkeypatc
             return False
 
     monkeypatch.setattr("isaaclab_arena.assets.object_reference.open_stage", OpenStage)
-    monkeypatch.setattr(
-        ObjectReference,
-        "isaaclab_prim_path_to_original_prim_path",
-        staticmethod(lambda prim_path, parent, stage: "/World/counter"),
-    )
 
     def fake_extract(stage, prim_path, scale):
         calls["extract"] = (prim_path, scale)
@@ -166,9 +165,12 @@ def test_object_reference_get_collision_mesh_returns_none_on_extraction_failure(
     calls = {"extract_count": 0}
     obj_ref = ObjectReference.__new__(ObjectReference)
     obj_ref.name = "counter"
-    obj_ref.parent_asset = SimpleNamespace(usd_path="/tmp/kitchen.usd", name="kitchen")
+    obj_ref.reference_source = SimpleNamespace(
+        parent_asset=SimpleNamespace(spawn_source=SimpleNamespace(usd_path="/tmp/kitchen.usd")),
+        parent_scale=(1.0, 1.0, 1.0),
+        prim_path_in_parent_usd="/World/counter",
+    )
     obj_ref.prim_path = "{ENV_REGEX_NS}/kitchen/counter"
-    obj_ref._parent_scale = (1.0, 1.0, 1.0)
     obj_ref._collision_mesh = None
     obj_ref._collision_mesh_loaded = False
 
@@ -187,11 +189,6 @@ def test_object_reference_get_collision_mesh_returns_none_on_extraction_failure(
             return False
 
     monkeypatch.setattr("isaaclab_arena.assets.object_reference.open_stage", OpenStage)
-    monkeypatch.setattr(
-        ObjectReference,
-        "isaaclab_prim_path_to_original_prim_path",
-        staticmethod(lambda prim_path, parent, stage: "/World/counter"),
-    )
 
     def fail_extract(stage, prim_path, scale):
         calls["extract_count"] += 1
@@ -211,9 +208,12 @@ def test_object_reference_get_collision_mesh_returns_none_on_unsupported_geometr
 
     obj_ref = ObjectReference.__new__(ObjectReference)
     obj_ref.name = "counter"
-    obj_ref.parent_asset = SimpleNamespace(usd_path="/tmp/kitchen.usd", name="kitchen")
+    obj_ref.reference_source = SimpleNamespace(
+        parent_asset=SimpleNamespace(spawn_source=SimpleNamespace(usd_path="/tmp/kitchen.usd")),
+        parent_scale=(1.0, 1.0, 1.0),
+        prim_path_in_parent_usd="/World/counter",
+    )
     obj_ref.prim_path = "{ENV_REGEX_NS}/kitchen/counter"
-    obj_ref._parent_scale = (1.0, 1.0, 1.0)
     obj_ref._collision_mesh = None
     obj_ref._collision_mesh_loaded = False
 
@@ -232,11 +232,6 @@ def test_object_reference_get_collision_mesh_returns_none_on_unsupported_geometr
             return False
 
     monkeypatch.setattr("isaaclab_arena.assets.object_reference.open_stage", OpenStage)
-    monkeypatch.setattr(
-        ObjectReference,
-        "isaaclab_prim_path_to_original_prim_path",
-        staticmethod(lambda prim_path, parent, stage: "/World/counter"),
-    )
 
     def fail_extract(stage, prim_path, scale):
         raise UnsupportedCollisionGeometryError("Unsupported non-mesh geometry under /World/counter: /World/cube")
@@ -254,9 +249,12 @@ def test_object_reference_get_collision_mesh_raises_on_missing_prim(monkeypatch)
 
     obj_ref = ObjectReference.__new__(ObjectReference)
     obj_ref.name = "counter"
-    obj_ref.parent_asset = SimpleNamespace(usd_path="/tmp/kitchen.usd", name="kitchen")
+    obj_ref.reference_source = SimpleNamespace(
+        parent_asset=SimpleNamespace(spawn_source=SimpleNamespace(usd_path="/tmp/kitchen.usd")),
+        parent_scale=(1.0, 1.0, 1.0),
+        prim_path_in_parent_usd="/World/missing",
+    )
     obj_ref.prim_path = "{ENV_REGEX_NS}/kitchen/missing"
-    obj_ref._parent_scale = (1.0, 1.0, 1.0)
     obj_ref._collision_mesh = None
     obj_ref._collision_mesh_loaded = False
 
@@ -275,12 +273,6 @@ def test_object_reference_get_collision_mesh_raises_on_missing_prim(monkeypatch)
             return False
 
     monkeypatch.setattr("isaaclab_arena.assets.object_reference.open_stage", OpenStage)
-    monkeypatch.setattr(
-        ObjectReference,
-        "isaaclab_prim_path_to_original_prim_path",
-        staticmethod(lambda prim_path, parent, stage: "/World/missing"),
-    )
-
     with pytest.raises(ValueError, match="No prim found"):
         obj_ref.get_collision_mesh()
 

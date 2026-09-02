@@ -14,6 +14,7 @@ from isaaclab_arena.affordances.pressable import Pressable
 from isaaclab_arena.affordances.turnable import Turnable
 from isaaclab_arena.assets.object import Object
 from isaaclab_arena.assets.object_base import ObjectBase, ObjectType
+from isaaclab_arena.assets.object_source import ReferencedSource
 from isaaclab_arena.assets.rooted_object import RootedObjectBase
 from isaaclab_arena.relations.relations import IsAnchor, RelationBase
 from isaaclab_arena.terms.events import reset_articulation_pose_and_joints
@@ -33,13 +34,17 @@ class ObjectReference(RootedObjectBase):
 
     def __init__(self, parent_asset: Object, **kwargs):
         super().__init__(**kwargs)
-        self.parent_asset = parent_asset
-        self._parent_scale = parent_asset.scale
-        # Resolve the path and pose together to avoid opening the parent USD stage multiple times.
-        (
-            self._prim_path_in_parent_usd,
-            self.initial_pose_relative_to_parent,
-        ) = self._get_referenced_prim_path_and_pose_relative_to_parent(parent_asset)
+        assert parent_asset.spawn_source.usd_path is not None, "ObjectReference requires a USD-backed parent"
+        assert parent_asset.spawn_source.scale is not None
+        prim_path_in_parent_usd, initial_pose_relative_to_parent = (
+            self._get_referenced_prim_path_and_pose_relative_to_parent(parent_asset)
+        )
+        self.reference_source = ReferencedSource(
+            parent_asset=parent_asset,
+            parent_scale=parent_asset.spawn_source.scale,
+            prim_path_in_parent_usd=prim_path_in_parent_usd,
+            initial_pose_relative_to_parent=initial_pose_relative_to_parent,
+        )
         self.object_cfg = self._init_object_cfg()
         self._pose_event_cfg = self._build_reset_event()
         self._bounding_box: AxisAlignedBoundingBox | None = None
@@ -55,18 +60,28 @@ class ObjectReference(RootedObjectBase):
         return event_cfg
 
     def get_initial_pose(self) -> Pose:
-        if self.parent_asset.initial_pose is None:
-            T_W_O = self.initial_pose_relative_to_parent
+        if self.reference_source.parent_asset.initial_pose is None:
+            T_W_O = self.reference_source.initial_pose_relative_to_parent
         else:
-            T_P_O = self.initial_pose_relative_to_parent
-            T_W_P = self.parent_asset.initial_pose
+            T_P_O = self.reference_source.initial_pose_relative_to_parent
+            T_W_P = self.reference_source.parent_asset.initial_pose
             T_W_O = T_W_P.multiply(T_P_O)
         return T_W_O
 
     @property
+    def parent_asset(self) -> Object:
+        """Return the object containing this referenced prim."""
+        return self.reference_source.parent_asset
+
+    @property
+    def initial_pose_relative_to_parent(self) -> Pose:
+        """Return the referenced prim pose in its parent frame."""
+        return self.reference_source.initial_pose_relative_to_parent
+
+    @property
     def prim_path_in_parent_usd(self) -> str:
         """Return the referenced prim's absolute path in its parent USD stage."""
-        return self._prim_path_in_parent_usd
+        return self.reference_source.prim_path_in_parent_usd
 
     def add_relation(self, relation: RelationBase) -> None:
         """Add a relation to this object reference.
@@ -92,13 +107,14 @@ class ObjectReference(RootedObjectBase):
         The bounding box is computed lazily and cached for subsequent calls.
         """
         if self._bounding_box is None:
-            with open_stage(self.parent_asset.usd_path) as parent_stage:
-                prim_path_in_usd = self.isaaclab_prim_path_to_original_prim_path(
-                    self.prim_path, self.parent_asset, parent_stage
+            parent_asset = self.reference_source.parent_asset
+            with open_stage(parent_asset.spawn_source.usd_path) as parent_stage:
+                raw_bbox = compute_world_aligned_bounding_box_relative_to_prim_origin(
+                    parent_stage,
+                    self.reference_source.prim_path_in_parent_usd,
                 )
-                raw_bbox = compute_world_aligned_bounding_box_relative_to_prim_origin(parent_stage, prim_path_in_usd)
                 # Apply parent's scale (no centering - solver is origin-agnostic)
-                self._bounding_box = raw_bbox.scaled(self._parent_scale)
+                self._bounding_box = raw_bbox.scaled(self.reference_source.parent_scale)
         return self._bounding_box
 
     def get_world_bounding_box(self) -> AxisAlignedBoundingBox:
@@ -109,7 +125,7 @@ class ObjectReference(RootedObjectBase):
         """
         box = self.get_bounding_box()
         world_position = self.get_initial_pose().position_xyz
-        parent_pose = self.parent_asset.initial_pose
+        parent_pose = self.reference_source.parent_asset.initial_pose
         if parent_pose is None:
             return box.translated(world_position)
         quarters = quaternion_to_90_deg_z_quarters(parent_pose.rotation_xyzw)
@@ -132,13 +148,12 @@ class ObjectReference(RootedObjectBase):
 
     def _extract_collision_mesh(self) -> trimesh.Trimesh:
         """Extract the referenced prim mesh from the parent asset USD."""
-        with open_stage(self.parent_asset.usd_path) as parent_stage:
-            prim_path_in_usd = self.isaaclab_prim_path_to_original_prim_path(
-                self.prim_path, self.parent_asset, parent_stage
-            )
+        parent_asset = self.reference_source.parent_asset
+        with open_stage(parent_asset.spawn_source.usd_path) as parent_stage:
+            prim_path_in_usd = self.reference_source.prim_path_in_parent_usd
             if not parent_stage.GetPrimAtPath(prim_path_in_usd):
-                raise ValueError(f"No prim found with path {prim_path_in_usd} in {self.parent_asset.usd_path}")
-            return extract_trimesh_from_prim(parent_stage, prim_path_in_usd, self._parent_scale)
+                raise ValueError(f"No prim found with path {prim_path_in_usd} in {parent_asset.spawn_source.usd_path}")
+            return extract_trimesh_from_prim(parent_stage, prim_path_in_usd, self.reference_source.parent_scale)
 
     def get_contact_sensor_cfg(self, contact_against_object: ObjectBase | None = None) -> ContactSensorCfg:
         # NOTE(alexmillane): Right now this requires that the object
@@ -194,17 +209,18 @@ class ObjectReference(RootedObjectBase):
 
         The position is scaled by the parent's scale factor.
         """
-        with open_stage(parent_asset.usd_path) as parent_stage:
+        with open_stage(parent_asset.spawn_source.usd_path) as parent_stage:
             prim_path_in_usd = self.isaaclab_prim_path_to_original_prim_path(self.prim_path, parent_asset, parent_stage)
             prim = parent_stage.GetPrimAtPath(prim_path_in_usd)
             if not prim:
-                raise ValueError(f"No prim found with path {prim_path_in_usd} in {parent_asset.usd_path}")
+                raise ValueError(f"No prim found with path {prim_path_in_usd} in {parent_asset.spawn_source.usd_path}")
             prim_pose = get_prim_pose_in_default_prim_frame(prim, parent_stage)
             # Apply parent's scale to the position
+            assert parent_asset.spawn_source.scale is not None
             scaled_pos = (
-                prim_pose.position_xyz[0] * self._parent_scale[0],
-                prim_pose.position_xyz[1] * self._parent_scale[1],
-                prim_pose.position_xyz[2] * self._parent_scale[2],
+                prim_pose.position_xyz[0] * parent_asset.spawn_source.scale[0],
+                prim_pose.position_xyz[1] * parent_asset.spawn_source.scale[1],
+                prim_pose.position_xyz[2] * parent_asset.spawn_source.scale[2],
             )
             return prim_path_in_usd, Pose(position_xyz=scaled_pos, rotation_xyzw=prim_pose.rotation_xyzw)
 
