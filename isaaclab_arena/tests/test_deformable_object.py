@@ -209,6 +209,7 @@ def _test_deformable_nodal_reset_terms(simulation_app) -> bool:
     import torch
     from types import SimpleNamespace
 
+    from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
     from isaaclab.utils import math as math_utils
 
     from isaaclab_arena.terms.events import set_deformable_object_pose, set_deformable_object_pose_per_env
@@ -216,12 +217,16 @@ def _test_deformable_nodal_reset_terms(simulation_app) -> bool:
     from isaaclab_arena.utils.velocity import Velocity
 
     class FakeAsset:
-        def __init__(self):
+        def __init__(self, usd_backed: bool = False):
             default_state = torch.zeros((2, 2, 6))
             default_state[0, :, :3] = torch.tensor([[-0.05, 0.0, 0.5], [0.05, 0.0, 0.5]])
             default_state[1, :, :3] = torch.tensor([[9.95, 0.0, 0.5], [10.05, 0.0, 0.5]])
             self.data = SimpleNamespace(default_nodal_state_w=SimpleNamespace(torch=default_state))
-            self.cfg = SimpleNamespace(init_state=SimpleNamespace(rot=(0.0, 0.0, 0.0, 1.0)))
+            spawn = UsdFileCfg(usd_path="/tmp/fake.usd") if usd_backed else SimpleNamespace()
+            self.cfg = SimpleNamespace(
+                init_state=SimpleNamespace(pos=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0, 1.0)),
+                spawn=spawn,
+            )
             self.written_state = default_state.clone()
             self.reset_env_ids = None
 
@@ -267,6 +272,14 @@ def _test_deformable_nodal_reset_terms(simulation_app) -> bool:
     )
     torch.testing.assert_close(asset.written_state[..., 3:], torch.zeros((2, 2, 3)))
     torch.testing.assert_close(asset.reset_env_ids, env_ids)
+
+    usd_asset = FakeAsset(usd_backed=True)
+    usd_env = SimpleNamespace(scene=FakeScene(usd_asset), device=torch.device("cpu"))
+    set_deformable_object_pose(usd_env, env_ids, asset_cfg, fixed_pose)
+    torch.testing.assert_close(
+        usd_asset.written_state[..., :3].mean(dim=1),
+        torch.tensor([[1.0, 2.0, 3.5], [11.0, 2.0, 3.5]]),
+    )
     return True
 
 
