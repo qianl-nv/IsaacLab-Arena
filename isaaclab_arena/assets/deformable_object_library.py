@@ -51,27 +51,35 @@ class LibraryDeformableObject(DeformableObject):
 
 @register_asset
 class DeformableCube(LibraryDeformableObject):
-    """PhysX deformable cube from Isaac Lab's deformables demo."""
+    """PhysX deformable cube used by the DROID pick-and-place environment."""
 
     name = "deformable_cube"
     spawner_cfg = sim_utils.MeshCuboidCfg(
-        size=(0.6, 0.6, 0.6),
-        deformable_props=PhysxDeformableBodyPropertiesCfg(),
-        visual_material=sim_utils.PreviewSurfaceCfg(),
-        physics_material=PhysxDeformableBodyMaterialCfg(),
+        size=(0.15, 0.04, 0.04),
+        deformable_props=PhysxDeformableBodyPropertiesCfg(
+            rest_offset=0.0,
+            contact_offset=0.0025,
+            linear_damping=0.0,
+        ),
+        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.95, 0.85, 0.1)),
+        physics_material=PhysxDeformableBodyMaterialCfg(
+            youngs_modulus=8.0e4,
+            poissons_ratio=0.25,
+            density=300.0,
+        ),
     )
 
 
 @register_asset
 class DeformableSurface(LibraryDeformableObject):
-    """PhysX deformable surface from Isaac Lab's deformables demo."""
+    """PhysX surface matching Isaac Lab's Franka cloth lift geometry."""
 
     name = "deformable_surface"
     spawner_cfg = sim_utils.MeshRectangleCfg(
-        size=(1.5, 1.0),
-        resolution=(21, 21),
+        size=(0.2, 0.2),
+        resolution=(30, 30),
         deformable_props=PhysxDeformableBodyPropertiesCfg(),
-        visual_material=sim_utils.PreviewSurfaceCfg(),
+        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.95, 0.85, 0.1)),
         physics_material=PhysxSurfaceDeformableBodyMaterialCfg(),
     )
 

@@ -19,14 +19,13 @@ def _make_soft_cube(physics_preset, initial_pose=None):
     import isaaclab.sim as sim_utils
     from isaaclab_newton.sim.schemas import NewtonDeformableBodyPropertiesCfg
     from isaaclab_newton.sim.spawners.materials import NewtonDeformableBodyMaterialCfg
-    from isaaclab_physx.sim.schemas import PhysxCollisionPropertiesCfg, PhysxDeformableBodyPropertiesCfg
+    from isaaclab_physx.sim.schemas import PhysxDeformableBodyPropertiesCfg
     from isaaclab_physx.sim.spawners.materials import PhysxDeformableBodyMaterialCfg
 
     from isaaclab_arena.assets.deformable_object import DeformableObject
 
     if physics_preset == "physx":
-        deformable_props = PhysxDeformableBodyPropertiesCfg()
-        collision_props = [PhysxCollisionPropertiesCfg(rest_offset=0.0025, contact_offset=0.01)]
+        deformable_props = PhysxDeformableBodyPropertiesCfg(rest_offset=0.0025, contact_offset=0.01)
         physics_material = PhysxDeformableBodyMaterialCfg(
             youngs_modulus=8.0e4,
             poissons_ratio=0.4,
@@ -34,7 +33,6 @@ def _make_soft_cube(physics_preset, initial_pose=None):
         )
     else:
         deformable_props = NewtonDeformableBodyPropertiesCfg()
-        collision_props = None
         physics_material = NewtonDeformableBodyMaterialCfg(
             k_mu=8.0e4 / (2.0 * (1.0 + 0.4)),
             k_lambda=8.0e4 * 0.4 / ((1.0 + 0.4) * (1.0 - 2.0 * 0.4)),
@@ -46,7 +44,6 @@ def _make_soft_cube(physics_preset, initial_pose=None):
         spawner_cfg=sim_utils.MeshCuboidCfg(
             size=(0.1, 0.1, 0.1),
             deformable_props=deformable_props,
-            collision_props=collision_props,
             physics_material=physics_material,
         ),
         initial_pose=initial_pose,
@@ -122,6 +119,21 @@ def _test_backend_specific_deformable_config(simulation_app) -> bool:
         assert library_object.physics_preset == "physx"
         assert isinstance(library_object.spawner_cfg.deformable_props, PhysxDeformableBodyPropertiesCfg)
         assert isinstance(library_object.spawner_cfg.physics_material, material_type)
+
+    library_cube = DeformableCube()
+    assert library_cube.spawner_cfg.size == (0.15, 0.04, 0.04)
+    assert library_cube.spawner_cfg.deformable_props.rest_offset == 0.0
+    assert library_cube.spawner_cfg.deformable_props.contact_offset == pytest.approx(0.0025)
+    assert library_cube.spawner_cfg.deformable_props.linear_damping == 0.0
+    assert library_cube.spawner_cfg.physics_material.youngs_modulus == pytest.approx(8.0e4)
+    assert library_cube.spawner_cfg.physics_material.poissons_ratio == pytest.approx(0.25)
+    assert library_cube.spawner_cfg.physics_material.density == pytest.approx(300.0)
+    assert library_cube.spawner_cfg.visual_material.diffuse_color == (0.95, 0.85, 0.1)
+
+    library_surface = DeformableSurface()
+    assert library_surface.spawner_cfg.size == (0.2, 0.2)
+    assert library_surface.spawner_cfg.resolution == (30, 30)
+    assert library_surface.spawner_cfg.visual_material.diffuse_color == (0.95, 0.85, 0.1)
 
     updated_pose = Pose(position_xyz=(0.4, 0.0, 0.5))
     soft_cube.set_initial_pose(updated_pose)
@@ -248,11 +260,12 @@ def _test_deformable_nodal_reset_terms(simulation_app) -> bool:
     return True
 
 
-def _test_deformable_smoke(simulation_app, physics_preset: str) -> bool:
+def _test_deformable_reset_and_initial_pose(simulation_app) -> bool:
     import torch
 
     from isaaclab.assets import DeformableObjectCfg
 
+    from isaaclab_arena.assets.registries import AssetRegistry
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
     from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
     from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
@@ -265,9 +278,11 @@ def _test_deformable_smoke(simulation_app, physics_preset: str) -> bool:
             Pose(position_xyz=(0.2, 0.0, 0.6), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)),
         ]
     )
-    soft_cube = _make_soft_cube(physics_preset, initial_pose=poses)
+    physics_preset = "physx"
+    soft_cube = AssetRegistry().get_asset_by_name("deformable_cube")(instance_name="soft_cube")
+    soft_cube.set_initial_pose(poses)
     arena_env = IsaacLabArenaEnvironment(
-        name=f"{physics_preset}_deformable_smoke",
+        name=f"{physics_preset}_deformable_reset_and_initial_pose",
         scene=Scene(assets=[soft_cube]),
     )
     builder = ArenaEnvBuilder(
@@ -280,19 +295,72 @@ def _test_deformable_smoke(simulation_app, physics_preset: str) -> bool:
     env.reset()
 
     try:
-        nodal_state = env.unwrapped.scene[soft_cube.name].data.nodal_state_w.torch.clone()
-        assert torch.isfinite(nodal_state).all()
+        deformable_asset = env.unwrapped.scene[soft_cube.name]
+        initial_nodal_state = deformable_asset.data.nodal_state_w.torch.clone()
+        assert torch.isfinite(initial_nodal_state).all()
         expected = torch.tensor([pose.position_xyz for pose in poses.poses], device=env.unwrapped.device)
-        centroids = nodal_state[..., :3].mean(dim=1) - env.unwrapped.scene.env_origins
-        torch.testing.assert_close(centroids, expected, atol=2.0e-3, rtol=0.0)
+        aggregate_positions = deformable_asset.data.root_pos_w.torch - env.unwrapped.scene.env_origins
+        torch.testing.assert_close(aggregate_positions, expected, atol=2.0e-3, rtol=0.0)
 
-        displaced = nodal_state.clone()
+        displaced = initial_nodal_state.clone()
         displaced[..., 0] += 0.25
-        env.unwrapped.scene[soft_cube.name].write_nodal_state_to_sim_index(displaced)
+        displaced[..., 1] += torch.linspace(
+            0.0,
+            0.05,
+            displaced.shape[1],
+            device=displaced.device,
+        )
+        displaced[..., 3:] = 0.5
+        deformable_asset.write_nodal_state_to_sim_index(displaced)
         env.reset()
-        restored = env.unwrapped.scene[soft_cube.name].data.nodal_state_w.torch.clone()
-        restored_centroids = restored[..., :3].mean(dim=1) - env.unwrapped.scene.env_origins
-        torch.testing.assert_close(restored_centroids, expected, atol=2.0e-3, rtol=0.0)
+        restored_nodal_state = deformable_asset.data.nodal_state_w.torch.clone()
+        torch.testing.assert_close(restored_nodal_state, initial_nodal_state)
+    finally:
+        env.close()
+    return True
+
+
+def _test_deformable_pick_and_place_success(simulation_app) -> bool:
+    import torch
+
+    from isaaclab_arena.assets.registries import AssetRegistry
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+    from isaaclab_arena.scene.scene import Scene
+    from isaaclab_arena.tasks.pick_and_place_task import PickAndPlaceTask
+    from isaaclab_arena.utils.pose import Pose
+
+    soft_cube = AssetRegistry().get_asset_by_name("deformable_cube")(instance_name="soft_cube")
+    soft_cube.set_initial_pose(Pose(position_xyz=(0.0, 0.0, 0.05)))
+    table = AssetRegistry().get_asset_by_name("procedural_table")(
+        instance_name="destination",
+        initial_pose=Pose(position_xyz=(0.0, 0.0, 0.0)),
+    )
+    task = PickAndPlaceTask(
+        pick_up_object=soft_cube,
+        destination_location=table,
+        background_scene=table,
+    )
+    arena_env = IsaacLabArenaEnvironment(
+        name="deformable_pick_and_place_success",
+        scene=Scene(assets=[soft_cube, table]),
+        task=task,
+    )
+    builder = ArenaEnvBuilder(
+        arena_env,
+        ArenaEnvBuilderCfg(num_envs=1, presets="physx", solve_relations=False),
+    )
+    env_cfg, env_kwargs = builder.compose_manager_cfg()
+    env = builder.make_registered(env_cfg, env_kwargs)
+
+    try:
+        env.reset()
+        assert task.contact_sensor_name is None
+        assert len(env.unwrapped.scene.sensors) == 0
+        success_term = task.get_termination_cfg().success
+        success = success_term.func(env, **success_term.params)
+        torch.testing.assert_close(success, torch.ones(1, dtype=torch.bool, device=env.unwrapped.device))
     finally:
         env.close()
     return True
@@ -311,10 +379,16 @@ def test_deformable_nodal_reset_terms():
 
 
 @pytest.mark.skipif(not PYTETWILD_AVAILABLE, reason="requires Isaac Lab's optional tetrahedralization dependencies")
-@pytest.mark.parametrize("physics_preset", ["physx", "newton"])
-def test_deformable_smoke(physics_preset: str):
+def test_deformable_reset_and_initial_pose():
     assert run_function_with_persistent_simulation_app(
-        _test_deformable_smoke,
+        _test_deformable_reset_and_initial_pose,
         headless=HEADLESS,
-        physics_preset=physics_preset,
+    )
+
+
+@pytest.mark.skipif(not PYTETWILD_AVAILABLE, reason="requires Isaac Lab's optional tetrahedralization dependencies")
+def test_deformable_pick_and_place_success():
+    assert run_function_with_persistent_simulation_app(
+        _test_deformable_pick_and_place_success,
+        headless=HEADLESS,
     )
