@@ -56,7 +56,6 @@ class Object(RootedObjectBase):
         self.scale = scale
         self.initial_pose = initial_pose
         self.relations = list(relations)
-        self.reset_pose = True
         self.spawn_cfg_addon = spawn_cfg_addon
         self.asset_cfg_addon = asset_cfg_addon
         self.bounding_box = None
@@ -79,18 +78,14 @@ class Object(RootedObjectBase):
     def is_initial_pose_set(self) -> bool:
         return self.initial_pose is not None
 
-    def disable_reset_pose(self) -> None:
-        self.reset_pose = False
-        self._pose_event_cfg = self._build_reset_event()
-
-    def enable_reset_pose(self) -> None:
-        self.reset_pose = True
-        self._pose_event_cfg = self._build_reset_event()
-
     def get_contact_sensor_cfg(
         self, contact_against_object: ObjectBase | None = None, usd_path: str | None = None
     ) -> ContactSensorCfg:
         assert self.object_type == ObjectType.RIGID, "Contact sensor is only supported for rigid objects"
+        if contact_against_object is not None:
+            assert (
+                contact_against_object.object_type != ObjectType.DEFORMABLE
+            ), "Contact sensor filtering against deformable objects is not supported"
         # We override this function from the parent class because in some assets, the rigid body
         # is not at the root of the USD file. To be robust to this, we find the shallowest rigid body
         # and add the contact sensor to it.
