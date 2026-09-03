@@ -54,7 +54,10 @@ class DroidDeformablePickAndPlaceEnvironment(ArenaEnvironmentFactory[DroidDeform
     def build(self, cfg: DroidDeformablePickAndPlaceEnvironmentCfg) -> IsaacLabArenaEnvironment:
         """Build the environment from its typed configuration."""
         from isaaclab_arena.assets.deformable_object import DeformableObject
+        from isaaclab_arena.assets.object_base import ObjectType
+        from isaaclab_arena.assets.object_reference import ObjectReference
         from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+        from isaaclab_arena.relations.relations import IsAnchor, NextTo, On, Side
         from isaaclab_arena.scene.scene import Scene
         from isaaclab_arena.tasks.pick_and_place_task import PickAndPlaceTask
         from isaaclab_arena.utils.pose import Pose
@@ -62,19 +65,23 @@ class DroidDeformablePickAndPlaceEnvironment(ArenaEnvironmentFactory[DroidDeform
         table = self.asset_registry.get_asset_by_name("maple_table_robolab")()
         light = self.asset_registry.get_asset_by_name("light")()
         directional_light = self.asset_registry.get_asset_by_name("directional_light")()
-        destination = self.asset_registry.get_asset_by_name("plate_large_vomp_robolab")(
-            instance_name="plate",
-            initial_pose=Pose(position_xyz=(0.55, -0.1, 0.02), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)),
+        table_reference = ObjectReference(
+            name="table",
+            prim_path="{ENV_REGEX_NS}/maple_table_robolab/table",
+            parent_asset=table,
+            object_type=ObjectType.RIGID,
         )
+        table_reference.add_relation(IsAnchor())
+        destination = self.asset_registry.get_asset_by_name("plate_large_vomp_robolab")(instance_name="plate")
 
         pick_object_registry_name = _PICK_OBJECT_ALIASES.get(cfg.pick_object, cfg.pick_object)
-        pick_object = self.asset_registry.get_asset_by_name(pick_object_registry_name)(
-            instance_name="pick_object",
-            initial_pose=Pose(position_xyz=(0.48, 0.18, 0.05), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)),
-        )
+        pick_object = self.asset_registry.get_asset_by_name(pick_object_registry_name)(instance_name="pick_object")
         assert isinstance(
             pick_object, DeformableObject
         ), f"Pick object {cfg.pick_object!r} resolves to {pick_object_registry_name!r}, which is not deformable."
+        destination.add_relation(On(table_reference))
+        pick_object.add_relation(On(table_reference))
+        pick_object.add_relation(NextTo(destination, side=Side.POSITIVE_Y))
 
         assert cfg.embodiment in {"droid_abs_joint_pos", "droid_differential_ik"}, (
             "The deformable pick-and-place example supports droid_abs_joint_pos and droid_differential_ik, "
@@ -95,6 +102,6 @@ class DroidDeformablePickAndPlaceEnvironment(ArenaEnvironmentFactory[DroidDeform
         return IsaacLabArenaEnvironment(
             name=self.name,
             embodiment=embodiment,
-            scene=Scene(assets=[table, light, directional_light, destination, pick_object]),
+            scene=Scene(assets=[table, table_reference, light, directional_light, destination, pick_object]),
             task=task,
         )

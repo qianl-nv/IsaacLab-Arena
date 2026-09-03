@@ -20,9 +20,10 @@ def _test_droid_deformable_environment_registration_and_config(simulation_app) -
 
     from isaaclab_arena.assets.deformable_object import DeformableObject
     from isaaclab_arena.assets.object_base import ObjectType
+    from isaaclab_arena.assets.object_reference import ObjectReference
     from isaaclab_arena.assets.registries import EnvironmentRegistry
+    from isaaclab_arena.relations.relations import NextTo, On, Side, get_relation
     from isaaclab_arena.tasks.pick_and_place_task import PickAndPlaceTask
-    from isaaclab_arena.utils.pose import Pose
     from isaaclab_arena_environments.cli import (
         ensure_environments_registered,
         get_arena_builder_from_cli,
@@ -46,13 +47,19 @@ def _test_droid_deformable_environment_registration_and_config(simulation_app) -
     pick_object = arena_env.scene.assets["pick_object"]
     destination = arena_env.scene.assets["plate"]
     table = arena_env.scene.assets["maple_table_robolab"]
+    table_reference = arena_env.scene.assets["table"]
     assert isinstance(pick_object, DeformableObject)
     assert isinstance(pick_object.spawner_cfg, sim_utils.MeshCuboidCfg)
     assert pick_object.spawner_cfg.size == (0.15, 0.04, 0.04)
     assert pick_object.object_type is ObjectType.DEFORMABLE
     assert destination.object_type is ObjectType.RIGID
-    assert isinstance(pick_object.get_initial_pose(), Pose)
-    assert isinstance(destination.get_initial_pose(), Pose)
+    assert isinstance(table_reference, ObjectReference)
+    assert table_reference.is_anchor
+    assert get_relation(pick_object, On).parent is table_reference
+    assert get_relation(destination, On).parent is table_reference
+    next_to = get_relation(pick_object, NextTo)
+    assert next_to.parent is destination
+    assert next_to.side is Side.POSITIVE_Y
     assert arena_env.task.pick_up_object is pick_object
     assert arena_env.task.destination_location is destination
     assert arena_env.task.background_scene is table
@@ -102,6 +109,7 @@ def _test_droid_deformable_physx_smoke(simulation_app) -> bool:
             "robot",
             "pick_object",
             "plate",
+            "table",
             "maple_table_robolab",
         } <= set(env.unwrapped.scene.keys())
 

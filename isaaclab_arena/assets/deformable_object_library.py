@@ -18,7 +18,6 @@ from isaaclab_physx.sim.spawners.materials import PhysxDeformableBodyMaterialCfg
 
 from isaaclab_arena.assets.deformable_object import DeformableObject
 from isaaclab_arena.assets.register import register_asset
-from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 from isaaclab_arena.utils.pose import Pose, PosePerEnv
 
 
@@ -28,14 +27,12 @@ class LibraryDeformableObject(DeformableObject):
     name: str
     tags = ["object", "deformable", "physx"]
     spawner_cfg: DeformableObjectSpawnerCfg
-    local_bounding_box: AxisAlignedBoundingBox | None = None
 
     def __init__(
         self,
         instance_name: str | None = None,
         prim_path: str | None = None,
         initial_pose: Pose | PosePerEnv | None = None,
-        local_bounding_box: AxisAlignedBoundingBox | None = None,
         **kwargs: Any,
     ):
         super().__init__(
@@ -44,7 +41,6 @@ class LibraryDeformableObject(DeformableObject):
             tags=self.tags,
             spawner_cfg=copy.deepcopy(self.spawner_cfg),
             initial_pose=initial_pose,
-            local_bounding_box=local_bounding_box or self.local_bounding_box,
             **kwargs,
         )
 
