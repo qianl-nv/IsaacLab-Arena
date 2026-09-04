@@ -18,3 +18,4 @@ class ObjectType(str, Enum):
     BASE = "base"
     RIGID = "rigid"
     ARTICULATION = "articulation"
+    DEFORMABLE = "deformable"
