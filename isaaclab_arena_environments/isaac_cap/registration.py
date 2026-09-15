@@ -34,6 +34,7 @@ def register_components() -> None:
         asset_registry = AssetRegistry()
         _register_insertion_task_embodiments(asset_registry)
         _register_gear_insertion_components(asset_registry)
+        _register_tool_sort_components(asset_registry)
         _registered = True
     finally:
         _registering = False
@@ -90,3 +91,32 @@ def _register_gear_insertion_components(asset_registry: AssetRegistry) -> None:
             assert existing is factory, f"Conflicting Isaac Cap environment {factory.name!r}."
             continue
         environment_registry.register_environment(factory, cfg_type)
+
+
+def _register_tool_sort_components(asset_registry: AssetRegistry) -> None:
+    """Register the tool-sort assets, retargeter, and environment."""
+    from isaaclab_arena.assets.registries import RetargeterRegistry
+
+    from .tool_sort.asset_factories import TOOL_SORT_ASSET_ENTRY_POINTS
+    from .tool_sort.retargeters import IndustrialFr3RobotiqKeyboardRetargeter
+    from .tool_sort.tool_sort_environment import (
+        IndustrialToolSortNewtonEnvironment,
+        IndustrialToolSortNewtonEnvironmentCfg,
+    )
+
+    for name, factory in TOOL_SORT_ASSET_ENTRY_POINTS.items():
+        _register(asset_registry, factory, name)
+
+    retargeter_registry = RetargeterRegistry()
+    retargeter_key = retargeter_registry.convert_tuple_to_str(
+        (IndustrialFr3RobotiqKeyboardRetargeter.device, IndustrialFr3RobotiqKeyboardRetargeter.embodiment)
+    )
+    _register(retargeter_registry, IndustrialFr3RobotiqKeyboardRetargeter, retargeter_key)
+
+    environment_registry = EnvironmentRegistry()
+    factory = IndustrialToolSortNewtonEnvironment
+    if environment_registry.is_registered(factory.name, ensure_loaded=False):
+        existing = environment_registry.get_component_by_name(factory.name)
+        assert existing is factory, f"Conflicting Isaac Cap environment {factory.name!r}."
+    else:
+        environment_registry.register_environment(factory, IndustrialToolSortNewtonEnvironmentCfg)
