@@ -146,6 +146,32 @@ def _assert_nested_equal(actual, expected, path="root"):
     assert actual == expected, f"{path}: {actual!r} != {expected!r}"
 
 
+def _test_tool_sort_python_and_yaml_are_equivalent(_simulation_app) -> bool:
+    from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+    from isaaclab_arena_environments.isaac_cap.tool_sort import (
+        IndustrialToolSortNewtonEnvironment,
+        IndustrialToolSortNewtonEnvironmentCfg,
+        configure_tool_sort_physics,
+    )
+
+    python_env = IndustrialToolSortNewtonEnvironment().build(IndustrialToolSortNewtonEnvironmentCfg())
+    yaml_env = ArenaEnvGraphSpec.from_yaml(ENVIRONMENT_YAML).to_arena_env()
+    yaml_env.env_cfg_callback = configure_tool_sort_physics
+    _assert_nested_equal(_arena_env_snapshot(yaml_env), _arena_env_snapshot(python_env))
+
+    builder_cfg = ArenaEnvBuilderCfg(num_envs=1, solve_relations=False)
+    python_cfg, _ = ArenaEnvBuilder(python_env, builder_cfg).compose_manager_cfg()
+    yaml_cfg, _ = ArenaEnvBuilder(yaml_env, builder_cfg).compose_manager_cfg()
+    _assert_nested_equal(_normalize(yaml_cfg.to_dict()), _normalize(python_cfg.to_dict()), path="env_cfg")
+    return True
+
+
+def test_tool_sort_python_and_yaml_are_equivalent():
+    assert run_function_with_persistent_simulation_app(_test_tool_sort_python_and_yaml_are_equivalent)
+
+
 def _test_shared_tool_sort_assets_spawn_with_physx(_simulation_app) -> bool:
     import isaaclab_arena_environments.isaac_cap.tool_sort  # noqa: F401
     from isaaclab_arena.assets.registries import AssetRegistry
