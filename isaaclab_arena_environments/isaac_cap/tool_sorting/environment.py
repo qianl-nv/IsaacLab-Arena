@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from isaaclab_arena.assets.register import register_environment
 from isaaclab_arena.environments.arena_environment_factory import ArenaEnvironmentCfg, ArenaEnvironmentFactory
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ class ToolSortEnvironment(ArenaEnvironmentFactory[ToolSortEnvironmentCfg]):
         return configure_tool_sort_placement(arena_env)
 
 
+@register_environment(cfg_type=ToolSortingEasy1EnvironmentCfg)
 class ToolSortingEasy1Environment(ToolSortEnvironment):
     """Build the first easy tool-sorting level."""
 
@@ -69,6 +71,7 @@ class ToolSortingEasy1Environment(ToolSortEnvironment):
     scene_spec = Path(__file__).with_name("tool_sorting_easy_1.yaml")
 
 
+@register_environment(cfg_type=ToolSortingEasy2EnvironmentCfg)
 class ToolSortingEasy2Environment(ToolSortEnvironment):
     """Build the second easy tool-sorting level."""
 
@@ -77,6 +80,7 @@ class ToolSortingEasy2Environment(ToolSortEnvironment):
     scene_spec = Path(__file__).with_name("tool_sorting_easy_2.yaml")
 
 
+@register_environment(cfg_type=ToolSortingEasy3EnvironmentCfg)
 class ToolSortingEasy3Environment(ToolSortEnvironment):
     """Build the third easy tool-sorting level."""
 

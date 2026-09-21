@@ -16,6 +16,7 @@ from isaaclab.managers import EventTermCfg, SceneEntityCfg, TerminationTermCfg
 from isaaclab.utils.configclass import configclass
 
 from isaaclab_arena.assets.asset import Asset
+from isaaclab_arena.assets.register import register_task
 from isaaclab_arena.metrics.metric_base import MetricBase
 from isaaclab_arena.metrics.success_rate import SuccessRateMetric
 from isaaclab_arena.progress_tracking.progress_objective import ProgressObjective
@@ -107,6 +108,7 @@ def _make_gear_success_composite_predicate_cfg(
     )
 
 
+@register_task
 class GearInsertionTask(TaskBase):
     """Require every configured gear to be seated and settled on the plate."""
 
