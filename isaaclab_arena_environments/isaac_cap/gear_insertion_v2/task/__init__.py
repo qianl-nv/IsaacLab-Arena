@@ -5,6 +5,6 @@
 
 """AUTOLab gear-mesh task and layout variations."""
 
-from .task import GearInsertionTask, GearMeshTask
+from .task import GearInsertionTask, GearMeshTaskV2
 
-__all__ = ["GearInsertionTask", "GearMeshTask"]
+__all__ = ["GearInsertionTask", "GearMeshTaskV2"]
