@@ -209,14 +209,3 @@ def configure_scene_mesh_instancing(scene, enabled: bool) -> None:
             continue
         object_cfg = getattr(asset, "object_cfg", None)
         configure_usd_asset_instancing(getattr(object_cfg, "spawn", None), enabled)
-
-
-__all__ = [
-    "configure_scene_mesh_instancing",
-    "configure_usd_asset_instancing",
-    "make_asset_root_instanceable",
-    "make_referenced_mesh_leaves_instanceable",
-    "spawn_multi_usd_as_instances",
-    "spawn_usd_as_instance",
-    "spawn_usd_with_instanceable_meshes",
-]

@@ -40,7 +40,7 @@ class UsbcInsertionMediumEnvironmentCfg(UsbcInsertionEasyEnvironmentCfg):
 def _build_environment(scene_spec: Path, cfg: UsbcInsertionEasyEnvironmentCfg):
     from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
     from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
-    from isaaclab_arena_environments.isaac_cap import register_components
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
 
     from .cameras import UsbcInsertionCameraCfg
 

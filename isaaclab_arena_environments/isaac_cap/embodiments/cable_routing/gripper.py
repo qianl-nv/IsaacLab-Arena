@@ -42,6 +42,3 @@ class YamGripper(ParallelJawGripper):
     def get_position_w(self, world: ArenaWorld) -> torch.Tensor:
         """Return the tracked work-hand TCP position."""
         return world.get_frame_position_w(self.frame_transformer_name, self.target_frame_name)
-
-
-__all__ = ["YamGripper"]

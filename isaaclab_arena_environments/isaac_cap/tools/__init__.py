@@ -4,7 +4,3 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Shared tooling for Isaac Cap environments."""
-
-from .env_behaviour_demo import EnvBehaviourDemo
-
-__all__ = ["EnvBehaviourDemo"]

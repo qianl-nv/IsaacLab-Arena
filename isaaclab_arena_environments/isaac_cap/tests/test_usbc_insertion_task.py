@@ -27,7 +27,7 @@ def _test_usbc_insertion_task(_simulation_app) -> bool:
         tilt_axis_aligned,
         velocity_below_threshold,
     )
-    from isaaclab_arena_environments.isaac_cap import register_components
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
     from isaaclab_arena_environments.isaac_cap.usbc_insertion.task import UsbcInsertionTask
 
     class _World:
@@ -306,7 +306,7 @@ def test_usbc_contact_rig() -> None:
 def _test_usbc_asset_registration(_simulation_app) -> bool:
     from isaaclab_arena.assets.object_type import ObjectType
     from isaaclab_arena.assets.registries import AssetRegistry
-    from isaaclab_arena_environments.isaac_cap import register_components
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
     from isaaclab_arena_environments.isaac_cap.usbc_insertion.assets import ASSET_ROOT, USBC_ASSET_CLASSES
     from isaaclab_arena_environments.isaac_cap.usbc_insertion.environment import (
         UsbcInsertionEasyEnvironment,

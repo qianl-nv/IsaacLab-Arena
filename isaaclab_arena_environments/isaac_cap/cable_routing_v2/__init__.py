@@ -4,17 +4,3 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Current Isaac CAP cable-routing environments, isolated from the legacy port."""
-
-from .environment import (
-    CableRoutingEasyEnvironment,
-    CableRoutingEasyEnvironmentCfg,
-    CableRoutingMediumEnvironment,
-    CableRoutingMediumEnvironmentCfg,
-)
-
-__all__ = [
-    "CableRoutingEasyEnvironment",
-    "CableRoutingEasyEnvironmentCfg",
-    "CableRoutingMediumEnvironment",
-    "CableRoutingMediumEnvironmentCfg",
-]

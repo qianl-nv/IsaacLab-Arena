@@ -4,17 +4,3 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Isaac Cap cable-routing environments."""
-
-from .environment import (
-    CableRoutingEasyEnvironment,
-    CableRoutingEasyEnvironmentCfg,
-    CableRoutingMediumEnvironment,
-    CableRoutingMediumEnvironmentCfg,
-)
-
-__all__ = [
-    "CableRoutingEasyEnvironment",
-    "CableRoutingEasyEnvironmentCfg",
-    "CableRoutingMediumEnvironment",
-    "CableRoutingMediumEnvironmentCfg",
-]

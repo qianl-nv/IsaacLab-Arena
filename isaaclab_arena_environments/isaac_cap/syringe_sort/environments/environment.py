@@ -39,7 +39,7 @@ class SyringeBase(ArenaEnvironmentFactory[SyringeSortEnvironmentCfg]):
         from isaaclab.envs.mdp.actions.actions_cfg import JointPositionActionCfg
 
         from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
-        from isaaclab_arena_environments.isaac_cap import register_components
+        from isaaclab_arena_environments.isaac_cap.registration import register_components
 
         from .cameras import configure_syringe_cameras
 

@@ -30,7 +30,7 @@ def ensure_environments_registered():
     Python, so subsequent calls are free.
     """
     import isaaclab_arena_environments  # noqa: F401
-    from isaaclab_arena_environments.isaac_cap import register_components
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
 
     register_components()
 

@@ -99,11 +99,3 @@ class CableRoutingEasyEnvironment(CableRoutingMediumEnvironment):
 
         assert isinstance(cfg, CableRoutingEasyEnvironmentCfg)
         return easy_variant(cfg.layout_seed)
-
-
-__all__ = [
-    "CableRoutingEasyEnvironment",
-    "CableRoutingEasyEnvironmentCfg",
-    "CableRoutingMediumEnvironment",
-    "CableRoutingMediumEnvironmentCfg",
-]

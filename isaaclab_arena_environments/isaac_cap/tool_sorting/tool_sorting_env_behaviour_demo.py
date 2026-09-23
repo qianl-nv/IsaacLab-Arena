@@ -49,7 +49,7 @@ def _build_tool_sort_demo_environment(level: str):
     assert level in _EASY_LEVELS, f"Unsupported easy level {level!r}."
 
     from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
-    from isaaclab_arena_environments.isaac_cap import register_components
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
     from isaaclab_arena_environments.isaac_cap.tool_sorting.embodiment import (
         ToolSortingFr3Robotiq2f85DifferentialIKEmbodiment,
     )

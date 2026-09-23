@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from isaaclab_arena_environments.isaac_cap.tools import EnvBehaviourDemo
+from isaaclab_arena_environments.isaac_cap.tools.env_behaviour_demo import EnvBehaviourDemo
 
 if TYPE_CHECKING:
     import torch

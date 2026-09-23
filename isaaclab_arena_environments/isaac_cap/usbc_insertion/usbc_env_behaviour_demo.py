@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import math
 
-from isaaclab_arena_environments.isaac_cap.tools import EnvBehaviourDemo
+from isaaclab_arena_environments.isaac_cap.tools.env_behaviour_demo import EnvBehaviourDemo
 
 _MATING_ROTATIONS_XYZW = {
     "easy": (-0.5, -0.5, -0.5, 0.5),

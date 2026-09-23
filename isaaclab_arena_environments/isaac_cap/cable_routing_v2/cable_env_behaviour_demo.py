@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 
-from isaaclab_arena_environments.isaac_cap.tools import EnvBehaviourDemo
+from isaaclab_arena_environments.isaac_cap.tools.env_behaviour_demo import EnvBehaviourDemo
 
 _NUM_ENVS = 1
 _REGION_DWELL_HALF_LENGTH = 0.020
@@ -532,6 +532,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-__all__ = ["CurrentCableRoutingBehaviourDemo", "run_demo"]

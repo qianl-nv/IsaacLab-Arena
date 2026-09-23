@@ -36,10 +36,10 @@ def _build_gear_demo_environment(variant: str):
     assert variant in ("easy", "medium"), f"Unsupported gear variant {variant!r}."
 
     from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
-    from isaaclab_arena_environments.isaac_cap import register_components
     from isaaclab_arena_environments.isaac_cap.embodiments.insertion_task import (
         IndustrialFr3Robotiq2f85DifferentialIKEmbodiment,
     )
+    from isaaclab_arena_environments.isaac_cap.registration import register_components
 
     register_components()
     spec_path = Path(__file__).with_name(f"gear_{variant}.yaml")

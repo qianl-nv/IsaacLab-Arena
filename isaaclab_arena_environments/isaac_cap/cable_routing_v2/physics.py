@@ -234,6 +234,3 @@ def configure_cable_routing_physics(
     env_cfg.decimation = 1
     env_cfg.scene.replicate_physics = True
     return env_cfg
-
-
-__all__ = ["configure_cable_routing_physics"]

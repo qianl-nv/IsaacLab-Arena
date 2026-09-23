@@ -4,21 +4,3 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Current Isaac CAP gear-mesh environments, isolated from the legacy port."""
-
-from .gear_mesh_environment import (
-    GearInsertionEasyNewtonEnvironment,
-    GearInsertionEasyNewtonEnvironmentCfg,
-    GearMeshPairNewtonEnvironment,
-    GearMeshPairNewtonEnvironmentCfg,
-    GearMeshTrainNewtonEnvironment,
-    GearMeshTrainNewtonEnvironmentCfg,
-)
-
-__all__ = [
-    "GearInsertionEasyNewtonEnvironment",
-    "GearInsertionEasyNewtonEnvironmentCfg",
-    "GearMeshPairNewtonEnvironment",
-    "GearMeshPairNewtonEnvironmentCfg",
-    "GearMeshTrainNewtonEnvironment",
-    "GearMeshTrainNewtonEnvironmentCfg",
-]

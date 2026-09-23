@@ -124,7 +124,7 @@ class GearMeshNewtonEnvironment(ArenaEnvironmentFactory[GearMeshNewtonEnvironmen
 
     def build(self, cfg: GearMeshNewtonEnvironmentCfg) -> IsaacLabArenaEnvironment:
         from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
-        from isaaclab_arena_environments.isaac_cap import register_components
+        from isaaclab_arena_environments.isaac_cap.registration import register_components
 
         register_components()
         spec = ArenaEnvGraphSpec.from_yaml(str(self.scene_spec))

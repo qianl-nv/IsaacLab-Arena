@@ -111,6 +111,3 @@ class IndustrialBimanualYamEmbodiment(EmbodimentBase):
             return END_EFFECTOR_BODY_NAME
         assert arm_mode in (ArmMode.LEFT, ArmMode.RIGHT), "A dual-arm YAM end-effector frame requires one arm side."
         return f"{arm_mode.value}_ee_frame"
-
-
-__all__ = ["IndustrialBimanualYamEmbodiment"]

@@ -393,15 +393,3 @@ def build_cable_routing_scene(variant: CableRoutingVariant) -> BuiltCableRouting
         ]
     )
     return BuiltCableRoutingScene(scene=scene, cable=cable, pegs=pegs, port=port)
-
-
-__all__ = [
-    "BOARD_TOP_Z",
-    "CablePhysics",
-    "CableRoutingVariant",
-    "TerminatedCableGoal",
-    "YAM_I2RT_USD_PATH",
-    "build_cable_routing_scene",
-    "easy_variant",
-    "medium_variant",
-]
