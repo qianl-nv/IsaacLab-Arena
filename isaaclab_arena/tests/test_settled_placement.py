@@ -122,6 +122,7 @@ def test_recording_cli_saves_final_poses(tmp_path, backend):
             f"output={output}",
             f"presets={backend}",
             "num_envs=2",
+            "env_spacing=2.5",
             "layouts_per_env=2",
             "settle.num_steps=120",
             "settle.validators.pose_shift.max_translation_m=0.0015",
@@ -133,6 +134,17 @@ def test_recording_cli_saves_final_poses(tmp_path, backend):
     )
     assert "physics_settled: ENABLED" in completed.stdout
     assert "articulation_link_shift: SKIPPED: scene has no articulations" in completed.stdout
+    physics_progress = [line for line in completed.stdout.splitlines() if line.endswith("physics steps")]
+    assert len(physics_progress) == 2
+    for line in physics_progress:
+        completed_steps, total_steps = map(int, line.rsplit(": ", 1)[1].split()[0].split("/"))
+        assert completed_steps == (total_steps + 1) // 2
+    assert (
+        "[recording] batch 1/2: 2 solutions, 2 passed solver validation, "
+        "2 passed post-physics validation; overall 2/4 validated, 2 accepted"
+        in completed.stdout
+    )
+    assert "overall 4/4 validated, 4 accepted" in completed.stdout
     records = [json.loads(line)["variations"]["scene.relation_placement"] for line in output.read_text().splitlines()]
     assert len(records) == 4
     for record in records:

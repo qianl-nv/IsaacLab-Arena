@@ -89,6 +89,10 @@ def collect_settled_pool_layouts(
     accepted_indices: list[tuple[int, int]] = []
     rejections: dict[tuple[int, int], str] = {}
     validation: list[dict] = []
+    queues = placement_pool.layouts_per_env()[: env.num_envs]
+    total_candidates = sum(len(queue) for queue in queues)
+    num_batches = max((len(queue) for queue in queues), default=0)
+    processed_candidates = 0
     batches = iter_pool_validation(
         env,
         placement_pool,
@@ -97,6 +101,7 @@ def collect_settled_pool_layouts(
         snapshot=snapshot,
         skip_failed=True,
         render=render,
+        log_progress=True,
     )
     try:
         for batch in batches:
@@ -110,6 +115,7 @@ def collect_settled_pool_layouts(
                 final_links=articulation_link_poses_in_root_frame(env),
             )
             reports = validate_post_physics(validators, state)
+            batch_accepted = 0
             for env_id, layout in batch.layouts.items():
                 if env_id in batch.skipped_layouts:
                     rejections[env_id, batch.index] = batch.skipped_layouts[env_id]
@@ -122,6 +128,7 @@ def collect_settled_pool_layouts(
                     value = batch.final_poses[key][env_id].tolist()
                     accepted[key].append(Pose(tuple(value[:3]), tuple(value[3:])))
                 accepted_indices.append((env_id, batch.index))
+                batch_accepted += 1
                 validation.append({
                     "pre_physics": dict(layout.validation_results.validation_results),
                     "post_physics": [asdict(report) for report in reports[env_id]],
@@ -131,6 +138,13 @@ def collect_settled_pool_layouts(
                         "physics_dt_s": env.sim.get_physics_dt(),
                     },
                 })
+            processed_candidates += len(batch.layouts)
+            solver_valid = len(batch.layouts) - len(batch.skipped_layouts)
+            print(
+                f"[recording] batch {batch.index + 1}/{num_batches}: {len(batch.layouts)} solutions, "
+                f"{solver_valid} passed solver validation, {batch_accepted} passed post-physics validation; "
+                f"overall {processed_candidates}/{total_candidates} validated, {len(accepted_indices)} accepted"
+            )
         assert (
             len(accepted_indices) >= params.min_layouts
         ), f"Accepted {len(accepted_indices)} layouts; need {params.min_layouts}. Rejections: {rejections}"

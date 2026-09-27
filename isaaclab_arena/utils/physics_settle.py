@@ -12,7 +12,13 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
 
-def step_physics(env: ManagerBasedEnv, num_steps: int, render: bool = False) -> None:
+def step_physics(
+    env: ManagerBasedEnv,
+    num_steps: int,
+    render: bool = False,
+    log_step: int | None = None,
+    log_prefix: str = "[physics]",
+) -> None:
     """Advance physics, optionally rendering each step.
 
     Args:
@@ -20,13 +26,18 @@ def step_physics(env: ManagerBasedEnv, num_steps: int, render: bool = False) -> 
         num_steps: Number of physics steps to advance.
         render: When True, render each step so the settle is visible in the GUI. Defaults to
             False (physics-only).
+        log_step: Print progress after this step; None disables logging.
+        log_prefix: Prefix identifying the physics operation in progress messages.
     """
+    assert log_step is None or 1 <= log_step <= num_steps, "log_step must select a physics step"
     dt = env.unwrapped.sim.get_physics_dt()
     # Apply actuator targets on every substep without advancing episode recorders via env.step.
-    for _ in range(num_steps):
+    for step in range(1, num_steps + 1):
         env.unwrapped.scene.write_data_to_sim()
         env.unwrapped.sim.step(render=render)
         env.unwrapped.scene.update(dt)
+        if step == log_step:
+            print(f"{log_prefix}: {step}/{num_steps} physics steps")
 
 
 def are_all_objects_settled_per_env(

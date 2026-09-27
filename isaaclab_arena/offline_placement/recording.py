@@ -26,6 +26,8 @@ class PlacementRecordingCfg:
     """Placement JSONL output path; must not exist."""
     num_envs: int = 1
     """Number of parallel simulation environments."""
+    env_spacing: float = 30.0
+    """Spacing between parallel environments, in metres."""
     layouts_per_env: int = 5
     """Minimum solved candidates per environment before physics filtering."""
     seed: int = 42
@@ -64,7 +66,14 @@ def record_placements_to_jsonl(cfg: PlacementRecordingCfg, device: str = "cuda:0
         resolve_on_reset=True,
     )
     builder = ArenaEnvBuilder(
-        arena_env, ArenaEnvBuilderCfg(num_envs=cfg.num_envs, seed=cfg.seed, device=device, presets=cfg.presets)
+        arena_env,
+        ArenaEnvBuilderCfg(
+            num_envs=cfg.num_envs,
+            env_spacing=cfg.env_spacing,
+            seed=cfg.seed,
+            device=device,
+            presets=cfg.presets,
+        ),
     )
     env = builder.make_registered()
     try:

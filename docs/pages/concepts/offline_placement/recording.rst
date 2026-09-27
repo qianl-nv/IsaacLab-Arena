@@ -12,6 +12,28 @@ The saved poses can then be loaded on reset without solving again.
                           -> velocity and pose-shift checks -> poses.jsonl
    Environment YAML + poses.jsonl -> restore poses on reset -> run policy
 
+The recording path reuses the online relation solver and its per-environment
+solution pools, then branches into physics stepping and post-physics validation:
+
+.. figure:: ../../../images/offline_recording_pipeline.png
+   :width: 100%
+   :alt: Offline recording pipeline branching from the online placement solution pools
+   :align: center
+
+   Offline recording applies solved candidates in simulation and stores accepted
+   settled poses with validation metadata.
+
+During replay, the recorded pose file enters the builder directly. Relation
+solving and placement validation are bypassed:
+
+.. figure:: ../../../images/recorded_placement_replay_pipeline.png
+   :width: 100%
+   :alt: Recorded placement replay pipeline bypassing online relation solving
+   :align: center
+
+   Replay validates the cache for compatibility, seeds environment construction,
+   and draws complete recorded layouts on reset.
+
 1. Record a scene
 -----------------
 
@@ -30,7 +52,7 @@ recording, replay and policy evaluation:
    /isaac-sim/python.sh isaaclab_arena/scripts/record_placement_layouts.py \
        env_spec=isaaclab_arena_environments/office_table/franka_pick_cube_into_bowl_office_table.yaml \
        output=outputs/placements/poses.jsonl \
-       num_envs=2 layouts_per_env=5 seed=42 \
+       num_envs=2 env_spacing=3.0 layouts_per_env=5 seed=42 \
        settle.num_steps=120 --device cpu --viz none
 
 Expect all three default checks to print ``ENABLED``: ``physics_settled``,
