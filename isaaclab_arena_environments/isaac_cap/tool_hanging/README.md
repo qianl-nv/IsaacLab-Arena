@@ -35,3 +35,28 @@ Run a scene in the GUI from the repository root inside its container; the config
 
 Cameras are exposed as `top_camera`, `side_camera`, `left_wrist_camera`, and `right_wrist_camera`,
 the names Isaac-cap's graph policy binds to.
+
+## CAP policy with an external server
+
+Start Arena inside its container:
+
+```bash
+/isaac-sim/python.sh isaaclab_arena/evaluation/experiment_runner.py \
+  --experiment_config isaaclab_arena_environments/isaac_cap/tool_hanging/experiment_configs/tool_hanging_cap_remote_experiment.yaml \
+  --viz kit
+```
+
+Then start only the graph server from the Isaac-cap checkout on the host:
+
+```bash
+GAP_PORT=19000 \
+GAP_GRAPH=tool_hanging/gap_perception \
+GAP_ADAPTATION=vabar_tool_hanging_artist_wrench \
+CAP_GAP_ROBOT_PROFILE=yam_bimanual \
+CAP_GAP_CONTROL_FREQUENCY_HZ=60 \
+CAP_GAP_HONOURS_ROLL=1 \
+CAP_GAP_CARTESIAN_CORRECTION_LIMIT_M=0.01 \
+CAP_GAP_ARM_BASE_POSES='[[[0.3025,0.17,0.81],[0,0,0,1]],[[0.3025,-0.17,0.81],[0,0,0,1]]]' \
+./arena_gap/scripts/run_gap_graph.sh \
+  --inputs instruction='"hang the wrench on the hook"'
+```
