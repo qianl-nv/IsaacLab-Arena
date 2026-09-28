@@ -8,13 +8,13 @@
 from typing import ClassVar
 
 from isaaclab_arena.assets.background import Background
-from isaaclab_arena.assets.nucleus import ARENA_NUCLEUS_DIR
+from isaaclab_arena.assets.nucleus import ARENA_STAGING_NUCLEUS_DIR
 from isaaclab_arena.assets.object_library import LibraryObject
 from isaaclab_arena.assets.register import register_asset
 from isaaclab_arena.utils.bounding_box import AxisAlignedBoundingBox
 from isaaclab_arena.utils.pose import Pose
 
-ASSET_ROOT = f"{ARENA_NUCLEUS_DIR}/Arena/assets/object_library/temp_newton_envs/cap_envs/tool_hanging/assets"
+ASSET_ROOT = f"{ARENA_STAGING_NUCLEUS_DIR}/Arena/assets/object_library/temp_newton_envs/cap_envs/tool_hanging/assets"
 
 
 @register_asset
