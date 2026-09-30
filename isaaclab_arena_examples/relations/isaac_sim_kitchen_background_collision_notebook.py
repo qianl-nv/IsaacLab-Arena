@@ -52,7 +52,7 @@ def run_kitchen_background_collision_demo(simulation_app, view_steps: int = 0, a
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
     from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
     from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
-    from isaaclab_arena.relations.passive_collision_objects import get_passive_collision_objects
+    from isaaclab_arena.relations.passive_collision_objects import get_placement_collision_objects
     from isaaclab_arena.relations.relation_solver_params import CollisionMode, RelationSolverParams
     from isaaclab_arena.relations.relations import IsAnchor, On
     from isaaclab_arena.scene.scene import Scene
@@ -79,10 +79,6 @@ def run_kitchen_background_collision_demo(simulation_app, view_steps: int = 0, a
         objects.append(obj)
 
     scene = Scene(assets=[background, counter, *objects, light])
-    collision_objects = get_passive_collision_objects(scene.assets.values(), include_background=True)
-    collision_names = [c.name for c in collision_objects]
-    print(f"Using background collision obstacles: {collision_names}", flush=True)
-
     placer_params = ObjectPlacerParams(
         max_placement_attempts=10,
         min_unique_layouts_per_env=1,
@@ -97,6 +93,13 @@ def run_kitchen_background_collision_demo(simulation_app, view_steps: int = 0, a
             save_position_history=False,
         ),
     )
+    collision_objects = get_placement_collision_objects(
+        [counter, *objects],
+        scene.assets.values(),
+        placer_params.solver_params.collision_mode,
+    )
+    collision_names = [collision_object.name for collision_object in collision_objects]
+    print(f"Using background collision obstacles: {collision_names}", flush=True)
     env = ArenaEnvBuilder(
         IsaacLabArenaEnvironment(name="kitchen_background_collision", scene=scene, placer_params=placer_params),
         builder_cfg,

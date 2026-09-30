@@ -65,6 +65,8 @@ def collect_settled_placements(
     Each candidate must pass its required solver checks and every enabled, applicable
     post-physics check. Solver validation is not repeated. This function does not
     enforce replay restrictions or a minimum accepted count, and does not close env.
+    Scenes containing ClutterOn relations receive clutter-specific preflight checks
+    and validator semantics before the first reset.
 
     Args:
         env: Environment with a pooled placement reset event.
@@ -74,7 +76,8 @@ def collect_settled_placements(
         scene_assets: Optional asset definitions supplementing the pool's embodiment tags.
             Embodiment tags exclude the asset's scene roots from task-object
             link checks. Other articulations receive those checks; root measurements
-            cover all rigid objects and articulations.
+            cover all rigid objects and articulations. Pass the complete scene asset
+            list for ClutterOn so supports and passive geometry can be validated.
         log_progress: Print validator settings, physics-step progress, and per-batch results.
 
     Returns:
@@ -85,13 +88,25 @@ def collect_settled_placements(
     assert num_batches > 0, "num_batches must be positive"
     placement_pool = get_placement_pool(env)
     assert placement_pool is not None, "Collection requires a pooled placement reset event"
-    if params is None:
-        params = SettledPlacementParams()
     assert placement_pool.num_envs == env.num_envs, "Placement pool and scene must have the same environment count"
     assets = list(placement_pool.objects)
     for asset in scene_assets or []:
         if asset not in assets:
             assets.append(asset)
+    from isaaclab_arena.relations.relations import ClutterOn, get_relation
+
+    has_clutter = any(get_relation(asset, ClutterOn) is not None for asset in assets)
+    if params is None:
+        if has_clutter:
+            from isaaclab_arena.offline_placement.clutter_validators import default_clutter_validators
+
+            params = SettledPlacementParams(validators=default_clutter_validators())
+        else:
+            params = SettledPlacementParams()
+    if has_clutter:
+        from isaaclab_arena.offline_placement.clutter_preparation import prepare_clutter_settling
+
+        prepare_clutter_settling(env, assets)
     keys = sorted(set(env.scene.rigid_objects) | set(env.scene.articulations))
     assert keys, "Collection requires rigid objects or articulations"
     embodiment_keys = set()

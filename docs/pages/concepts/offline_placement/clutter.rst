@@ -10,29 +10,37 @@ their final poses.
 Collect layouts
 ---------------
 
-Build the environment with relation solving enabled. For an environment definition
-containing ``ClutterOn`` relations:
+Use the ordinary offline placement recorder. Its shared
+``collect_settled_placements`` stage detects ``ClutterOn`` relations, runs
+clutter-specific preflight checks, and selects clutter validators before sampling
+and stepping physics. The recorder then writes accepted results using the ordinary
+JSONL workflow:
 
 .. code-block:: python
 
    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
-   from isaaclab_arena.offline_placement.clutter_settling import settle_clutter
    from isaaclab_arena.offline_placement.clutter_validators import default_clutter_validators
-   from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
+   from isaaclab_arena.offline_placement.recording_params import PlacementRecordingParams
+   from isaaclab_arena.scripts.record_placement_layouts import record_placements_to_jsonl
 
-   params = SettledPlacementParams(
+   params = PlacementRecordingParams(
        num_steps=480,
        validators=default_clutter_validators(),
+       min_layouts=1,
    )
    env = ArenaEnvBuilder(arena_env, ArenaEnvBuilderCfg(num_envs=4)).make_registered()
    try:
-       result = settle_clutter(
-           env, arena_env.get_placement_assets(), num_batches=2,
-           params=params, render=True, log_progress=True,
+       summary = record_placements_to_jsonl(
+           env,
+           "settled_clutter.jsonl",
+           num_batches=2,
+           params=params,
+           render=True,
+           scene_assets=arena_env.get_placement_assets(),
        )
-       print(result.accepted_indices)
-       print(result.rejections)
+       print(summary.accepted)
+       print(summary.rejections)
    finally:
        env.close()
 
@@ -41,15 +49,10 @@ resets once per batch. Two batches of four environments sample eight candidates.
 ``num_steps`` counts environment steps, each containing the configured number of
 physics substeps; it is independent of the number of batches.
 
-``settle_clutter`` checks scene prerequisites and calls
-``collect_settled_placements``. It returns the same ``SettledPlacementResult``:
-
-* ``poses`` contains accepted rigid-object and articulation root poses, keyed by
-  runtime scene name. Positions are environment-local metres; rotations are xyzw.
-* ``accepted_indices`` identifies each accepted environment and reset batch.
-* ``validation`` retains solver verdicts and post-physics settings and outcomes.
-* ``rejections`` explains failed candidates. All-rejected runs return empty pose
-  lists. Increase ``num_batches`` to sample more candidates.
+The output uses the same episode JSONL format as ordinary settled placement
+recordings. Each accepted record contains final root poses and the solver and
+post-physics validation reports. If fewer than ``min_layouts`` candidates pass,
+the recorder returns ``output=None`` and does not write a partial file.
 
 The caller owns the environment. It remains at its final state after collection
 or failure.
@@ -69,9 +72,11 @@ The shared validator builder and evaluator run these defaults:
   ``no_overlap`` and ``clutter_on_relation`` checks.
 
 All enabled, applicable checks must pass. Disabled and inapplicable checks retain
-their skip reasons. For example, set
-``params.validators["support_containment"]["containment_margin_m"] = 0.005``
-to permit 5 mm overhang. Physics runs for the configured duration; final velocity
+their skip reasons. The shared collector selects clutter defaults when ``params``
+is omitted. When passing explicit parameters, initialize ``params.validators`` with
+``default_clutter_validators()``. To customize them, for example, set
+``params.validators["support_containment"]["containment_margin_m"] = 0.005`` to
+permit 5 mm overhang. Physics runs for the configured duration; final velocity
 limits determine whether the objects are still moving.
 Validators read captured measurements, without stepping physics or reading the
 live environment themselves.

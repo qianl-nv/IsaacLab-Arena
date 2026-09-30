@@ -110,8 +110,7 @@ def record_placements_to_jsonl(
 
     output = Path(output)
     assert not output.exists(), f"Output already exists: {output}"
-    if params is None:
-        params = PlacementRecordingParams()
+    recording_params = params if params is not None else PlacementRecordingParams()
     pool = get_placement_pool(env)
     assert pool is not None, "Recording requires a pooled placement reset event"
     assets = list(pool.objects)
@@ -119,14 +118,21 @@ def record_placements_to_jsonl(
         if asset not in assets:
             assets.append(asset)
     validate_recording_assets(env, assets)
-    result = collect_settled_placements(env, num_batches, params, render=render, scene_assets=assets, log_progress=True)
+    result = collect_settled_placements(
+        env,
+        num_batches,
+        params,
+        render=render,
+        scene_assets=assets,
+        log_progress=True,
+    )
     summary = PlacementRecordingSummary(
         output=None,
         accepted=len(result.accepted_indices),
         attempted=result.attempted,
         rejections=result.rejections,
     )
-    if summary.accepted < params.min_layouts:
+    if summary.accepted < recording_params.min_layouts:
         return summary
     layouts = PlacementLayouts(result.poses)
     layouts.validate_assets(assets)
@@ -135,7 +141,7 @@ def record_placements_to_jsonl(
         if asset.tags and "embodiment" in asset.tags:
             embodiment_keys.extend(asset.get_scene_root_keys())
     sampling = {
-        "num_steps": params.num_steps,
+        "num_steps": recording_params.num_steps,
         "decimation": env.unwrapped.cfg.decimation,
         "physics_dt_s": env.unwrapped.sim.get_physics_dt(),
         "embodiment_keys": embodiment_keys,

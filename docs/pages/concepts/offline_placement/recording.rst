@@ -376,9 +376,18 @@ For an environment you already own, ``record_placements_to_jsonl`` in the same
 script accepts ``env``, an output path and ``num_batches`` and returns the same
 summary. This helper leaves environment cleanup to its caller.
 
+Both recording entry points delegate physics collection to
+``collect_settled_placements``. That collector detects ``ClutterOn`` relations
+from the scene assets and applies clutter preflight checks, non-clutter pose-shift
+semantics, and support-containment validation without a separate recording mode.
+When collection parameters are omitted, validator defaults are selected from the
+scene. Explicit validator configurations are used unchanged.
+
 For the reusable library API, call ``collect_settled_placements`` to inspect
 poses and rejection reasons in memory. It measures the scene's rigid and
-articulation roots without enforcing recording or replay policies:
+articulation roots without enforcing recording or replay policies. Pass the complete
+``scene_assets`` list for clutter scenes so the collector can validate supports and
+passive geometry:
 
 .. code-block:: python
 
