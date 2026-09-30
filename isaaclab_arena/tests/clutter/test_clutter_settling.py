@@ -32,10 +32,9 @@ def _test_settling_rejects_kinematic_variant_before_release(simulation_app, tmp_
     from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
     from isaaclab_arena.environments.arena_world_scene_access import get_representative_rigid_body_prims
     from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
-    from isaaclab_arena.offline_placement.clutter_settling import settle_clutter
-    from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
     from isaaclab_arena.relations.relations import ClutterOn, IsAnchor
     from isaaclab_arena.scene.scene import Scene
+    from isaaclab_arena.scripts.record_placement_layouts import record_placements_to_jsonl
     from isaaclab_arena.utils.pose import Pose
 
     objects = []
@@ -74,11 +73,16 @@ def _test_settling_rejects_kinematic_variant_before_release(simulation_app, tmp_
         ]
         initial = env.unwrapped.scene.get_state()
         with patch(
-            "isaaclab_arena.offline_placement.clutter_settling.collect_settled_placements",
+            "isaaclab_arena.offline_placement.settled_placement.collect_settled_placements",
             side_effect=AssertionError("release must not run for kinematic clutter"),
         ) as release:
             with pytest.raises(AssertionError, match="mixed_cube.*must be dynamic"):
-                settle_clutter(env, arena_env.get_placement_assets(), 1, SettledPlacementParams())
+                record_placements_to_jsonl(
+                    env,
+                    tmp_path / "kinematic.jsonl",
+                    1,
+                    scene_assets=arena_env.get_placement_assets(),
+                )
             release.assert_not_called()
         assert variants.variant_indices_by_env == assignments
         _assert_scene_state_equal(env.unwrapped.scene.get_state(), initial)
@@ -140,13 +144,13 @@ def _make_primitive_clutter_scene(tmp_path, raised_support=False):
 
 
 def _test_settling_rejects_moved_fixed_assets_before_solving(simulation_app, tmp_path):
+    import json
     from unittest.mock import patch
 
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
     from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
-    from isaaclab_arena.offline_placement.clutter_settling import settle_clutter
-    from isaaclab_arena.offline_placement.clutter_validators import default_clutter_validators
-    from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
+    from isaaclab_arena.offline_placement.recording_params import PlacementRecordingParams
+    from isaaclab_arena.scripts.record_placement_layouts import record_placements_to_jsonl
 
     arena_env = _make_primitive_clutter_scene(tmp_path)
     assets = arena_env.get_placement_assets()
@@ -164,21 +168,34 @@ def _test_settling_rejects_moved_fixed_assets_before_solving(simulation_app, tmp
             base.sim.forward()
             before = base.scene.get_state()
             with patch(
-                "isaaclab_arena.offline_placement.clutter_settling.collect_settled_placements",
+                "isaaclab_arena.offline_placement.settled_placement.collect_settled_placements",
                 side_effect=AssertionError("must reject before solving or releasing"),
             ):
                 with pytest.raises(AssertionError, match=f"{key!r} differs from its configured pose"):
-                    settle_clutter(env, assets, 1, SettledPlacementParams())
+                    record_placements_to_jsonl(
+                        env,
+                        tmp_path / f"moved_{key}.jsonl",
+                        1,
+                        scene_assets=assets,
+                    )
             _assert_scene_state_equal(base.scene.get_state(), before)
             body.write_root_pose_to_sim_index(root_pose=original)
             base.scene.write_data_to_sim()
             base.sim.forward()
         # The same scene at its authored poses remains usable across both environments.
-        results = settle_clutter(
-            env, assets, 1, SettledPlacementParams(num_steps=480, validators=default_clutter_validators())
+        output = tmp_path / "fixed.jsonl"
+        summary = record_placements_to_jsonl(
+            env,
+            output,
+            1,
+            PlacementRecordingParams(num_steps=480),
+            scene_assets=assets,
         )
-        assert len(results.accepted_indices) == 2
-        assert all(abs(pose.position_xyz[0]) < 0.4 for pose in results.poses["cube_body"])
+        assert summary.accepted == 2
+        records = [
+            json.loads(line)["variations"]["scene.relation_placement"] for line in output.read_text().splitlines()
+        ]
+        assert all(abs(record["poses"]["cube_body"]["position_xyz"][0]) < 0.4 for record in records)
     finally:
         env.close()
     return True
@@ -191,15 +208,16 @@ def test_settling_rejects_moved_fixed_assets_before_solving(tmp_path):
 
 
 def _test_clutter_collection_uses_shared_batches(simulation_app, tmp_path):
+    import json
     import torch
     from unittest.mock import patch
 
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
     from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
-    from isaaclab_arena.offline_placement.clutter_settling import settle_clutter
     from isaaclab_arena.offline_placement.clutter_validators import default_clutter_validators
-    from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
+    from isaaclab_arena.offline_placement.recording_params import PlacementRecordingParams
     from isaaclab_arena.relations.placement_events import get_placement_pool
+    from isaaclab_arena.scripts.record_placement_layouts import record_placements_to_jsonl
     from isaaclab_arena.utils.physics_settle import step_physics
 
     arena_env = _make_primitive_clutter_scene(tmp_path)
@@ -208,36 +226,57 @@ def _test_clutter_collection_uses_shared_batches(simulation_app, tmp_path):
     try:
         base = env.unwrapped
         pool = get_placement_pool(base)
-        params = SettledPlacementParams(num_steps=480, validators=default_clutter_validators())
+        params = PlacementRecordingParams(num_steps=480)
         before = base.arena_world.get_pose_e("cube_body").clone()
+        output = tmp_path / "clutter.jsonl"
         with patch.object(pool, "sample_for_envs", wraps=pool.sample_for_envs) as sample:
-            result = settle_clutter(env, arena_env.get_placement_assets(), 2, params)
+            summary = record_placements_to_jsonl(
+                env,
+                output,
+                2,
+                params,
+                scene_assets=arena_env.get_placement_assets(),
+            )
         assert sample.call_count == 2
         assert pool.remaining == 0
-        assert result.attempted == 4
-        assert result.accepted_indices == [(0, 0), (1, 0), (0, 1), (1, 1)]
-        assert not result.rejections
-        for outcome in result.validation:
-            reports = {report.check: report for report in outcome.post_physics}
-            assert reports["physics_settled"].passed
-            assert reports["pose_shift"].passed
-            assert reports["support_containment"].passed
-            assert reports["articulation_link_shift"].passed is None
-            assert reports["support_containment"].configuration["fall_through_tolerance_m"] == 0.01
+        assert summary.attempted == 4
+        assert summary.accepted == 4
+        assert not summary.rejections
+        records = [
+            json.loads(line)["variations"]["scene.relation_placement"] for line in output.read_text().splitlines()
+        ]
+        for record in records:
+            reports = {report["check"]: report for report in record["validation"]["post_physics"]}
+            assert reports["physics_settled"]["passed"]
+            assert reports["pose_shift"]["passed"]
+            assert reports["support_containment"]["passed"]
+            assert reports["articulation_link_shift"]["passed"] is None
+            assert reports["support_containment"]["configuration"]["fall_through_tolerance_m"] == 0.01
         after = base.arena_world.get_pose_e("cube_body")
         assert torch.all(before[:, 2] - after[:, 2] > 0.15)
         for env_id in range(2):
-            torch.testing.assert_close(after[env_id], result.poses["cube_body"][2 + env_id].to_tensor(base.device))
+            recorded_pose = records[2 + env_id]["poses"]["cube_body"]
+            expected = torch.tensor(
+                [*recorded_pose["position_xyz"], *recorded_pose["rotation_xyzw"]],
+                device=base.device,
+            )
+            torch.testing.assert_close(after[env_id], expected)
         step_physics(base, 200)
         torch.testing.assert_close(base.arena_world.get_pose_e("cube_body"), after, atol=0.005, rtol=0)
 
         # The same pool/reset path reports rejections and permits explicit check configuration.
         # A one-step drop retains high downward speed after release.
-        short = SettledPlacementParams(num_steps=1, validators=default_clutter_validators())
+        short = PlacementRecordingParams(num_steps=1, validators=default_clutter_validators())
         short.validators["physics_settled"]["lin_vel_thresh"] = 0.0001
-        rejected = settle_clutter(env, arena_env.get_placement_assets(), 1, short)
+        rejected = record_placements_to_jsonl(
+            env,
+            tmp_path / "rejected.jsonl",
+            1,
+            short,
+            scene_assets=arena_env.get_placement_assets(),
+        )
         assert rejected.attempted == 2
-        assert not rejected.accepted_indices
+        assert rejected.accepted == 0
         assert all("physics_settled" in reason for reason in rejected.rejections.values())
     finally:
         env.close()
@@ -256,13 +295,12 @@ def _test_raised_support_requires_explicit_surface(simulation_app, tmp_path):
     from isaaclab_arena.assets.object_type import ObjectType
     from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
     from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
-    from isaaclab_arena.offline_placement.clutter_settling import settle_clutter
-    from isaaclab_arena.offline_placement.clutter_validators import default_clutter_validators
-    from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
+    from isaaclab_arena.offline_placement.recording_params import PlacementRecordingParams
     from isaaclab_arena.relations.relations import ClutterOn, IsAnchor, get_relation
+    from isaaclab_arena.scripts.record_placement_layouts import record_placements_to_jsonl
     from isaaclab_arena.utils.physics_settle import step_physics
 
-    params = SettledPlacementParams(num_steps=480, validators=default_clutter_validators())
+    params = PlacementRecordingParams(num_steps=480)
     for support_kind in ("whole_table", "unprepared_tabletop", "tabletop"):
         directory = tmp_path / support_kind
         directory.mkdir()
@@ -295,11 +333,23 @@ def _test_raised_support_requires_explicit_surface(simulation_app, tmp_path):
                 before = base.scene.get_state()
                 with patch.object(base, "reset", side_effect=AssertionError("must reject before resetting")):
                     with pytest.raises(AssertionError, match=reason):
-                        settle_clutter(env, assets, 1, params)
+                        record_placements_to_jsonl(
+                            env,
+                            directory / "rejected.jsonl",
+                            1,
+                            params,
+                            scene_assets=assets,
+                        )
                 _assert_scene_state_equal(base.scene.get_state(), before)
             else:
-                result = settle_clutter(env, assets, 1, params)
-                assert result.accepted_indices == [(0, 0)], result.rejections
+                summary = record_placements_to_jsonl(
+                    env,
+                    directory / "accepted.jsonl",
+                    1,
+                    params,
+                    scene_assets=assets,
+                )
+                assert summary.accepted == 1, summary.rejections
                 pose = base.arena_world.get_pose_e("cube_body").clone()
                 # The tabletop is at 0.52 m; the rail is at 0.72 m. The cube is 0.1 m tall.
                 assert abs(float(pose[0, 2]) - 0.57) < 0.002

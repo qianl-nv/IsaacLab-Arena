@@ -258,7 +258,8 @@ def test_passive_background_excludes_relation_anchor_subtrees(monkeypatch):
     import isaaclab_arena.relations.passive_collision_objects as passive_module
     from isaaclab_arena.assets.background import Background
     from isaaclab_arena.assets.object_reference import ObjectReference
-    from isaaclab_arena.relations.passive_collision_objects import get_passive_collision_objects
+    from isaaclab_arena.relations.collision_mode import CollisionMode
+    from isaaclab_arena.relations.passive_collision_objects import get_placement_collision_objects
     from isaaclab_arena.utils.pose import Pose
 
     kitchen = Background.__new__(Background)
@@ -270,6 +271,7 @@ def test_passive_background_excludes_relation_anchor_subtrees(monkeypatch):
     counter = MagicMock(spec=ObjectReference)
     counter.parent_asset = kitchen
     counter.prim_path_in_parent_usd = "/Kitchen/counter"
+    counter.is_anchor = True
     calls = {}
 
     def fake_make_fixed(objects, excluded_prim_paths_by_object=None):
@@ -279,11 +281,7 @@ def test_passive_background_excludes_relation_anchor_subtrees(monkeypatch):
 
     monkeypatch.setattr(passive_module, "make_fixed_collision_objects", fake_make_fixed)
 
-    result = get_passive_collision_objects(
-        [kitchen],
-        include_background=True,
-        background_mesh_exclusions=[counter, counter],
-    )
+    result = get_placement_collision_objects([counter], [kitchen], CollisionMode.MESH)
 
     assert result == [kitchen]
     assert calls["objects"] == [kitchen]
@@ -481,7 +479,7 @@ def test_validate_no_overlap_rejects_background_overlap():
     assert validator._validate_no_overlap(clear, env_bboxes, [background])
 
 
-def _test_get_passive_collision_objects_filters(simulation_app) -> bool:
+def _test_discover_passive_assets_filters(simulation_app) -> bool:
     """Only relation-free objects with a USD path and a fixed Pose are returned; Background is excluded."""
     from unittest.mock import MagicMock
 
@@ -524,24 +522,21 @@ def _test_get_passive_collision_objects_filters(simulation_app) -> bool:
         o.name: o for o in [furniture, counter_ref, kitchen, kitchen_no_pose, anchored, no_usd, no_pose, ranged]
     }
 
-    original = passive_collision_module.make_fixed_collision_objects
-    passive_collision_module.make_fixed_collision_objects = lambda objects, excluded_prim_paths_by_object=None: list(
-        objects
+    without_background = passive_collision_module.discover_passive_assets(
+        scene.assets.values(), include_background=False
     )
-    try:
-        no_combine = passive_collision_module.get_passive_collision_objects(scene.assets.values())
-        combined = passive_collision_module.get_passive_collision_objects(
-            scene.assets.values(), include_background=True
-        )
-    finally:
-        passive_collision_module.make_fixed_collision_objects = original
+    with_background = passive_collision_module.discover_passive_assets(scene.assets.values(), include_background=True)
 
-    return no_combine == [furniture, counter_ref] and combined == [furniture, kitchen, kitchen_no_pose]
+    return without_background == [furniture, counter_ref] and with_background == [
+        furniture,
+        kitchen,
+        kitchen_no_pose,
+    ]
 
 
-def test_get_passive_collision_objects_filters():
-    result = run_function_with_persistent_simulation_app(_test_get_passive_collision_objects_filters, headless=HEADLESS)
-    assert result, "get_passive_collision_objects() returned the wrong subset"
+def test_discover_passive_assets_filters():
+    result = run_function_with_persistent_simulation_app(_test_discover_passive_assets_filters, headless=HEADLESS)
+    assert result, "discover_passive_assets() returned the wrong subset"
 
 
 def test_background_with_pose_range_rejected_for_aggregate_collision():
@@ -550,7 +545,7 @@ def test_background_with_pose_range_rejected_for_aggregate_collision():
     import pytest
 
     from isaaclab_arena.assets.background import Background
-    from isaaclab_arena.relations.passive_collision_objects import get_passive_collision_objects
+    from isaaclab_arena.relations.passive_collision_objects import discover_passive_assets
     from isaaclab_arena.utils.pose import PoseRange
 
     background = MagicMock(spec=Background)
@@ -565,7 +560,7 @@ def test_background_with_pose_range_rejected_for_aggregate_collision():
     )
 
     with pytest.raises(AssertionError, match="must have a fixed Pose or no initial_pose"):
-        get_passive_collision_objects([background], include_background=True)
+        discover_passive_assets([background], include_background=True)
 
 
 def test_object_placer_place_forwards_collision_objects():
@@ -795,12 +790,13 @@ def test_relation_placement_forwards_anchor_background_mesh_exclusions(monkeypat
     reference.collision_mode = CollisionMode.MESH
     reference.get_scene_key.return_value = "counter"
     reference.get_relations.return_value = [IsAnchor()]
+    reference.parent_asset = MagicMock()
+    reference.prim_path_in_parent_usd = "/Kitchen/counter"
     calls = {}
 
-    def fake_get_passive_collision_objects(assets, include_background: bool = False, background_mesh_exclusions=()):
+    def fake_discover_passive_assets(assets, include_background):
         calls["assets"] = list(assets)
         calls["include_background"] = include_background
-        calls["background_mesh_exclusions"] = list(background_mesh_exclusions)
         return []
 
     class FakePooledObjectPlacer:
@@ -811,8 +807,8 @@ def test_relation_placement_forwards_anchor_background_mesh_exclusions(monkeypat
             calls["collision_objects"] = collision_objects
 
     monkeypatch.setattr(
-        "isaaclab_arena.relations.passive_collision_objects.get_passive_collision_objects",
-        fake_get_passive_collision_objects,
+        "isaaclab_arena.relations.passive_collision_objects.discover_passive_assets",
+        fake_discover_passive_assets,
     )
     monkeypatch.setattr(interface_module, "PooledObjectPlacer", FakePooledObjectPlacer)
     placer_params = ObjectPlacerParams(solver_params=RelationSolverParams(collision_mode=CollisionMode.BBOX))
@@ -821,7 +817,6 @@ def test_relation_placement_forwards_anchor_background_mesh_exclusions(monkeypat
 
     assert calls["assets"] == []
     assert calls["include_background"] is True
-    assert calls["background_mesh_exclusions"] == [reference]
     assert calls["objects"] == [reference]
     assert calls["collision_objects"] == []
 
@@ -846,7 +841,7 @@ def test_relation_placement_includes_background_mesh_for_background_override(mon
     placed_object.add_relation(IsAnchor())
     calls = {}
 
-    def fake_get_passive_collision_objects(assets, include_background: bool = False, background_mesh_exclusions=()):
+    def fake_discover_passive_assets(assets, include_background):
         calls["assets"] = list(assets)
         calls["include_background"] = include_background
         return []
@@ -859,8 +854,8 @@ def test_relation_placement_includes_background_mesh_for_background_override(mon
             calls["collision_objects"] = collision_objects
 
     monkeypatch.setattr(
-        "isaaclab_arena.relations.passive_collision_objects.get_passive_collision_objects",
-        fake_get_passive_collision_objects,
+        "isaaclab_arena.relations.passive_collision_objects.discover_passive_assets",
+        fake_discover_passive_assets,
     )
     monkeypatch.setattr(interface_module, "PooledObjectPlacer", FakePooledObjectPlacer)
     placer_params = ObjectPlacerParams(solver_params=RelationSolverParams(collision_mode=CollisionMode.BBOX))
@@ -895,7 +890,7 @@ def test_relation_placement_skips_background_mesh_for_default_bbox(monkeypatch):
     placed_object.add_relation(IsAnchor())
     calls = {}
 
-    def fake_get_passive_collision_objects(assets, include_background: bool = False, background_mesh_exclusions=()):
+    def fake_discover_passive_assets(assets, include_background):
         calls["assets"] = list(assets)
         calls["include_background"] = include_background
         return []
@@ -908,8 +903,8 @@ def test_relation_placement_skips_background_mesh_for_default_bbox(monkeypatch):
             calls["collision_objects"] = collision_objects
 
     monkeypatch.setattr(
-        "isaaclab_arena.relations.passive_collision_objects.get_passive_collision_objects",
-        fake_get_passive_collision_objects,
+        "isaaclab_arena.relations.passive_collision_objects.discover_passive_assets",
+        fake_discover_passive_assets,
     )
     monkeypatch.setattr(interface_module, "PooledObjectPlacer", FakePooledObjectPlacer)
     placer_params = ObjectPlacerParams(solver_params=RelationSolverParams(collision_mode=CollisionMode.BBOX))

@@ -123,3 +123,17 @@ def default_clutter_validators() -> dict[str, dict]:
         SupportContainmentValidator(),
     )
     return {validator.check: validator.configuration() for validator in validators}
+
+
+def clutter_validators_from(configurations: dict[str, dict]) -> dict[str, dict]:
+    """Adapt configured settled-placement checks to clutter semantics."""
+    import copy
+
+    validators = copy.deepcopy(configurations)
+    defaults = default_clutter_validators()
+    pose_shift = validators.get(PoseShiftValidator.check)
+    ordinary_pose_shift_target = PoseShiftValidator().configuration()["_target_"]
+    if pose_shift is not None and pose_shift.get("_target_") == ordinary_pose_shift_target:
+        pose_shift["_target_"] = defaults[PoseShiftValidator.check]["_target_"]
+    validators.setdefault(SupportContainmentValidator.check, defaults[SupportContainmentValidator.check])
+    return validators

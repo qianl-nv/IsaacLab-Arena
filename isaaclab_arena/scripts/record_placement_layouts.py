@@ -113,13 +113,29 @@ def record_placements_to_jsonl(
     if params is None:
         params = PlacementRecordingParams()
     pool = get_placement_pool(env)
-    assert pool is not None, "Recording requires a pooled placement reset event"
-    assets = list(pool.objects)
+    assets = [] if pool is None else list(pool.objects)
     for asset in scene_assets or []:
         if asset not in assets:
             assets.append(asset)
+    from isaaclab_arena.relations.relations import ClutterOn, get_relation
+
+    effective_params = params
+    if any(get_relation(asset, ClutterOn) is not None for asset in assets):
+        from isaaclab_arena.offline_placement.clutter_preparation import prepare_clutter_recording
+        from isaaclab_arena.offline_placement.clutter_validators import clutter_validators_from
+
+        prepare_clutter_recording(env.unwrapped, assets)
+        effective_params = replace(params, validators=clutter_validators_from(params.validators))
     validate_recording_assets(env, assets)
-    result = collect_settled_placements(env, num_batches, params, render=render, scene_assets=assets, log_progress=True)
+    assert pool is not None, "Recording requires a pooled placement reset event"
+    result = collect_settled_placements(
+        env,
+        num_batches,
+        effective_params,
+        render=render,
+        scene_assets=assets,
+        log_progress=True,
+    )
     summary = PlacementRecordingSummary(
         output=None,
         accepted=len(result.accepted_indices),
@@ -135,7 +151,7 @@ def record_placements_to_jsonl(
         if asset.tags and "embodiment" in asset.tags:
             embodiment_keys.extend(asset.get_scene_root_keys())
     sampling = {
-        "num_steps": params.num_steps,
+        "num_steps": effective_params.num_steps,
         "decimation": env.unwrapped.cfg.decimation,
         "physics_dt_s": env.unwrapped.sim.get_physics_dt(),
         "embodiment_keys": embodiment_keys,

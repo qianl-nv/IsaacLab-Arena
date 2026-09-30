@@ -376,6 +376,10 @@ For an environment you already own, ``record_placements_to_jsonl`` in the same
 script accepts ``env``, an output path and ``num_batches`` and returns the same
 summary. This helper leaves environment cleanup to its caller.
 
+Both recording entry points detect ``ClutterOn`` relations from the scene assets.
+Clutter scenes receive additional offline preflight checks, non-clutter pose-shift
+semantics, and support-containment validation without a separate recording mode.
+
 For the reusable library API, call ``collect_settled_placements`` to inspect
 poses and rejection reasons in memory. It measures the scene's rigid and
 articulation roots without enforcing recording or replay policies:

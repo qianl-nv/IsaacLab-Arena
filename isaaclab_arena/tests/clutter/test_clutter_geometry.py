@@ -55,3 +55,21 @@ def test_only_clutter_roots_are_exempt_from_shift_limits():
     report = validator.validate(batch)[0]
     assert not report.passed
     assert "neighbor" in report.reason
+
+
+def test_clutter_validator_profile_preserves_overrides():
+    from isaaclab_arena.offline_placement.clutter_validators import (
+        NonClutterPoseShiftValidator,
+        SupportContainmentValidator,
+        clutter_validators_from,
+    )
+    from isaaclab_arena.offline_placement.post_physics_validation import default_post_physics_validators
+
+    configured = default_post_physics_validators()
+    configured["pose_shift"]["max_translation_m"] = 0.01
+    adapted = clutter_validators_from(configured)
+
+    assert adapted["pose_shift"]["_target_"].endswith(f".{NonClutterPoseShiftValidator.__qualname__}")
+    assert adapted["pose_shift"]["max_translation_m"] == 0.01
+    assert SupportContainmentValidator.check in adapted
+    assert configured["pose_shift"]["_target_"] != adapted["pose_shift"]["_target_"]
