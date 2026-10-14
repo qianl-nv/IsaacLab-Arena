@@ -33,17 +33,17 @@ class _RecordingEnv(gym.Env):
         self.variation_recorder = variation_recorder
         self.variation_replay_scheduler = variation_replay_scheduler
         self.constructor_option = constructor_option
-        self.episode_index = -1
+        self._episode_indices = {0: -1}
         if variation_recorder is not None:
-            variation_recorder.bind_env(self)
+            variation_recorder.bind_episode_indices(self._episode_indices)
 
     def get_episode_index(self, env_id):
-        return self.episode_index
+        return self._episode_indices.get(env_id, 0)
 
     def reset(self, **kwargs):
-        if self.episode_index >= 0:
+        if self._episode_indices[0] >= 0:
             self.variation_replay_scheduler.complete_episodes([0])
-        self.episode_index += 1
+        self._episode_indices[0] += 1
         self.variation_replay_scheduler.assign_new_episodes([0])
         sample = self.cfg.events.mass.params["sampler"].sample(1, env_ids=torch.tensor([0]))
         return {}, {"sample": sample}

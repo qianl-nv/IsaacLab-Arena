@@ -57,10 +57,10 @@ class IsaacLabArenaManagerBasedRLEnv(ManagerBasedRLEnv):
         self._variation_replay_scheduler = variation_replay_scheduler
         if variation_replay_scheduler is not None:
             variation_replay_scheduler.reset()
-        if variation_recorder is not None:
-            # Bind so run-time variation draws can be attributed to the current episode index.
-            variation_recorder.bind_env(self)
         self._episode_indices: dict[int, int] = {}
+        if variation_recorder is not None:
+            # Share counters so run-time draws follow episode changes without retaining this environment.
+            variation_recorder.bind_episode_indices(self._episode_indices)
         self._episode_limit: int | None = None
         self._started_episode_count = 0
         self._completed_episode_count = 0

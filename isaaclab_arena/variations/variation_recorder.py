@@ -6,8 +6,7 @@
 from __future__ import annotations
 
 import torch
-import weakref
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -86,16 +85,21 @@ class VariationRecorder:
         # Records are keyed by: "{asset_name}.{variation_name}"
         self.records: dict[str, VariationRecord] = {}
         self.placement_record: VariationRecord | None = None
-        # Non-owning reference: registered sampler callbacks must not keep a simulation alive.
-        self._env: Any = None
+        # Share episode counters without retaining the environment or its simulation resources.
+        self._episode_indices: Mapping[int, int] | None = None
 
-    def bind_env(self, env: Any) -> None:
-        """Start recording for a new env, retaining build-time draws and clearing prior runtime samples."""
+    def bind_episode_indices(self, episode_indices: Mapping[int, int]) -> None:
+        """Bind live episode indices, retaining build-time draws and clearing prior runtime samples.
+
+        Args:
+            episode_indices: Environment IDs mapped to their current episode indices. The mapping is shared,
+                so updates must be made in place. IDs absent from the mapping use episode zero.
+        """
         for record in self.records.values():
             record.clear_runtime_samples()
         if self.placement_record is not None:
             self.placement_record.clear_runtime_samples()
-        self._env = weakref.proxy(env)
+        self._episode_indices = episode_indices
 
     def __getitem__(self, key: str) -> VariationRecord:
         """Return the record stored under "{asset_name}.{variation_name}"."""
@@ -154,9 +158,11 @@ class VariationRecorder:
             if env_ids is None:
                 record.record_buildtime_sample(sample)
                 return
-            assert self._env is not None, "VariationRecorder needs bind_env() before per-env draws."
+            assert (
+                self._episode_indices is not None
+            ), "VariationRecorder needs bind_episode_indices() before per-env draws."
             env_id_list = env_ids.tolist()
-            episode_indices = [self._env.get_episode_index(env_id) for env_id in env_id_list]
+            episode_indices = [self._episode_indices.get(env_id, 0) for env_id in env_id_list]
             record.record_runtime_sample(sample, env_id_list, episode_indices)
 
         return on_sample

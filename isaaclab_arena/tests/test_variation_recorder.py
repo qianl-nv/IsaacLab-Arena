@@ -138,12 +138,12 @@ def test_variation_record_tracks_per_env_episode_values():
 class _FakeEnv:
     """Minimal stand-in exposing the attributes ``record_variation_samples`` reads."""
 
-    def __init__(self, recorder: VariationRecorder, episode_index: int = 0) -> None:
+    def __init__(self, recorder: VariationRecorder, episode_indices: dict[int, int] | None = None) -> None:
         self.variation_recorder = recorder
-        self._episode_index = episode_index
+        self.episode_indices = episode_indices if episode_indices is not None else {}
 
-    def get_episode_index(self, env_id: int) -> int:  # noqa: ARG002
-        return self._episode_index
+    def get_episode_index(self, env_id: int) -> int:
+        return self.episode_indices.get(env_id, 0)
 
 
 def test_record_variation_samples_emits_the_per_episode_draw():
@@ -154,8 +154,8 @@ def test_record_variation_samples_emits_the_per_episode_draw():
     variation.enable()
     recorder = VariationRecorder()
     recorder.attach({"asset": [variation]})
-    env = _FakeEnv(recorder, episode_index=0)
-    recorder.bind_env(env)
+    env = _FakeEnv(recorder)
+    recorder.bind_episode_indices(env.episode_indices)
 
     # One run-time draw for env 0 during episode 0.
     variation.sampler.sample(num_samples=1, env_ids=torch.tensor([0]))
@@ -182,8 +182,8 @@ def test_record_placement_sample_uses_sampler_listener_without_variation():
         variation.sampler,
         serializer=lambda sample: [{"pose": row.tolist()} for row in sample],
     )
-    env = _FakeEnv(recorder, episode_index=2)
-    recorder.bind_env(env)
+    env = _FakeEnv(recorder, episode_indices={3: 2})
+    recorder.bind_episode_indices(env.episode_indices)
 
     variation.sampler.sample(num_samples=1, env_ids=torch.tensor([3]))
 
@@ -196,6 +196,27 @@ def test_record_placement_sample_uses_sampler_listener_without_variation():
     assert recorder.placement_record.sample_for_episode(3, 2) is None
 
 
+def test_recorder_follows_in_place_episode_index_updates():
+    """Absent IDs use episode zero, and a partial reset changes only the affected slot's attribution."""
+    variation = _RecorderTestVariation()
+    variation.enable()
+    recorder = VariationRecorder()
+    recorder.attach({"asset": [variation]})
+    episode_indices = {}
+    recorder.bind_episode_indices(episode_indices)
+
+    first_samples = variation.sampler.sample(num_samples=2, env_ids=torch.tensor([0, 3]))
+    record = recorder["asset.recorder_test"]
+    torch.testing.assert_close(record.sample_for_episode(0, 0), first_samples[0])
+    torch.testing.assert_close(record.sample_for_episode(3, 0), first_samples[1])
+
+    episode_indices[3] = 1
+    next_sample = variation.sampler.sample(num_samples=1, env_ids=torch.tensor([3]))
+    torch.testing.assert_close(record.sample_for_episode(3, 1), next_sample[0])
+    torch.testing.assert_close(record.sample_for_episode(0, 0), first_samples[0])
+    assert record.sample_for_episode(0, 1) is None
+
+
 def test_recorder_rebinding_starts_fresh_runtime_records():
     """A reused configuration preserves build-time draws but starts a new episode history."""
     variation = _RecorderTestVariation()
@@ -206,14 +227,14 @@ def test_recorder_rebinding_starts_fresh_runtime_records():
     build_time_sample = recorder["asset.recorder_test"].sample_for_episode(0, 0).clone()
     recorder.attach_placement_sampler(variation.sampler, serializer=lambda sample: sample.tolist())
 
-    for _ in range(2):
-        env = _FakeEnv(recorder)
-        recorder.bind_env(env)
+    for episode_index in (0, 2):
+        env = _FakeEnv(recorder, episode_indices={0: episode_index})
+        recorder.bind_episode_indices(env.episode_indices)
         assert recorder.placement_record.sample_for_episode(0, 0) is None
         torch.testing.assert_close(recorder["asset.recorder_test"].sample_for_episode(0, 0), build_time_sample)
         sample = variation.sampler.sample(num_samples=1, env_ids=torch.tensor([0]))
-        torch.testing.assert_close(recorder["asset.recorder_test"].sample_for_episode(0, 0), sample[0])
-        assert recorder.placement_record.sample_for_episode(0, 0) == sample[0].tolist()
+        torch.testing.assert_close(recorder["asset.recorder_test"].sample_for_episode(0, episode_index), sample[0])
+        assert recorder.placement_record.sample_for_episode(0, episode_index) == sample[0].tolist()
 
 
 def test_recorder_skips_disabled_variations():
