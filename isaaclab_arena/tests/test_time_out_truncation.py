@@ -60,3 +60,38 @@ def _test_builder_timeout_is_truncation(simulation_app, timeout_s):
 @pytest.mark.parametrize("timeout_s", [None, 1.0, 12.0])
 def test_builder_timeout_is_truncation(timeout_s):
     assert run_function_with_persistent_simulation_app(_test_builder_timeout_is_truncation, timeout_s=timeout_s)
+
+
+def _test_builder_registers_materialized_source(simulation_app):
+    import gymnasium as gym
+
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+    from isaaclab_arena.environments.environment_materializer import ArenaEnvironmentSourceCfg
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+    from isaaclab_arena.scene.scene import Scene
+
+    builder = ArenaEnvBuilder(
+        IsaacLabArenaEnvironment(name="materialized_source", scene=Scene()),
+        ArenaEnvBuilderCfg(num_envs=3, solve_relations=False, device="cpu"),
+    )
+    name, env_cfg, env_kwargs = builder.build_registered()
+
+    source_cfg = gym.spec(name).kwargs["env_cfg_entry_point"]()
+    assert isinstance(source_cfg, ArenaEnvironmentSourceCfg)
+    assert source_cfg.scene.num_envs == 3
+    assert gym.spec(name).kwargs["env_cfg_materializer_entry_point"].endswith(":materialize_arena_environment_cfg")
+    assert env_cfg._isaaclab_materialized is True
+    assert env_cfg.scene.num_envs == 3
+    assert env_cfg._variation_recorder is not None
+    assert env_kwargs == {}
+    env = gym.make(name, cfg=env_cfg)
+    try:
+        assert env.unwrapped.variation_recorder is not None
+    finally:
+        env.close()
+    return True
+
+
+def test_builder_registers_materialized_source():
+    assert run_function_with_persistent_simulation_app(_test_builder_registers_materialized_source)

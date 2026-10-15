@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import datetime
 import gymnasium as gym
+from copy import deepcopy
 from typing import Any
 
 from isaaclab.devices.device_base import DeviceCfg, DevicesCfg
 from isaaclab.envs import ManagerBasedRLMimicEnv, ViewerCfg
 from isaaclab.envs.manager_based_env import ManagerBasedEnv
 from isaaclab.envs.mdp import time_out
-from isaaclab.managers import EventTermCfg, TerminationTermCfg
+from isaaclab.managers import EventTermCfg, TerminationTermCfg, event_add
 from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.visualizers import VisualizerCfg
@@ -299,6 +300,21 @@ class ArenaEnvBuilder:
         Returns:
             An (env_cfg, env_kwargs) tuple.
         """
+        from isaaclab_arena.environments.environment_materializer import (
+            make_arena_environment_source_cfg,
+            materialize_arena_environment_cfg,
+        )
+
+        source_cfg = make_arena_environment_source_cfg(self.arena_env, self.cfg, self.hydra_overrides)
+        env_cfg = materialize_arena_environment_cfg(source_cfg)
+        env_kwargs = {
+            "variation_recorder": env_cfg._variation_recorder,
+            "variation_replay_scheduler": env_cfg._variation_replay_scheduler,
+        }
+        return env_cfg, env_kwargs
+
+    def _compose_manager_cfg(self) -> tuple[IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
+        """Compile the Arena source without passing through task registration."""
         # Apply Hydra variation overrides. Needs to happen before build-time variations are applied.
         variations = self.get_all_variations()
         if self.hydra_overrides:
@@ -378,15 +394,21 @@ class ArenaEnvBuilder:
             background_physics_events_cfg = BackgroundPhysicsEventsCfg()
         # Keep the background term first so its one-time snapshot observes the
         # composed startup state before any reset event can mutate scene entities.
-        events_cfg = combine_configclass_instances(
-            "EventsCfg",
+        event_terms: dict[str, EventTermCfg] = {}
+        for source_events in (
             background_physics_events_cfg,
             embodiment.get_events_cfg(),
             self.arena_env.scene.get_events_cfg(),
             task.get_events_cfg(),
             placement_event_cfg,
             variations_event_cfg,
+        ):
+            event_add(event_terms, source_events)
+        EventsCfg = make_configclass(
+            "EventsCfg",
+            [(name, EventTermCfg, term_cfg) for name, term_cfg in event_terms.items()],
         )
+        events_cfg = EventsCfg()
         termination_cfg = self._build_termination_manager_cfg(task_termination_cfg)
         task_progress_cfg = None
         if task_termination_cfg.success:
@@ -576,28 +598,35 @@ class ArenaEnvBuilder:
         install_empty_cpu_warp_to_torch_patch()
         apply_arena_global_settings()
         name = self.arena_env.name
+        materializer_entry_point = None
         if env_cfg is None:
-            env_cfg, env_kwargs = self.compose_manager_cfg()
+            from isaaclab_arena.environments.environment_materializer import make_arena_environment_source_cfg
+
+            source_cfg = make_arena_environment_source_cfg(self.arena_env, self.cfg, self.hydra_overrides)
+
+            def env_cfg_entry_point():
+                return deepcopy(source_cfg)
+
+            registered_env_cfg = env_cfg_entry_point
+            materializer_entry_point = (
+                "isaaclab_arena.environments.environment_materializer:materialize_arena_environment_cfg"
+            )
+            env_kwargs = {}
         elif env_kwargs is None:
             env_kwargs = {}
-        _configure_arena_visualizer_defaults(env_cfg)
-        self.arena_env.scene.validate_simulation_cfg(env_cfg.sim)
+            registered_env_cfg = env_cfg
+        else:
+            registered_env_cfg = env_cfg
         entry_point = self.get_entry_point()
         # Register the environment with the Gym registry.
-        # NOTE(alexmillane, 2026-08-05): Do not spread env_kwargs into the registry kwargs. env_kwargs carries the
-        # VariationRecorder, whose bind_env() holds a reference to the constructed env
-        # (and thus its SimulationContext/PhysX GPU buffers). The Gym registry is process-global
-        # and never cleared, so pinning it there retains every registered env's GPU memory until
-        # process exit — an unbounded leak across a persistent SimulationApp.
-        # TODO(alexmillane, 2026-08-05): Fix this issue and remove this note.
-        # TODO(qianl, 2026-10-12): Restore Isaac Lab interoperability without retaining these runtime objects in
-        # the Gym registry. Relation placement and enabled run-time variations currently fail because their
-        # VariationRecorder is not forwarded to and bound by Isaac Lab's later gym.make() call.
+        # Runtime variation objects live only on the transient materialized cfg.
+        # Keeping them out of Gym's process-global registry avoids retaining
+        # environments and their simulation buffers across repeated builds.
         kwargs = {
-            "env_cfg_entry_point": env_cfg,
+            "env_cfg_entry_point": registered_env_cfg,
         }
-        if env_cfg.demo_recorder_config is not None:
-            kwargs["demo_recorder_cfg_entry_point"] = env_cfg.demo_recorder_config
+        if materializer_entry_point is not None:
+            kwargs["env_cfg_materializer_entry_point"] = materializer_entry_point
         if self.arena_env.rl_framework_entry_point is not None:
             kwargs[self.arena_env.rl_framework_entry_point] = self.arena_env.rl_policy_cfg
         gym.register(
@@ -612,6 +641,10 @@ class ArenaEnvBuilder:
             num_envs=self.cfg.num_envs,
             use_fabric=not self.cfg.disable_fabric,
         )
+        _configure_arena_visualizer_defaults(cfg)
+        self.arena_env.scene.validate_simulation_cfg(cfg.sim)
+        if cfg.demo_recorder_config is not None:
+            gym.spec(name).kwargs["demo_recorder_cfg_entry_point"] = cfg.demo_recorder_config
         return name, cfg, env_kwargs
 
     def make_registered(

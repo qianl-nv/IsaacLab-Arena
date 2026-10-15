@@ -53,8 +53,16 @@ class IsaacLabArenaManagerBasedRLEnv(ManagerBasedRLEnv):
         self._object_initial_rest_pose_recorder = ObjectInitialRestPoseRecorder(
             num_envs=cfg.scene.num_envs, device=cfg.sim.device
         )
-        self._variation_recorder = variation_recorder
-        self._variation_replay_scheduler = variation_replay_scheduler
+        self._variation_recorder = variation_recorder or getattr(cfg, "_variation_recorder", None)
+        self._variation_replay_scheduler = variation_replay_scheduler or getattr(
+            cfg, "_variation_replay_scheduler", None
+        )
+        # These objects are runtime handoff values, not declarative config.
+        # Remove them before Lab recursively validates the config; the recorder
+        # binds back to this environment and would otherwise create a cycle.
+        cfg._variation_recorder = None
+        cfg._variation_replay_scheduler = None
+        variation_recorder = self._variation_recorder
         if variation_recorder is not None:
             # Bind so run-time variation draws can be attributed to the current episode index.
             variation_recorder.bind_env(self)
