@@ -17,6 +17,7 @@ from isaaclab.envs.mdp import time_out
 from isaaclab.managers import EventTermCfg, TerminationTermCfg, event_add
 from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.scene import add as scene_add
 from isaaclab.visualizers import VisualizerCfg
 from isaaclab_newton.physics import NewtonCfg
 from isaaclab_physx.physics import PhysxCfg
@@ -350,13 +351,18 @@ class ArenaEnvBuilder:
         embodiment.configure_physics_backend(resolved_physics_backend)
         task = self.arena_env.task or NoTask()
         task.configure_for_embodiment(embodiment)
-        scene_cfg = combine_configclass_instances(
-            "SceneCfg",
-            self.interactive_scene_cfg,
+        scene_cfg = deepcopy(self.interactive_scene_cfg)
+        for source_scene in (
             self.arena_env.scene.get_scene_cfg(),
             embodiment.get_scene_cfg(),
             task.get_scene_cfg(),
-        )
+        ):
+            scene_add(
+                scene_cfg,
+                source_scene,
+                mode="merge",
+                on_conflict="replace",
+            )
         observation_cfg = combine_configclass_instances(
             "ObservationCfg",
             self.arena_env.scene.get_observation_cfg(),
