@@ -73,7 +73,7 @@ def _test_builder_registers_materialized_source(simulation_app):
 
     builder = ArenaEnvBuilder(
         IsaacLabArenaEnvironment(name="materialized_source", scene=Scene()),
-        ArenaEnvBuilderCfg(num_envs=3, solve_relations=False, device="cpu"),
+        ArenaEnvBuilderCfg(num_envs=3, solve_relations=False, device="cpu", disable_fabric=True),
     )
     name, env_cfg, env_kwargs = builder.build_registered()
 
@@ -83,6 +83,8 @@ def _test_builder_registers_materialized_source(simulation_app):
     assert gym.spec(name).kwargs["env_cfg_materializer_entry_point"].endswith(":materialize_arena_environment_cfg")
     assert env_cfg._isaaclab_materialized is True
     assert env_cfg.scene.num_envs == 3
+    assert env_cfg.sim.device == "cpu"
+    assert env_cfg.sim.use_fabric is False
     assert env_cfg._variation_recorder is not None
     assert env_kwargs == {}
     env = gym.make(name, cfg=env_cfg)

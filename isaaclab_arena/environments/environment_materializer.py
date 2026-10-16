@@ -21,8 +21,16 @@ from isaaclab_arena.environments.isaaclab_arena_manager_based_env_cfg import Isa
 class ArenaEnvironmentSourceCfg(IsaacLabArenaManagerBasedRLEnvCfg):
     """Unmaterialized Arena source accepted by Isaac Lab's task config pipeline."""
 
-    arena_environment: IsaacLabArenaEnvironment | None = None
-    """Arena authoring description to compile."""
+    @property
+    def arena_environment(self) -> IsaacLabArenaEnvironment | None:
+        """Live authoring graph, excluded from configclass/Hydra serialization."""
+        return getattr(self, "__arena_environment__", None)
+
+    @arena_environment.setter
+    def arena_environment(self, value: IsaacLabArenaEnvironment) -> None:
+        # configclass skips dunder attributes in to_dict(), while deepcopy still
+        # copies them (including cycles) for each registered source factory call.
+        self.__arena_environment__ = value
 
     arena_builder: ArenaEnvBuilderCfg | None = None
     """Arena compilation settings."""
@@ -54,12 +62,55 @@ def make_arena_environment_source_cfg(
     cfg.seed = builder_cfg.seed
     cfg.sim.device = builder_cfg.device
     cfg.sim.use_fabric = not builder_cfg.disable_fabric
+    cfg.__arena_defaults__ = cfg.to_dict()
     return cfg
+
+
+def _copy_source_overrides(source_cfg, env_cfg) -> None:
+    """Copy changed source fields without replacing defaults authored by the compiler."""
+    source_dict = source_cfg.to_dict()
+    explicit_paths = getattr(source_cfg, "__isaaclab_explicit_overrides__", ())
+
+    def copy_fields(source, baseline, target, current, prefix=""):
+        for name, value in current.items():
+            if not prefix and name in {
+                "arena_builder",
+                "arena_materialization",
+                "arena_source",
+                "variation_overrides",
+            }:
+                continue
+            path = f"{prefix}.{name}" if prefix else name
+            previous = baseline.get(name)
+            explicitly_overridden = any(item == path or item.startswith(f"{path}.") for item in explicit_paths)
+            if name in baseline and value == previous and not explicitly_overridden:
+                continue
+            source_value = source[name] if isinstance(source, dict) else getattr(source, name)
+            changed = path in explicit_paths or name not in baseline or type(value) is not type(previous)
+            if not changed and isinstance(value, dict):
+                target_value = target[name] if isinstance(target, dict) else getattr(target, name)
+                copy_fields(source_value, previous, target_value, value, path)
+                continue
+            if not changed:
+                changed = value != previous
+            if changed:
+                if isinstance(target, dict):
+                    target[name] = deepcopy(source_value)
+                else:
+                    setattr(target, name, deepcopy(source_value))
+
+    copy_fields(source_cfg, source_cfg.__arena_defaults__, env_cfg, source_dict)
+    # These builder settings apply even when they equal the initial source.
+    env_cfg.sim.device = source_cfg.sim.device
+    env_cfg.sim.use_fabric = source_cfg.sim.use_fabric
 
 
 def materialize_arena_environment_cfg(source_cfg: ArenaEnvironmentSourceCfg) -> IsaacLabArenaManagerBasedRLEnvCfg:
     """Compile an Arena source after Isaac Lab has applied configuration overrides."""
-    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_compiler import (
+        compile_arena_manager_cfg,
+        configure_arena_visualizer_defaults,
+    )
 
     assert source_cfg.arena_environment is not None, "Arena environment source is not configured."
     assert source_cfg.arena_builder is not None, "Arena builder source is not configured."
@@ -70,12 +121,14 @@ def materialize_arena_environment_cfg(source_cfg: ArenaEnvironmentSourceCfg) -> 
     builder_cfg.device = source_cfg.sim.device
     builder_cfg.disable_fabric = not source_cfg.sim.use_fabric
 
-    builder = ArenaEnvBuilder(
+    env_cfg, env_kwargs = compile_arena_manager_cfg(
         source_cfg.arena_environment,
         builder_cfg,
-        hydra_overrides=source_cfg.variation_overrides,
+        source_cfg.variation_overrides,
     )
-    env_cfg, env_kwargs = builder._compose_manager_cfg()
+    _copy_source_overrides(source_cfg, env_cfg)
+    configure_arena_visualizer_defaults(env_cfg)
+    source_cfg.arena_environment.scene.validate_simulation_cfg(env_cfg.sim)
     env_cfg._variation_recorder = env_kwargs["variation_recorder"]
     env_cfg._variation_replay_scheduler = env_kwargs["variation_replay_scheduler"]
     return env_cfg

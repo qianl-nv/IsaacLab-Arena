@@ -15,8 +15,6 @@ from isaaclab.utils.configclass import configclass
 # newton_manager_cfg (older isaaclab_newton) or mjwarp_manager_cfg (Isaac Lab Beta 2).
 from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg, NewtonMJWarpManager
 from isaaclab_physx.physics import PhysxCfg
-from isaaclab_physx.renderers import IsaacRtxRendererGlobalSettingsCfg
-from isaaclab_physx.renderers.isaac_rtx_renderer_utils import apply_isaac_rtx_global_settings
 from isaaclab_tasks.utils import PresetCfg
 
 from isaaclab_arena.progress_tracking.task_progress_cfg import TaskProgressCfg
@@ -111,6 +109,9 @@ class IsaacLabArenaManagerBasedRLEnvCfg(ManagerBasedRLEnvCfg):
 
 def apply_arena_global_settings() -> None:
     """Apply Arena's process-global RTX and physics settings before environment construction."""
+    from isaaclab_physx.renderers import IsaacRtxRendererGlobalSettingsCfg
+    from isaaclab_physx.renderers.isaac_rtx_renderer_utils import apply_isaac_rtx_global_settings
+
     apply_isaac_rtx_global_settings(
         IsaacRtxRendererGlobalSettingsCfg(
             # Disable RTX's built-in scene ambient so USD light prims fully control illumination.

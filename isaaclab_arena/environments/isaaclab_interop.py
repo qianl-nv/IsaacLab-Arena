@@ -4,10 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+from copy import deepcopy
 
 from isaaclab_arena.assets.registries import EnvironmentRegistry
 from isaaclab_arena.cli.isaaclab_arena_cli import arena_env_builder_cfg_from_argparse
 from isaaclab_arena_environments.cli import (
+    _environment_cfg_from_cli,
     add_environment_cli_args,
     build_environment_from_cli,
     ensure_environments_registered,
@@ -134,13 +136,29 @@ def environment_registration_callback() -> list[str]:
         if not hasattr(args, "teleop_device"):
             raise ValueError("The selected Arena environment does not configure teleoperation devices.")
         args.teleop_device = args.arena_teleop_device
+    if environment_name == "gr1_open_microwave":
+        import gymnasium as gym
+
+        from isaaclab_arena_environments.gr1_open_microwave_environment import make_gr1_open_microwave_env_cfg
+
+        source_cfg = make_gr1_open_microwave_env_cfg(
+            _environment_cfg_from_cli(environment_factory_type, args),
+            arena_env_builder_cfg_from_argparse(args),
+        )
+
+        def env_cfg_entry_point():
+            return deepcopy(source_cfg)
+
+        gym_spec = gym.spec(environment_name)
+        gym_spec.kwargs["env_cfg_entry_point"] = env_cfg_entry_point
+        return remaining_args
     # Create the environment config
     isaaclab_arena_environment = build_environment_from_cli(environment_factory_type, args)
     # Build and register the environment
     # TODO(cvolk, 2026-07-06): [typed-config-migration] Remove this Namespace conversion when the Isaac Lab
     # external callback can receive ArenaEnvBuilderCfg directly.
     env_builder = ArenaEnvBuilder(isaaclab_arena_environment, arena_env_builder_cfg_from_argparse(args))
-    env_builder.build_registered()
+    env_builder.register()
     # Return the arguments that were not consumed by this callback
     return remaining_args
 

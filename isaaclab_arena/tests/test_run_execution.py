@@ -92,6 +92,42 @@ def _experiment(*run_cfgs: ArenaRunCfg) -> ArenaExperimentCfg:
     return ArenaExperimentCfg(runs={run_cfg.name: run_cfg for run_cfg in run_cfgs})
 
 
+def test_open_microwave_uses_gym_materialization_path(monkeypatch, tmp_path):
+    """The migrated exemplar bypasses legacy factory-to-builder execution."""
+    from isaaclab_arena_environments.gr1_open_microwave_environment import Gr1OpenMicrowaveEnvironmentCfg
+
+    run = _run(
+        environment=Gr1OpenMicrowaveEnvironmentCfg(embodiment="gr1_joint"),
+        environment_builder=ArenaEnvBuilderCfg(record_trajectories=True),
+    )
+    expected_env = _environment()
+    received = {}
+
+    def build_migrated(cfg, render_mode):
+        received["cfg"] = cfg
+        received["render_mode"] = render_mode
+        return expected_env
+
+    monkeypatch.setattr(run_execution, "_build_gr1_open_microwave_from_cfg", build_migrated)
+    monkeypatch.setattr(
+        run_execution,
+        "build_arena_builder_from_run_cfg",
+        lambda cfg: pytest.fail("The migrated task must not construct ArenaEnvBuilder."),
+    )
+
+    env = run_execution._build_environment_from_cfg(
+        run,
+        "rgb_array",
+        output_dir=tmp_path,
+        rebuild_index=2,
+    )
+
+    assert env is expected_env
+    assert received["render_mode"] == "rgb_array"
+    assert received["cfg"].environment_builder.recorder_dataset_export_dir_path == str(tmp_path)
+    assert received["cfg"].environment_builder.recorder_dataset_filename == "dataset_test_run_rebuild2"
+
+
 def test_build_and_run_splits_episode_budget_without_mutating_config(monkeypatch, tmp_path):
     run = _run()
     rollout_limits = []

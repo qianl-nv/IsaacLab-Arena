@@ -5,20 +5,17 @@
 
 from __future__ import annotations
 
-import datetime
 import gymnasium as gym
 from copy import deepcopy
 from typing import Any
 
 from isaaclab.devices.device_base import DeviceCfg, DevicesCfg
-from isaaclab.envs import ManagerBasedRLMimicEnv, ViewerCfg
+from isaaclab.envs import ManagerBasedRLMimicEnv
 from isaaclab.envs.manager_based_env import ManagerBasedEnv
-from isaaclab.envs.mdp import time_out
-from isaaclab.managers import EventTermCfg, TerminationTermCfg, event_add
+from isaaclab.managers import EventTermCfg, event_add
 from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.scene import add as scene_add
-from isaaclab.visualizers import VisualizerCfg
 from isaaclab_newton.physics import NewtonCfg
 from isaaclab_physx.physics import PhysxCfg
 from isaaclab_tasks.utils import parse_env_cfg
@@ -35,23 +32,11 @@ from isaaclab_arena.environments.isaaclab_arena_manager_based_env_cfg import (
     IsaacLabArenaManagerBasedRLEnvCfg,
     apply_arena_global_settings,
 )
-from isaaclab_arena.environments.relation_solver_interface import (
-    make_placement_event,
-    prepare_live_relation_placement,
-    prepare_recorded_relation_placement,
-)
+from isaaclab_arena.environments.relation_solver_interface import make_placement_event
 from isaaclab_arena.metrics.metric_base import MetricBase
-from isaaclab_arena.metrics.metric_term_cfg import MetricTermCfg
 from isaaclab_arena.metrics.recorder_manager_utils import metrics_to_recorder_manager_cfg
 from isaaclab_arena.progress_tracking.task_progress_cfg import TaskProgressCfg
-from isaaclab_arena.recording.common_terms import (
-    CoreEpisodeRecorderTermCfg,
-    PlacementEpisodeRecorderTermCfg,
-    VariationEpisodeRecorderTermCfg,
-)
 from isaaclab_arena.recording.episode_recorder_manager import EpisodeRecorderTermCfg
-from isaaclab_arena.recording.progress_terms import ProgressEpisodeRecorderTermCfg
-from isaaclab_arena.relations.object_placer_params import ObjectPlacerParams
 from isaaclab_arena.relations.placement_events import PLACEMENT_RESET_EVENT_NAME
 from isaaclab_arena.relations.placement_sampler import (
     PlacementSampler,
@@ -59,19 +44,16 @@ from isaaclab_arena.relations.placement_sampler import (
     serialize_placement_samples,
     supports_recorded_placement,
 )
-from isaaclab_arena.relations.relation_solver_params import RelationSolverParams
 from isaaclab_arena.tasks.no_task import NoTask
 from isaaclab_arena.tasks.task_termination_cfg import TaskTerminationCfg
-from isaaclab_arena.tasks.terminations import task_success_from_progress
 from isaaclab_arena.terms.events import ResetBackgroundPhysics
 from isaaclab_arena.terms.recorders import ArenaEnvRecorderManagerCfg
 from isaaclab_arena.utils.configclass import combine_configclass_instances, make_configclass
 from isaaclab_arena.utils.isaaclab_utils.warp_patch import install_empty_cpu_warp_to_torch_patch
-from isaaclab_arena.utils.multiprocess import get_local_rank
 from isaaclab_arena.utils.physics_backend import PhysicsBackend
 from isaaclab_arena.variations import variations_hydra, variations_printing
 from isaaclab_arena.variations.recorded_variation_replay import configure_recorded_variation_replay
-from isaaclab_arena.variations.variation_base import RunTimeVariationBase, VariationBase
+from isaaclab_arena.variations.variation_base import VariationBase
 from isaaclab_arena.variations.variation_recorder import VariationRecorder
 from isaaclab_arena.variations.variation_replay_scheduler import VariationReplayScheduler
 
@@ -83,18 +65,9 @@ def _configure_arena_visualizer_defaults(env_cfg: IsaacLabArenaManagerBasedRLEnv
     Compatibility layer to enable Arena's legacy ViewerCfg to work with Lab's default_visualizer_cfg.
     This can be removed once Arena migrates off ViewCfg and into KitVisualizerCfg.
     """
-    from isaaclab.envs.common import _apply_deprecated_viewer_cfg
+    from isaaclab_arena.environments.arena_env_compiler import configure_arena_visualizer_defaults
 
-    if env_cfg.sim.default_visualizer_cfg is None:
-        _apply_deprecated_viewer_cfg(env_cfg)
-    visualizer_cfg = env_cfg.sim.default_visualizer_cfg
-    if visualizer_cfg is None:
-        visualizer_cfg = VisualizerCfg(background_color=None)
-    elif visualizer_cfg.background_color == VisualizerCfg().background_color:
-        visualizer_cfg.background_color = None
-    env_cfg.sim.default_visualizer_cfg = visualizer_cfg
-    # Avoid a second deprecated conversion when ManagerBasedRLEnv initializes.
-    env_cfg.viewer = ViewerCfg()
+    configure_arena_visualizer_defaults(env_cfg)
 
 
 class ArenaEnvBuilder:
@@ -116,7 +89,9 @@ class ArenaEnvBuilder:
     @property
     def resolved_physics_backend(self) -> PhysicsBackend:
         """Return the physics backend selected for this build (CLI preset or environment default)."""
-        return self.cfg.presets if self.cfg.presets is not None else self.arena_env.default_physics_backend
+        from isaaclab_arena.environments.arena_env_compiler import resolve_physics_backend
+
+        return resolve_physics_backend(self.arena_env, self.cfg)
 
     def _prepare_relation_placement(
         self,
@@ -141,53 +116,18 @@ class ArenaEnvBuilder:
         Returns:
             The prepared live or recorded placement sampler, or ``None`` when placement is disabled.
         """
-        if scheduler is not None and scheduler.variation_record.has_placement_samples:
-            return prepare_recorded_relation_placement(
-                replay_assets=self.arena_env.get_placement_assets(),
-                scheduler=scheduler,
-                num_envs=self.cfg.num_envs,
-            )
+        from isaaclab_arena.environments.arena_env_compiler import prepare_relation_placement
 
-        if not self.cfg.solve_relations:
-            return None
-        # Reachability constraints are defined in the task, so apply them before placement.
-        if self.arena_env.task is not None:
-            self.arena_env.task.apply_reachability_constraints()
-        placement_assets = self.arena_env.scene.get_objects_with_relations()
-        embodiment = self.arena_env.embodiment
-        if embodiment is not None and embodiment.get_relations():
-            placement_assets.append(embodiment)
-
-        placer_params = self.arena_env.placer_params
-        if placer_params is None:
-            placer_params = ObjectPlacerParams(
-                solver_params=RelationSolverParams(verbose=False, save_position_history=False),
-            )
-        if self.cfg.placement_seed is not None:
-            placer_params.placement_seed = self.cfg.placement_seed
-        if self.cfg.resolve_on_reset is not None:
-            placer_params.resolve_on_reset = self.cfg.resolve_on_reset
-
-        # Delists itself unless the embodiment has a registered cuRobo config and the solver deps are importable.
-        # TODO(xinjieyao, 2026-07-22): updated once robot-object co-placement is merged.
-        placer_params.reachability_config.embodiment = self.arena_env.embodiment
-        return prepare_live_relation_placement(
-            placement_assets,
-            num_envs=self.cfg.num_envs,
-            placer_params=placer_params,
-            scene_assets=self.arena_env.scene.assets.values(),
-        )
+        return prepare_relation_placement(self.arena_env, self.cfg, scheduler)
 
     def get_all_variations(self) -> dict[str, list[VariationBase]]:
         """Return ``{asset_name: [variation, ...]}`` for every variation host in the env.
 
         Merges scene variations with the embodiment own variations.
         """
-        scene_and_embodiment_variations = self.arena_env.scene.get_asset_variations()
-        if self.arena_env.embodiment is not None:
-            embodiment_variations = self.arena_env.embodiment.get_variations()
-            scene_and_embodiment_variations[self.arena_env.embodiment.name] = embodiment_variations
-        return scene_and_embodiment_variations
+        from isaaclab_arena.environments.arena_env_compiler import collect_asset_variations
+
+        return collect_asset_variations(self.arena_env)
 
     def get_variations_catalogue_as_string(self) -> str:
         """Return a human-readable catalog of Hydra-configurable variations for this env."""
@@ -199,26 +139,9 @@ class ArenaEnvBuilder:
 
         Returns ``None`` when no run-time variation is enabled.
         """
-        # Assemble all the variations together into a single configclass.
-        fields: list[tuple[str, type, EventTermCfg]] = []
-        added_event_names: set[str] = set()
-        for variations_per_asset in self.get_all_variations().values():
-            for variation in variations_per_asset:
-                if not variation.enabled:
-                    continue
-                if not isinstance(variation, RunTimeVariationBase):
-                    continue
-                event_name, event_cfg = variation.build_event_cfg()
-                assert event_name not in added_event_names, (
-                    f"Duplicate variation event term name '{event_name}'. "
-                    "Each variation must produce a unique name; consider prefixing with the asset name."
-                )
-                added_event_names.add(event_name)
-                fields.append((event_name, EventTermCfg, event_cfg))
-        if not fields:
-            return None
-        VariationsEventCfg = make_configclass("VariationsEventCfg", fields)
-        return VariationsEventCfg()
+        from isaaclab_arena.environments.arena_env_compiler import compose_variations_event_cfg
+
+        return compose_variations_event_cfg(self.get_all_variations())
 
     def _apply_build_time_variations(self) -> None:
         """Configure every enabled variation at build time before ``scene_cfg`` is materialised.
@@ -226,26 +149,21 @@ class ArenaEnvBuilder:
         These mutate asset configs in place (e.g. a dome light's spawner
         texture), so this must run before ``scene_cfg`` is materialised.
         """
-        for asset_variations in self.get_all_variations().values():
-            for variation in asset_variations:
-                if not variation.enabled:
-                    continue
-                variation.configure_at_build_time()
+        from isaaclab_arena.environments.arena_env_compiler import apply_build_time_variations
+
+        apply_build_time_variations(self.get_all_variations())
 
     def _modify_recorder_cfg_dataset_filename(self, recorder_cfg: RecorderManagerBaseCfg) -> RecorderManagerBaseCfg:
         """Modify the recorder dataset filename to include the timestamp and rank."""
-        base = getattr(recorder_cfg, "dataset_filename", "dataset")
-        recorder_cfg.dataset_filename = (
-            f"{base}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_rank{get_local_rank()}"
-        )
-        return recorder_cfg
+        from isaaclab_arena.environments.arena_env_compiler import stamp_recorder_dataset_filename
+
+        return stamp_recorder_dataset_filename(recorder_cfg)
 
     def _compose_metrics_cfg(self, metrics: list[MetricBase] | None) -> object | None:
         """Build a configclass container with one ``MetricTermCfg`` field per metric."""
-        if not metrics:
-            return None
-        fields = [(m.name, MetricTermCfg, m.get_metric_term_cfg()) for m in metrics]
-        return make_configclass("MetricsCfg", fields)()
+        from isaaclab_arena.environments.arena_env_compiler import compose_metrics_cfg
+
+        return compose_metrics_cfg(metrics)
 
     def _build_termination_manager_cfg(
         self,
@@ -259,17 +177,9 @@ class ArenaEnvBuilder:
         Returns:
             A configclass containing the requested failure, timeout, and success terms.
         """
-        termination_terms = dict(task_termination_cfg.failures)
-        if task_termination_cfg.timeout_s is not None:
-            termination_terms["time_out"] = TerminationTermCfg(func=time_out, time_out=True)
-        success_criteria = task_termination_cfg.success
+        from isaaclab_arena.environments.arena_env_compiler import build_termination_manager_cfg
 
-        # Install the shared success term when the task defines success criteria.
-        if success_criteria:
-            success_term = TerminationTermCfg(func=task_success_from_progress)
-            termination_terms["success"] = success_term
-        termination_fields = [(name, TerminationTermCfg, term) for name, term in termination_terms.items()]
-        return make_configclass("TerminationsCfg", termination_fields)()
+        return build_termination_manager_cfg(task_termination_cfg)
 
     def _compose_episode_recorders_cfg(self, extra_terms: dict[str, EpisodeRecorderTermCfg] | None = None) -> object:
         """Build a configclass container with one EpisodeRecorderTermCfg field per episode recorder term.
@@ -277,21 +187,9 @@ class ArenaEnvBuilder:
         Note that this function automatically adds the core, variations, and progress terms. The
         progress term records nothing for tasks that define no completion criteria.
         """
-        fields = [
-            ("core", EpisodeRecorderTermCfg, CoreEpisodeRecorderTermCfg()),
-            ("placement", EpisodeRecorderTermCfg, PlacementEpisodeRecorderTermCfg()),
-            ("variations", EpisodeRecorderTermCfg, VariationEpisodeRecorderTermCfg()),
-            ("progress", EpisodeRecorderTermCfg, ProgressEpisodeRecorderTermCfg()),
-        ]
-        for name, term_cfg in (extra_terms or {}).items():
-            assert name not in (
-                "core",
-                "placement",
-                "variations",
-                "progress",
-            ), f"Episode recorder term name '{name}' collides with a built-in term."
-            fields.append((name, EpisodeRecorderTermCfg, term_cfg))
-        return make_configclass("EpisodeRecorderManagerCfg", fields)()
+        from isaaclab_arena.environments.arena_env_compiler import compose_episode_recorders_cfg
+
+        return compose_episode_recorders_cfg(extra_terms)
 
     def compose_manager_cfg(self) -> tuple[IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
         """Return the base ManagerBased cfg and the env kwargs (no registration).
@@ -316,6 +214,12 @@ class ArenaEnvBuilder:
 
     def _compose_manager_cfg(self) -> tuple[IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
         """Compile the Arena source without passing through task registration."""
+        from isaaclab_arena.environments.arena_env_compiler import compile_arena_manager_cfg
+
+        return compile_arena_manager_cfg(self.arena_env, self.cfg, self.hydra_overrides)
+
+    def _compose_manager_cfg_legacy(self) -> tuple[IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
+        """Retain the pre-extraction implementation temporarily for parity testing."""
         # Apply Hydra variation overrides. Needs to happen before build-time variations are applied.
         variations = self.get_all_variations()
         if self.hydra_overrides:
@@ -584,22 +488,17 @@ class ArenaEnvBuilder:
         else:
             return "isaaclab_arena.environments.isaaclab_arena_manager_based_env:IsaacLabArenaManagerBasedRLEnv"
 
-    def build_registered(
+    def register(
         self,
         env_cfg: None | IsaacLabArenaManagerBasedRLEnvCfg = None,
-        env_kwargs: dict[str, Any] | None = None,
-    ) -> tuple[str, IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
-        """Build env cfg and register the env with gym. Stop short of env.make().
-
-        The default operation is to call with no arguments, in which case the env_cfg is built from the
-        Arena description passed to the builder at construction.
+    ) -> str:
+        """Register a fresh source factory without compiling or sampling the environment.
 
         Args:
-            env_cfg: The optional environment cfg to use.
-            env_kwargs: The optional environment kwargs to use.
+            env_cfg: Optional prebuilt config to register instead of an Arena source.
 
         Returns:
-            A ``(name, cfg, env_kwargs)`` tuple.
+            The Gym environment name.
         """
         install_empty_cpu_warp_to_torch_patch()
         apply_arena_global_settings()
@@ -617,10 +516,6 @@ class ArenaEnvBuilder:
             materializer_entry_point = (
                 "isaaclab_arena.environments.environment_materializer:materialize_arena_environment_cfg"
             )
-            env_kwargs = {}
-        elif env_kwargs is None:
-            env_kwargs = {}
-            registered_env_cfg = env_cfg
         else:
             registered_env_cfg = env_cfg
         entry_point = self.get_entry_point()
@@ -641,6 +536,25 @@ class ArenaEnvBuilder:
             kwargs=kwargs,
             disable_env_checker=True,
         )
+        return name
+
+    def build_registered(
+        self,
+        env_cfg: None | IsaacLabArenaManagerBasedRLEnvCfg = None,
+        env_kwargs: dict[str, Any] | None = None,
+    ) -> tuple[str, IsaacLabArenaManagerBasedRLEnvCfg, dict[str, Any]]:
+        """Register and materialize a config without creating an environment.
+
+        Args:
+            env_cfg: Optional prebuilt environment config.
+            env_kwargs: Optional runtime kwargs for a prebuilt config.
+
+        Returns:
+            A ``(name, cfg, env_kwargs)`` tuple.
+        """
+        name = self.register(env_cfg)
+        if env_cfg is None or env_kwargs is None:
+            env_kwargs = {}
         cfg = parse_env_cfg(
             name,
             device=self.cfg.device,

@@ -170,8 +170,42 @@ def _build_environment_from_cfg(
         str(output_dir) if trajectory_recording_enabled else None
     )
     run_cfg.environment_builder.recorder_dataset_filename = f"dataset_{cfg.name}_rebuild{rebuild_index}"
+    from isaaclab_arena_environments.gr1_open_microwave_environment import Gr1OpenMicrowaveEnvironmentCfg
+
+    if isinstance(run_cfg.environment, Gr1OpenMicrowaveEnvironmentCfg):
+        return _build_gr1_open_microwave_from_cfg(run_cfg, render_mode)
     arena_builder = build_arena_builder_from_run_cfg(run_cfg)
     return arena_builder.make_registered(render_mode=render_mode)
+
+
+def _build_gr1_open_microwave_from_cfg(cfg: ArenaRunCfg, render_mode: str | None) -> gym.Env:
+    """Build the migrated Open Microwave task through Lab's materialization path."""
+    import gymnasium as gym
+
+    from isaaclab_tasks.utils import parse_env_cfg
+
+    from isaaclab_arena_environments.gr1_open_microwave_environment import (
+        make_gr1_open_microwave_env_cfg,
+        register_gr1_open_microwave_gym_task,
+    )
+
+    register_gr1_open_microwave_gym_task()
+    source_cfg = make_gr1_open_microwave_env_cfg(cfg.environment, cfg.environment_builder)
+    source_cfg.arena_materialization.variation_overrides = overrides_from_dict(cfg.variations)
+    source_cfg.__arena_defaults__ = source_cfg.to_dict()
+
+    def env_cfg_entry_point():
+        return deepcopy(source_cfg)
+
+    task_name = "gr1_open_microwave"
+    gym.spec(task_name).kwargs["env_cfg_entry_point"] = env_cfg_entry_point
+    env_cfg = parse_env_cfg(
+        task_name,
+        device=cfg.environment_builder.device,
+        num_envs=cfg.environment_builder.num_envs,
+        use_fabric=not cfg.environment_builder.disable_fabric,
+    )
+    return gym.make(task_name, cfg=env_cfg, render_mode=render_mode)
 
 
 def build_arena_builder_from_run_cfg(cfg: ArenaRunCfg) -> ArenaEnvBuilder:

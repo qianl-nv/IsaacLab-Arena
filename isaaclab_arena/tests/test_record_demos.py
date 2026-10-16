@@ -73,12 +73,18 @@ def environment_registration_callback() -> list[str]:
             return torch.zeros(self._env.action_manager.total_action_dim, device=self._env.device)
 
     device_cfg = DeviceCfg(class_type=MicrowaveTestDevice)
+    from isaaclab_tasks.utils import materialize_env_cfg
+
     # GR1 joint control has no keyboard retargeter. Replace only the hardware input configuration.
     with patch.object(DeviceRegistry, "get_teleop_device_cfg", return_value=device_cfg):
         remaining_args = register_arena_environment()
-    cfg = gym.spec("gr1_open_microwave").kwargs["env_cfg_entry_point"]
+        spec = gym.spec("gr1_open_microwave")
+        cfg_entry_point = spec.kwargs["env_cfg_entry_point"]
+        cfg = cfg_entry_point() if callable(cfg_entry_point) else cfg_entry_point
+        cfg = materialize_env_cfg("gr1_open_microwave", cfg)
     cfg.teleop_devices = DevicesCfg(devices={"keyboard": device_cfg})
     cfg.events.bind_record_demos_test_environment = EventTermCfg(func=bind_environment, mode="startup")
+    spec.kwargs["env_cfg_entry_point"] = cfg
     return remaining_args
 
 
