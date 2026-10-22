@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import subprocess
+
 import pytest
 
 from isaaclab_arena.tests.utils.constants import TestConstants
@@ -17,6 +19,10 @@ VARIATION_NAME = f"camera_intrinsics_{CAMERA_NAME}"
 EVENT_NAME = f"{CAMERA_NAME}_intrinsics_variation"
 # (d_fx, d_fy); distinct signs catch axis/sign swaps.
 TEST_DELTAS = (0.1, -0.1)
+ASYNC_INITIAL_DELTA = 0.1
+ASYNC_RESET_DELTA = 0.5
+RENDER_DIFF_THRESHOLD = 1.0
+RENDER_ITERS = 3
 
 
 def get_test_environment(*, camera_intrinsics_variation_enabled: bool):
@@ -133,6 +139,86 @@ def _test_camera_intrinsics_variation_realized_at_runtime(simulation_app):
     return True
 
 
+def _test_camera_intrinsics_async_reset_keeps_other_render_unchanged(simulation_app):
+    """Resetting env 0 with new intrinsics must not change env 1's RTX render."""
+    import torch
+
+    from isaaclab_arena.assets.registries import AssetRegistry
+    from isaaclab_arena.cli.isaaclab_arena_cli import arena_env_builder_cfg_from_argparse, get_isaaclab_arena_cli_parser
+    from isaaclab_arena.embodiments.franka.franka import FrankaIKEmbodiment
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
+    from isaaclab_arena.scene.scene import Scene
+    from isaaclab_arena.variations.camera_intrinsics_variation import CameraIntrinsicsVariationCfg
+    from isaaclab_arena.variations.uniform_sampler import UniformSamplerCfg
+
+    camera_name = "wrist_cam"
+    variation_name = f"camera_intrinsics_{camera_name}"
+    event_name = f"{camera_name}_intrinsics_variation"
+    embodiment = FrankaIKEmbodiment(enable_cameras=ENABLE_CAMERAS)
+    embodiment.camera_config.wrist_cam.height = 180
+    embodiment.camera_config.wrist_cam.width = 240
+    variation = embodiment.get_variation(variation_name)
+    variation.apply_cfg(
+        CameraIntrinsicsVariationCfg(
+            sampler_cfg=UniformSamplerCfg(
+                low=[ASYNC_INITIAL_DELTA, ASYNC_INITIAL_DELTA],
+                high=[ASYNC_INITIAL_DELTA, ASYNC_INITIAL_DELTA],
+            )
+        )
+    )
+    variation.enable()
+
+    asset_registry = AssetRegistry()
+    scene = Scene(
+        assets=[
+            asset_registry.get_asset_by_name("maple_table_robolab")(),
+            asset_registry.get_asset_by_name("light")(),
+            asset_registry.get_asset_by_name("directional_light")(),
+        ]
+    )
+    arena_env = IsaacLabArenaEnvironment(
+        name="test_camera_intrinsics_async_reset",
+        embodiment=embodiment,
+        scene=scene,
+    )
+    args_cli = get_isaaclab_arena_cli_parser().parse_args(["--num_envs", "2", "--enable_cameras"])
+    env = ArenaEnvBuilder(arena_env, arena_env_builder_cfg_from_argparse(args_cli)).make_registered()
+    env.reset()
+
+    base_env = env.unwrapped
+    camera = base_env.scene[camera_name]
+
+    def render_rgb() -> torch.Tensor:
+        for _ in range(RENDER_ITERS):
+            base_env.sim.render()
+        camera.update(dt=0.0, force_recompute=True)
+        return camera.data.output["rgb"].detach().float().cpu().clone()
+
+    before_intrinsics = camera.data.intrinsic_matrices.torch.detach().cpu().clone()
+    before_rgb = render_rgb()
+    assert (before_rgb[1] > 0).float().mean().item() > 0.01, "Env 1 RTX render is unexpectedly blank."
+
+    # Force env 0's next reset to use a substantially different focal length.
+    sampler = base_env.event_manager.get_term_cfg(event_name).params["sampler"]
+    sampler.low.fill_(ASYNC_RESET_DELTA)
+    sampler.high.fill_(ASYNC_RESET_DELTA)
+    base_env.reset(env_ids=torch.tensor([0], device=base_env.device))
+
+    after_intrinsics = camera.data.intrinsic_matrices.torch.detach().cpu().clone()
+    after_rgb = render_rgb()
+    assert not torch.equal(after_intrinsics[0], before_intrinsics[0]), "Env 0 intrinsics did not change on reset."
+    assert torch.equal(after_intrinsics[1], before_intrinsics[1]), "Env 1 reported intrinsics changed without a reset."
+
+    env_1_render_difference = (after_rgb[1] - before_rgb[1]).abs().mean().item()
+    env.close()
+    assert env_1_render_difference < RENDER_DIFF_THRESHOLD, (
+        "Resetting only env 0 changed env 1's RTX render despite env 1 retaining its reported intrinsics: "
+        f"mean absolute pixel difference {env_1_render_difference:.4f} >= {RENDER_DIFF_THRESHOLD}."
+    )
+    return True
+
+
 def _run_camera_intrinsics_variation_realized_at_runtime():
     """Run the runtime intrinsics check in a disposable Kit process."""
     from isaaclab_arena.cli.isaaclab_arena_cli import get_isaaclab_arena_cli_parser
@@ -144,6 +230,17 @@ def _run_camera_intrinsics_variation_realized_at_runtime():
         args_cli.visualizer = ["kit"]
     with SimulationAppContext(args_cli) as simulation_app_context:
         assert _test_camera_intrinsics_variation_realized_at_runtime(simulation_app_context.app_launcher.app)
+
+
+def _run_camera_intrinsics_async_reset():
+    """Run the multi-environment RTX regression check in a disposable Kit process."""
+    from isaaclab_arena.cli.isaaclab_arena_cli import get_isaaclab_arena_cli_parser
+    from isaaclab_arena.utils.isaaclab_utils.simulation_app import SimulationAppContext
+
+    args_cli = get_isaaclab_arena_cli_parser().parse_args([])
+    args_cli.enable_cameras = ENABLE_CAMERAS
+    with SimulationAppContext(args_cli) as simulation_app_context:
+        assert _test_camera_intrinsics_async_reset_keeps_other_render_unchanged(simulation_app_context.app_launcher.app)
 
 
 @pytest.mark.with_cameras
@@ -190,5 +287,22 @@ def test_camera_intrinsics_variation_realized_at_runtime():
     run_subprocess([TestConstants.python_path, __file__])
 
 
+@pytest.mark.with_cameras
+@pytest.mark.with_subprocess
+@pytest.mark.xfail(
+    raises=subprocess.CalledProcessError,
+    reason="Isaac RTX currently renders every environment with environment 0's projection.",
+    strict=True,
+)
+def test_camera_intrinsics_async_reset_keeps_other_render_unchanged():
+    """An asynchronous intrinsics reset must not alter non-reset environments' RTX images."""
+    run_subprocess([TestConstants.python_path, __file__, "--test-async-reset"])
+
+
 if __name__ == "__main__":
-    _run_camera_intrinsics_variation_realized_at_runtime()
+    import sys
+
+    if "--test-async-reset" in sys.argv:
+        _run_camera_intrinsics_async_reset()
+    else:
+        _run_camera_intrinsics_variation_realized_at_runtime()
