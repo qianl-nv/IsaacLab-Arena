@@ -16,7 +16,7 @@ from isaaclab_arena.agentic_environment_generation.simready_asset_search import 
 from isaaclab_arena.agentic_environment_generation.simready_ga_assets import (
     _count_phrase_words_in_path,
     _filter_and_rank_path_matches,
-    _has_single_rigid_body,
+    _prepare_simready_asset,
     _split_path_into_words,
 )
 from isaaclab_arena.agentic_environment_generation.simready_search_interface import (
@@ -25,6 +25,8 @@ from isaaclab_arena.agentic_environment_generation.simready_search_interface imp
     SimReadySourceKind,
     simready_search_config_from_cli,
 )
+from isaaclab_arena.assets.object_type import ObjectType
+from isaaclab_arena.assets.simready_asset_preparation import PreparedSimReadyAsset
 from isaaclab_arena.assets.simready_constants import SIMREADY_USD_OBJECT_REGISTRY_NAME
 
 SEARCH_LOGGER = "isaaclab_arena.agentic_environment_generation.simready_ga_assets"
@@ -35,10 +37,12 @@ GREY_CABINET_PATH = "SimReady/Residential/Kitchen/Cabinets/Cabinet_D01/sm_fixtur
 TRASH_CAN_PATH = "SimReady/Residential/Garage/sm_trashCan_wheeled_green_a01_01.usd"
 PLAIN_TRASH_CAN_PATH = "SimReady/Residential/Kitchen/sm_trashCan_a01_01.usd"
 
-RIGID_BODY_CHECK_TARGET = "isaaclab_arena.agentic_environment_generation.simready_ga_assets._has_single_rigid_body"
+ASSET_PREPARATION_CHECK_TARGET = (
+    "isaaclab_arena.agentic_environment_generation.simready_ga_assets._prepare_simready_asset"
+)
 # Patched where it is looked up, not where it is defined: simready_ga_assets binds the name at
 # import time, so patching the defining module would leave that binding untouched.
-RIGID_BODY_PATHS_TARGET = "isaaclab_arena.agentic_environment_generation.simready_ga_assets.read_asset_rigid_body_paths"
+ASSET_PREPARATION_TARGET = "isaaclab_arena.agentic_environment_generation.simready_ga_assets.prepare_simready_asset"
 PATH_FILTERS_TARGET = "isaaclab_arena.agentic_environment_generation.simready_ga_assets._build_path_filters_from_phrase"
 # Stubbed wherever the fake library stands in for a real one: building a path filter needs the
 # simready package, which only ships with Isaac Sim, and the fake library ignores the filters.
@@ -99,27 +103,23 @@ def test_filter_and_rank_path_matches_rejects_an_asset_that_only_shares_a_descri
     assert _filter_and_rank_path_matches([grey_cabinet], "grey cabinet") == [grey_cabinet]
 
 
-def test_has_single_rigid_body_accepts_a_single_rigid_body():
-    with patch(RIGID_BODY_PATHS_TARGET, return_value=["/Asset/bottle"]):
-        assert _has_single_rigid_body("s3://bucket/bottle.usd") == (True, "")
+def test_prepare_simready_asset_accepts_a_rigid_body():
+    expected = PreparedSimReadyAsset("/cache/bottle.usda", ObjectType.RIGID)
+    with patch(ASSET_PREPARATION_TARGET, return_value=expected):
+        assert _prepare_simready_asset("s3://bucket/bottle.usd") == (expected, "")
 
 
-def test_has_single_rigid_body_turns_down_several_rigid_bodies():
-    # A bottle and its cap are two bodies even though a fixed joint holds them together.
-    with patch(RIGID_BODY_PATHS_TARGET, return_value=["/Asset/bottle", "/Asset/cap"]):
-        assert _has_single_rigid_body("s3://bucket/bottle.usd") == (False, "it has 2 rigid bodies")
+def test_prepare_simready_asset_accepts_an_articulation():
+    expected = PreparedSimReadyAsset("/cache/toolbox.usda", ObjectType.ARTICULATION)
+    with patch(ASSET_PREPARATION_TARGET, return_value=expected):
+        assert _prepare_simready_asset("s3://bucket/toolbox.usd") == (expected, "")
 
 
-def test_has_single_rigid_body_turns_down_an_asset_without_physics():
-    with patch(RIGID_BODY_PATHS_TARGET, return_value=[]):
-        assert _has_single_rigid_body("s3://bucket/decoration.usd") == (False, "it has no rigid body")
-
-
-def test_has_single_rigid_body_turns_down_an_unreadable_asset():
-    with patch(RIGID_BODY_PATHS_TARGET, side_effect=FileNotFoundError("no such file")):
-        is_valid, reason = _has_single_rigid_body("s3://bucket/missing.usd")
-    assert not is_valid
-    assert "could not be read" in reason
+def test_prepare_simready_asset_turns_down_an_unusable_asset():
+    with patch(ASSET_PREPARATION_TARGET, side_effect=FileNotFoundError("no such file")):
+        prepared, reason = _prepare_simready_asset("s3://bucket/missing.usd")
+    assert prepared is None
+    assert "physics is unusable" in reason
 
 
 @patch(PATH_FILTERS_TARGET, return_value=[])
@@ -129,13 +129,14 @@ def test_has_single_rigid_body_turns_down_an_unreadable_asset():
 def test_search_falls_back_to_the_next_hit_when_one_is_rejected(mock_configure, mock_path_filters, caplog):
     mock_configure.return_value = _FakeLibrary([_FakeMatch(TRASH_CAN_PATH), _FakeMatch(PLAIN_TRASH_CAN_PATH)])
     # The green one is named after more of the phrase, so it is looked at first and turned down.
-    verdicts = {TRASH_CAN_PATH: (False, "it has 2 rigid bodies"), PLAIN_TRASH_CAN_PATH: (True, "")}
-    with patch(RIGID_BODY_CHECK_TARGET, side_effect=lambda usd_path: verdicts[usd_path]):
+    prepared = PreparedSimReadyAsset("/cache/plain_trash_can.usda", ObjectType.RIGID)
+    verdicts = {TRASH_CAN_PATH: (None, "it is disconnected"), PLAIN_TRASH_CAN_PATH: (prepared, "")}
+    with patch(ASSET_PREPARATION_CHECK_TARGET, side_effect=lambda usd_path: verdicts[usd_path]):
         with caplog.at_level(logging.INFO, logger=SEARCH_LOGGER):
             catalog = search_simready_objects(["green trash can"], SimReadySearchConfig())
-    assert [candidate.usd_path for candidate in catalog.candidates] == [PLAIN_TRASH_CAN_PATH]
+    assert [candidate.usd_path for candidate in catalog.candidates] == [prepared.usd_path]
     assert catalog.unmatched_phrases == []
-    assert TRASH_CAN_PATH in caplog.text and "2 rigid bodies" in caplog.text
+    assert TRASH_CAN_PATH in caplog.text and "disconnected" in caplog.text
 
 
 @patch(PATH_FILTERS_TARGET, return_value=[])
@@ -144,7 +145,7 @@ def test_search_falls_back_to_the_next_hit_when_one_is_rejected(mock_configure, 
 )
 def test_search_reports_a_phrase_with_only_rejected_hits_as_unmatched(mock_configure, mock_path_filters, caplog):
     mock_configure.return_value = _FakeLibrary([_FakeMatch(CABINET_PATH)])
-    with patch(RIGID_BODY_CHECK_TARGET, return_value=(False, "it has no rigid body")):
+    with patch(ASSET_PREPARATION_CHECK_TARGET, return_value=(None, "it has no rigid body")):
         with caplog.at_level(logging.INFO, logger=SEARCH_LOGGER):
             catalog = search_simready_objects(["kitchen cabinet"], SimReadySearchConfig())
     assert catalog.candidates == []

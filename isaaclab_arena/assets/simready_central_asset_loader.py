@@ -6,9 +6,11 @@
 """Download Central asset packages and create validated PhysX USD wrappers."""
 from __future__ import annotations
 
-import hashlib
 import re
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
+
+from isaaclab_arena.assets.simready_asset_preparation import PreparedSimReadyAsset, prepare_simready_asset
+from isaaclab_arena.assets.simready_constants import SIMREADY_PHYSICS_VARIANTS
 
 
 def _parse_central_asset_url(url: str) -> tuple[str, str, str, str]:
@@ -56,33 +58,14 @@ def _download_central_asset_package_to_cache(url: str) -> str:
     return cached_paths[filename]
 
 
-def download_and_wrap_central_asset(url: str) -> str:
-    """Download a Central package, validate its rigid body, and write a cached PhysX USD wrapper."""
-    from pxr import Usd, UsdGeom, UsdPhysics
-
-    from isaaclab_arena.utils.usd.rigid_bodies import apply_usd_variant_selections
-
+def download_and_wrap_central_asset(url: str) -> PreparedSimReadyAsset:
+    """Download a Central package and return its validated rigid or articulated wrapper."""
     asset_path = _download_central_asset_package_to_cache(url)
-    asset_stage = Usd.Stage.Open(asset_path)
-    assert asset_stage and asset_stage.GetDefaultPrim(), "asset requires a default prim"
-    stage = Usd.Stage.CreateInMemory()
-    UsdGeom.SetStageMetersPerUnit(stage, UsdGeom.GetStageMetersPerUnit(asset_stage))
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.GetStageUpAxis(asset_stage))
-    root = stage.DefinePrim("/Asset")
-    root.GetReferences().AddReference(asset_path)
-    stage.SetDefaultPrim(root)
     # TODO(xinjieyao, 20261022): Support Newton.
-    apply_usd_variant_selections(stage, {"Physics": "physics", "PhysX": "Enabled"})
-    assert not stage.GetCompositionErrors(), "USD has unresolved composition errors"
-    bodies = []
-    for prim in Usd.PrimRange.Stage(stage, Usd.TraverseInstanceProxies()):
-        assert not prim.HasAPI(UsdPhysics.ArticulationRootAPI), "asset has an articulation root"
-        if prim.HasAPI(UsdPhysics.RigidBodyAPI):
-            bodies.append(prim)
-    assert len(bodies) == 1, f"expected one rigid body, found {len(bodies)}"
-    assert UsdPhysics.RigidBodyAPI(bodies[0]).GetRigidBodyEnabledAttr().Get(), "rigid body is disabled"
-    cache = Path.home() / ".cache" / "isaaclab_arena" / "simready-central"
-    cache.mkdir(parents=True, exist_ok=True)
-    wrapper = cache / f"{hashlib.sha256(url.encode()).hexdigest()}.usda"
-    stage.GetRootLayer().Export(str(wrapper))
-    return str(wrapper)
+    variants = {**SIMREADY_PHYSICS_VARIANTS, "PhysX": "Enabled"}
+    return prepare_simready_asset(
+        asset_path,
+        cache_key=url,
+        cache_directory_name="simready-central",
+        variants=variants,
+    )

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
 
+from isaaclab_arena.assets.object_type import ObjectType
 from isaaclab_arena.assets.simready_constants import (
     DEFAULT_SIMREADY_SERVICE_URL,
     ISAAC_SIMREADY_GA_S3_URL,
@@ -45,6 +46,7 @@ class SimReadyObjectCandidate:
 
     search_phrase: str
     usd_path: str
+    object_type: ObjectType = ObjectType.RIGID
     tags: tuple[str, ...] = ("sim-ready",)
     relevance_score: float | None = None
     source_url: str | None = None

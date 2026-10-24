@@ -16,12 +16,12 @@ from isaaclab_arena.agentic_environment_generation.simready_search_interface imp
     SimReadyObjectCandidate,
     SimReadySourceKind,
 )
+from isaaclab_arena.assets.simready_asset_preparation import PreparedSimReadyAsset, prepare_simready_asset
 from isaaclab_arena.assets.simready_constants import (
     DEFAULT_SIMREADY_SERVICE_URL,
     ISAAC_SIMREADY_GA_S3_URL,
     SIMREADY_PHYSICS_VARIANTS,
 )
-from isaaclab_arena.utils.usd.rigid_bodies import read_asset_rigid_body_paths
 
 if TYPE_CHECKING:
     from simready.search import AssetLibrary
@@ -35,7 +35,7 @@ class AssetLibrarySearchBackend:
         self.library = _create_asset_library_for_source(source, s3_url=s3_url, service_url=service_url)
 
     def search(self, phrases: list[str], max_results: int) -> list[SimReadyObjectCandidate]:
-        """Search each phrase and retain single-rigid-body candidates."""
+        """Search each phrase and retain rigid or articulated candidates."""
         if self.library is None:
             return []
         candidates = []
@@ -76,7 +76,7 @@ def _create_asset_library_for_source(source: SimReadySourceKind, *, s3_url: str,
 def _search_library_rigid_body_candidates(
     library: AssetLibrary, phrase: str, *, max_results: int
 ) -> list[SimReadyObjectCandidate]:
-    """Search the library by phrase and retain ranked assets with exactly one rigid body."""
+    """Search the library by phrase and retain ranked physics assets."""
     matches = _filter_and_rank_path_matches(library.search(include_any=_build_path_filters_from_phrase(phrase)), phrase)
 
     # Inspect a few more hits than are wanted back, so a rejected one can be replaced rather than
@@ -89,9 +89,9 @@ def _search_library_rigid_body_candidates(
     candidates: list[SimReadyObjectCandidate] = []
     for match in ranked:
         usd_path = str(match.asset_path)
-        is_valid, rejection_reason = _has_single_rigid_body(usd_path)
-        if is_valid:
-            candidates.append(_build_simready_object_candidate_from_match(match, phrase))
+        prepared, rejection_reason = _prepare_simready_asset(usd_path)
+        if prepared is not None:
+            candidates.append(_build_simready_object_candidate_from_match(match, phrase, prepared))
             if len(candidates) >= max_results:
                 break
         else:
@@ -127,34 +127,31 @@ def _filter_and_rank_path_matches(matches: list[Any], phrase: str) -> list[Any]:
     return kept
 
 
-def _has_single_rigid_body(usd_path: str) -> tuple[bool, str]:
-    """Check that a readable USD contains exactly one rigid body with the SimReady variants selected.
+def _prepare_simready_asset(usd_path: str) -> tuple[PreparedSimReadyAsset | None, str]:
+    """Prepare a readable SimReady rigid object or compatible articulation.
 
     Args:
         usd_path: The asset to look at, local or remote.
 
     Returns:
-        Whether exactly one rigid body was found, and a reason when the check fails, such as
-        "it has no rigid body". The phrase is empty when the asset is usable.
+        The prepared asset, or None and a reason when validation fails.
     """
     try:
-        rigid_body_paths = read_asset_rigid_body_paths(usd_path, SIMREADY_PHYSICS_VARIANTS)
+        return prepare_simready_asset(usd_path, variants=SIMREADY_PHYSICS_VARIANTS), ""
     except Exception as exc:
-        return False, f"its USD could not be read: {exc}"
-    # Only one RigidBodyAPI is allowed on a USD asset.
-    if len(rigid_body_paths) == 1:
-        return True, ""
-    if not rigid_body_paths:
-        return False, "it has no rigid body"
-    return False, f"it has {len(rigid_body_paths)} rigid bodies"
+        return None, f"its USD physics is unusable: {exc}"
 
 
-def _build_simready_object_candidate_from_match(match: Any, phrase: str) -> SimReadyObjectCandidate:
+def _build_simready_object_candidate_from_match(
+    match: Any, phrase: str, prepared: PreparedSimReadyAsset
+) -> SimReadyObjectCandidate:
     return SimReadyObjectCandidate(
         search_phrase=phrase,
-        usd_path=str(match.asset_path),
+        usd_path=prepared.usd_path,
+        object_type=prepared.object_type,
         tags=tuple(dict.fromkeys(("sim-ready", *_split_phrase_into_words(phrase)))),
         relevance_score=getattr(match, "relevance_score", None),
+        source_url=str(match.asset_path),
     )
 
 

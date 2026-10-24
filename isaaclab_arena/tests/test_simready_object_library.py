@@ -93,6 +93,44 @@ def test_register_searched_simready_object_makes_it_a_catalogue_entry():
     assert "green" in asset_cls.tags
 
 
+def test_register_searched_simready_articulation_makes_a_typed_catalogue_entry():
+    from isaaclab_arena.assets.object_type import ObjectType
+    from isaaclab_arena.assets.simready_object_library import register_searched_simready_object
+
+    ensure_assets_registered()
+    asset_cls = register_searched_simready_object(
+        "foldout toolbox",
+        "/cache/toolbox.usda",
+        ("sim-ready", "articulation"),
+        ObjectType.ARTICULATION,
+    )
+    assert asset_cls.object_type is ObjectType.ARTICULATION
+    assert "articulation" in asset_cls.tags
+
+
+def test_generic_simready_articulation_builds_articulation_cfg_and_joint_reset(tmp_path):
+    from isaaclab.assets import ArticulationCfg
+    from pxr import UsdPhysics
+
+    from isaaclab_arena.assets.object_type import ObjectType
+    from isaaclab_arena.assets.simready_object_library import SimReadyUsdObject
+    from isaaclab_arena.terms.events import reset_articulation_joints
+    from isaaclab_arena.tests.utils.usd_stages import add_body, new_stage
+
+    stage = new_stage()
+    add_body(stage, "base")
+    add_body(stage, "lid")
+    UsdPhysics.ArticulationRootAPI.Apply(stage.GetDefaultPrim())
+    usd_path = str(tmp_path / "toolbox.usda")
+    assert stage.Export(usd_path)
+
+    obj = SimReadyUsdObject(usd_path=usd_path, name="toolbox", object_type="articulation")
+    assert obj.object_type is ObjectType.ARTICULATION
+    assert isinstance(obj.object_cfg, ArticulationCfg)
+    _, event_cfg = obj.get_event_cfg()
+    assert event_cfg is not None and event_cfg.func is reset_articulation_joints
+
+
 def test_a_searched_asset_resolves_its_usd_path_without_spec_params():
     from isaaclab_arena.assets.simready_object_library import register_searched_simready_object
 

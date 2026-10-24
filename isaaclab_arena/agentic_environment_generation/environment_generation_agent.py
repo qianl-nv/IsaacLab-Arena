@@ -88,7 +88,7 @@ class EnvironmentGenerationAgent:
         self.simready_config = simready_config or SimReadySearchConfig()
         self._traces: list[str] = []
         self._unavailable_objects: list[str] = []
-        self._simready_usd_paths: dict[str, str] = {}
+        self._simready_assets_by_registry_name: dict[str, SimReadyObjectCandidate] = {}
         self._simready_candidates: list[SimReadyObjectCandidate] = []
 
     @property
@@ -145,7 +145,7 @@ class EnvironmentGenerationAgent:
         """
         self._traces = []
         self._unavailable_objects = []
-        self._simready_usd_paths = {}
+        self._simready_assets_by_registry_name = {}
         self._simready_candidates = []
         asset_catalog = asset_catalog or build_asset_catalogue()
         relation_catalog = relation_catalog or build_relation_catalogue()
@@ -185,17 +185,21 @@ class EnvironmentGenerationAgent:
         """
         # TODO(xinjieyao, 2026-08-03): Lift this once ObjectSetSpec.members can carry a usd_path.
         for object_set in spec.object_sets or []:
-            searched_members = [name for name in object_set.members if name in self._simready_usd_paths]
+            searched_members = [name for name in object_set.members if name in self._simready_assets_by_registry_name]
             if searched_members:
                 return (
                     f"Object set '{object_set.id}' has searched SimReady members {searched_members}."
                     " Members have nowhere to carry a usd_path; use them as objects instead."
                 )
         for obj in spec.objects:
-            usd_path = self._simready_usd_paths.get(obj.registry_name)
-            if usd_path is not None:
+            candidate = self._simready_assets_by_registry_name.get(obj.registry_name)
+            if candidate is not None:
                 obj.registry_name = SIMREADY_USD_OBJECT_REGISTRY_NAME
-                obj.params = {**obj.params, "usd_path": usd_path}
+                obj.params = {
+                    **obj.params,
+                    "usd_path": candidate.usd_path,
+                    "object_type": candidate.object_type.value,
+                }
         return None
 
     def _extend_catalogue_with_simready(self, prompt: str, asset_catalog: AssetCatalogue) -> AssetCatalogue:
@@ -223,14 +227,19 @@ class EnvironmentGenerationAgent:
             return asset_catalog
         extended = replace(asset_catalog, objects=list(asset_catalog.objects))
         for candidate in search_result.candidates:
-            asset_cls = register_searched_simready_object(candidate.search_phrase, candidate.usd_path, candidate.tags)
+            asset_cls = register_searched_simready_object(
+                candidate.search_phrase,
+                candidate.usd_path,
+                candidate.tags,
+                candidate.object_type,
+            )
             tags = [tag for tag in asset_cls.tags if tag != "object"]
             extended.objects.append({
                 "name": asset_cls.registry_name,
                 "tags": tags,
                 "object_type": asset_cls.object_type.value,
             })
-            self._simready_usd_paths[asset_cls.registry_name] = candidate.usd_path
+            self._simready_assets_by_registry_name[asset_cls.registry_name] = candidate
             _logger.info(
                 "catalogued %r for %r: %s", asset_cls.registry_name, candidate.search_phrase, candidate.usd_path
             )

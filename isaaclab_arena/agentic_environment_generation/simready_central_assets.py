@@ -14,6 +14,7 @@ from isaaclab_arena.agentic_environment_generation.simready_search_interface imp
     MIN_INSPECTED_MATCHES_PER_PHRASE,
     SimReadyObjectCandidate,
 )
+from isaaclab_arena.assets.object_type import ObjectType
 from isaaclab_arena.assets.simready_central_asset_loader import download_and_wrap_central_asset
 
 CENTRAL_SEARCH_URL = "https://nvidia-simready-central.hf.space/search_hybrid"
@@ -21,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 class CentralSearchBackend:
-    """Search Central and validate downloaded single-rigid-body packages."""
+    """Search Central and validate downloaded rigid or articulated packages."""
 
     def search(self, phrases: list[str], max_results: int) -> list[SimReadyObjectCandidate]:
         """Search each phrase independently so one request failure does not discard other hits."""
@@ -38,7 +39,7 @@ class CentralSearchBackend:
 
 
 def search_central_objects(phrase: str, *, max_results: int) -> list[SimReadyObjectCandidate]:
-    """Search Central and retain only locally validated single-body props."""
+    """Search Central and retain only locally validated rigid or articulated props."""
     assert max_results > 0, "max_results must be positive"
     response = requests.post(
         CENTRAL_SEARCH_URL,
@@ -46,7 +47,6 @@ def search_central_objects(phrase: str, *, max_results: int) -> list[SimReadyObj
         json={
             "hybrid_text_query": phrase,
             "file_extension_include": "usd*",
-            "filter_by_properties_numeric": "simready_metadata_rigid_body_count=1",
             "return_usd_properties": True,
             "limit": max(MIN_INSPECTED_MATCHES_PER_PHRASE, max_results),
         },
@@ -63,14 +63,16 @@ def search_central_objects(phrase: str, *, max_results: int) -> list[SimReadyObj
                 for prop in source.get("usd_properties", [])
                 if prop.get("name") == "simready_metadata_rigid_body_count"
             ]
-            if not counts or any(float(count) != 1 for count in counts):
+            if not counts or any(float(count) < 1 for count in counts):
                 continue
-            usd_path = download_and_wrap_central_asset(source["path"])
+            prepared = download_and_wrap_central_asset(source["path"])
+            topology_tag = "single-rigid-body" if prepared.object_type == ObjectType.RIGID else "articulation"
             candidates.append(
                 SimReadyObjectCandidate(
                     search_phrase=phrase,
-                    usd_path=usd_path,
-                    tags=("sim-ready", "single-rigid-body"),
+                    usd_path=prepared.usd_path,
+                    object_type=prepared.object_type,
+                    tags=("sim-ready", topology_tag),
                     relevance_score=hit.get("rrf_score"),
                     source_url=source["path"].replace("hf://", "https://", 1),
                 )

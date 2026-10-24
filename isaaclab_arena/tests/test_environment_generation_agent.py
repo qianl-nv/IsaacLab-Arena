@@ -22,6 +22,7 @@ from isaaclab_arena.agentic_environment_generation.simready_search_interface imp
     SimReadyCandidateCatalogue,
     SimReadyObjectCandidate,
 )
+from isaaclab_arena.assets.object_type import ObjectType
 from isaaclab_arena.assets.registries import AssetRegistry
 from isaaclab_arena.assets.simready_constants import SIMREADY_USD_OBJECT_REGISTRY_NAME
 from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
@@ -268,7 +269,10 @@ class TestGenerateSpec:
         # The search name only exists in the process that searched, so the object is rewritten onto
         # the generic SimReady asset every process has, carrying the path the search found.
         assert searched.registry_name == SIMREADY_USD_OBJECT_REGISTRY_NAME
-        assert searched.params == {"usd_path": "s3://bucket/trash_can.usd"}
+        assert searched.params == {
+            "usd_path": "s3://bucket/trash_can.usd",
+            "object_type": ObjectType.RIGID.value,
+        }
         report = agent_obj.simready_asset_report(spec)
         assert len(report) == 1
         assert report[0]["used_in_spec"] is True
@@ -285,6 +289,38 @@ class TestGenerateSpec:
         assert agent_obj.simready_asset_report(next_spec) == []
         # Tags in params would be a duplicate keyword argument at build time.
         assert all("tags" not in asset["params"] for asset in spec.to_dict()["objects"])
+
+    @patch("isaaclab_arena.agentic_environment_generation.environment_generation_agent.search_simready_objects")
+    def test_a_searched_articulation_keeps_its_type_in_the_portable_spec(self, mock_search, agent):
+        agent_obj, client = agent
+        mock_search.return_value = SimReadyCandidateCatalogue(
+            candidates=[
+                SimReadyObjectCandidate(
+                    search_phrase="foldout toolbox",
+                    usd_path="/cache/toolbox.usda",
+                    object_type=ObjectType.ARTICULATION,
+                    tags=("sim-ready", "articulation"),
+                )
+            ]
+        )
+        spec_dict = minimal_spec_dict()
+        spec_dict["objects"].append({
+            "id": "toolbox",
+            "registry_name": "simready_foldout_toolbox",
+            "params": {},
+        })
+        client.chat.completions.create.side_effect = [
+            self._missing_objects_response("foldout toolbox"),
+            chat_response(content=json.dumps(spec_dict)),
+        ]
+
+        spec, _ = self._generate_with_simready(agent_obj)
+        searched = next(asset for asset in spec.objects if asset.id == "toolbox")
+        assert searched.registry_name == SIMREADY_USD_OBJECT_REGISTRY_NAME
+        assert searched.params == {
+            "usd_path": "/cache/toolbox.usda",
+            "object_type": ObjectType.ARTICULATION.value,
+        }
 
     @patch("isaaclab_arena.agentic_environment_generation.environment_generation_agent.search_simready_objects")
     def test_a_searched_simready_object_in_an_object_set_is_rejected(self, mock_search, agent):
