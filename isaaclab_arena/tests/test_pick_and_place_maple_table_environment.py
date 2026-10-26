@@ -17,7 +17,7 @@ def _test_task_objects_are_named_by_role(simulation_app):
     )
 
     pick_up_object_name = "rubiks_cube_hot3d_robolab"
-    environment_cfg = PickAndPlaceMapleTableEnvironmentCfg(pick_up_object=pick_up_object_name)
+    environment_cfg = PickAndPlaceMapleTableEnvironmentCfg()
     arena_env = PickAndPlaceMapleTableEnvironment().build(environment_cfg)
 
     assert arena_env.scene.assets["pick_up_object"].registry_name == pick_up_object_name

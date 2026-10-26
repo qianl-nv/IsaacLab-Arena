@@ -343,7 +343,6 @@ def test_experiment_runner_multiple_environments(tmp_path):
             "name": "kitchen_pick_cracker_box",
             "arena_env_args": {
                 "environment": "kitchen_pick_and_place",
-                "object": "cracker_box",
                 "embodiment": "gr1_joint",
             },
             "num_steps": NUM_STEPS,
@@ -354,8 +353,11 @@ def test_experiment_runner_multiple_environments(tmp_path):
             "name": "kitchen_pick_power_drill",
             "arena_env_args": {
                 "environment": "put_item_in_fridge_and_close_door",
-                "object": "power_drill",
                 "embodiment": "gr1_pink",
+            },
+            "variations": {
+                "pick_up_object.asset_selection.enabled": True,
+                "pick_up_object.asset_selection.registry_names": ["power_drill"],
             },
             "num_steps": NUM_STEPS,
             "policy_type": "zero_action",
@@ -376,8 +378,11 @@ def test_experiment_runner_different_embodiments(tmp_path):
             "name": "kitchen_pick_gr1_pink",
             "arena_env_args": {
                 "environment": "kitchen_pick_and_place",
-                "object": "tomato_soup_can",
                 "embodiment": "gr1_pink",
+            },
+            "variations": {
+                "pick_up_object.asset_selection.enabled": True,
+                "pick_up_object.asset_selection.registry_names": ["tomato_soup_can"],
             },
             "num_steps": NUM_STEPS,
             "policy_type": "zero_action",
@@ -387,8 +392,11 @@ def test_experiment_runner_different_embodiments(tmp_path):
             "name": "kitchen_pick_franka",
             "arena_env_args": {
                 "environment": "kitchen_pick_and_place",
-                "object": "tomato_soup_can",
                 "embodiment": "franka_ik",
+            },
+            "variations": {
+                "pick_up_object.asset_selection.enabled": True,
+                "pick_up_object.asset_selection.registry_names": ["tomato_soup_can"],
             },
             "num_steps": NUM_STEPS,
             "policy_type": "zero_action",
@@ -439,7 +447,6 @@ def test_experiment_runner_enable_cameras(tmp_path):
             "name": "kitchen_pick_and_place_no_cameras",
             "arena_env_args": {
                 "environment": "kitchen_pick_and_place",
-                "object": "cracker_box",
                 "embodiment": "franka_ik",
             },
             "num_steps": NUM_STEPS,
@@ -451,7 +458,6 @@ def test_experiment_runner_enable_cameras(tmp_path):
             "arena_env_args": {
                 "enable_cameras": True,
                 "environment": "kitchen_pick_and_place",
-                "object": "cracker_box",
                 "embodiment": "franka_ik",
             },
             "num_steps": NUM_STEPS,

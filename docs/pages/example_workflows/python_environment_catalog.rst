@@ -28,8 +28,9 @@ kitchen_pick_and_place
 **Class:** ``KitchenPickAndPlaceEnvironment`` (``isaaclab_arena_environments/kitchen_pick_and_place_environment.py``)
 
 **Task Description:** Pick an object off the kitchen counter top and place it
-inside a kitchen cabinet. Supports a single object via ``--object`` or a
-heterogeneous ``--object_set`` spawning a different object per environment.
+inside a kitchen cabinet. The default single object supports
+``pick_up_object.asset_selection``; ``--object_set`` spawns a different object
+per environment.
 
 .. list-table::
    :widths: 30 70
@@ -46,13 +47,13 @@ heterogeneous ``--object_set`` spawning a different object per environment.
    * - **Scene**
      - ``kitchen`` background, counter top reference (anchor), cabinet destination
    * - **Objects**
-     - Configurable via ``--object`` / ``--object_set`` (e.g. ``tomato_soup_can``, ``cracker_box``)
+     - ``cracker_box`` by default; use ``pick_up_object.asset_selection`` or ``--object_set``
    * - **Task Class**
      - ``PickAndPlaceTask``
    * - **Object Placement**
      - Relations: ``On(table_top)``, ``AtPosition(x=0.4, y=0.0)``
    * - **CLI Args**
-     - ``--object``, ``--object_set``, ``--embodiment``, ``--teleop_device``
+     - ``--object_set``, ``--embodiment``, ``--teleop_device``
 
 
 pick_and_place_maple_table
@@ -80,13 +81,13 @@ as the introductory ``First Arena Environment`` walkthrough.
    * - **Scene**
      - ``maple_table_robolab`` background, dome ``light`` (configurable HDR / intensity)
    * - **Objects**
-     - Pick: ``rubiks_cube_hot3d_robolab`` (default); Destination: ``bowl_ycb_robolab`` (default); plus optional ``--additional_table_objects``
+     - Pick: ``rubiks_cube_hot3d_robolab`` (default); destination: ``bowl_ycb_robolab`` (default). Use ``pick_up_object.asset_selection`` and ``destination_location.asset_selection`` to replace them.
    * - **Task Class**
      - ``PickAndPlaceTask`` (episode_length_s = 20)
    * - **Object Placement**
      - Relations: ``On(table)``, ``PositionLimitsBox(x=0.55..0.70, y=-0.4..-0.1)``
    * - **CLI Args**
-     - ``--pick_up_object``, ``--destination_location``, ``--additional_table_objects``, ``--embodiment``, ``--teleop_device``, ``--hdr``, ``--light_intensity``
+     - ``--additional_table_objects``, ``--embodiment``, ``--teleop_device``, ``--hdr``, ``--light_intensity``
 
 
 galileo_pick_and_place
@@ -114,11 +115,11 @@ place it into a small bin on the shelf.
    * - **Scene**
      - ``galileo`` lab background; bin lid (``small_bin_grid_01/lid``) used as destination reference
    * - **Objects**
-     - ``power_drill`` (default), configurable via ``--object``
+     - ``power_drill`` by default; use ``pick_up_object.asset_selection`` to replace it
    * - **Task Class**
      - ``PickAndPlaceTask``
    * - **CLI Args**
-     - ``--object``, ``--embodiment``, ``--teleop_device``
+     - ``--embodiment``, ``--teleop_device``
 
 
 galileo_g1_locomanip_pick_and_place
@@ -381,11 +382,11 @@ upright.
    * - **Scene**
      - ``table`` background (configurable), ``ground_plane``, ``light``
    * - **Objects**
-     - ``mug`` (default) via ``--object``
+     - ``mug`` by default; use ``placeable_object.asset_selection`` to replace it
    * - **Task Class**
      - ``PlaceUprightTask`` (custom event ``randomize_mug_positions``)
    * - **CLI Args**
-     - ``--object``, ``--background``, ``--embodiment``, ``--teleop_device``
+     - ``--background``, ``--embodiment``, ``--teleop_device``
 
 
 Goal-Pose / Lift (RL)
@@ -416,11 +417,11 @@ manipulation).
    * - **Scene**
      - ``table`` background (configurable), ``light``
    * - **Objects**
-     - ``dex_cube`` (default) via ``--object``
+     - ``dex_cube`` by default; use ``object.asset_selection`` to replace it
    * - **Task Class**
      - ``GoalPoseTask`` (target_z_range = [0.2, 1.0], target_orientation_xyzw = yaw 90°, tolerance = 0.2 rad)
    * - **CLI Args**
-     - ``--object``, ``--background``, ``--embodiment``, ``--teleop_device``
+     - ``--background``, ``--embodiment``, ``--teleop_device``
 
 
 lift_object
@@ -449,13 +450,13 @@ the :doc:`reinforcement_learning/index` workflow.
    * - **Scene**
      - ``table`` background, ``ground_plane``, ``light``
    * - **Objects**
-     - ``dex_cube`` (default) via ``--object``
+     - ``dex_cube`` by default; use ``pick_up_object.asset_selection`` to replace it
    * - **Task Class**
      - ``LiftObjectTaskRL`` (minimum_height_to_lift = 0.04, episode_length_s = 5)
    * - **Training Method**
      - Trained in Isaac Lab via Reinforcement Learning (RSL-RL PPO; ``rl_policy_cfg`` = ``base_rsl_rl_policy:RLPolicyCfg``)
    * - **CLI Args**
-     - ``--object``, ``--embodiment``, ``--teleop_device``, ``--rl_training_mode``
+     - ``--embodiment``, ``--teleop_device``, ``--rl_training_mode``
 
 
 dexsuite_lift
@@ -563,13 +564,13 @@ the refrigerator shelf, then closes the refrigerator door. Featured in the
    * - **Scene**
      - ``lightwheel_kitchen_one_wall_farmhouse1`` background, ``light``, kitchen counter anchor
    * - **Objects**
-     - Pick: ``ranch_dressing_hope_robolab`` (default), or ``--object_set`` for heterogeneous spawning; Destination: refrigerator shelf reference; Container: ``refrigerator`` (articulated)
+     - Pick: ``ranch_dressing_hope_robolab`` by default, replaceable through ``pick_up_object.asset_selection``; or ``--object_set`` for heterogeneous spawning. Destination: refrigerator shelf reference; container: ``refrigerator``.
    * - **Task Class**
      - ``PutAndCloseDoorTask`` (sequential: ``PickAndPlaceTask`` → ``CloseDoorTask``, episode_length_s = 10)
    * - **Interop**
      - Isaac Lab Mimic (``put_and_close_door_task_D0`` datagen)
    * - **CLI Args**
-     - ``--object``, ``--object_set``, ``--embodiment``, ``--teleop_device``
+     - ``--object_set``, ``--embodiment``, ``--teleop_device``
 
 
 franka_put_and_close_door
@@ -597,11 +598,11 @@ microwave, followed by closing the microwave door.
    * - **Scene**
      - ``kitchen`` background, ``microwave`` (articulated, starts open)
    * - **Objects**
-     - Pick: ``dex_cube`` (default) via ``--object``; Container: ``microwave``
+     - Pick: ``dex_cube`` by default, replaceable through ``pick_up_object.asset_selection``; container: ``microwave``
    * - **Task Class**
      - ``FrankaPutAndCloseDoorTask`` (sequential: ``PickAndPlaceTask`` → ``CloseDoorTask``)
    * - **CLI Args**
-     - ``--object``, ``--embodiment``, ``--teleop_device``
+     - ``--embodiment``, ``--teleop_device``
 
 
 See Also

@@ -23,8 +23,6 @@ class PickAndPlaceMapleTableEnvironmentCfg(ArenaEnvironmentCfg):
     embodiment: str = "droid_abs_joint_pos"
     hdr: str | None = None
     light_intensity: float = 500.0
-    pick_up_object: str = "rubiks_cube_hot3d_robolab"
-    destination_location: str = "bowl_ycb_robolab"
     additional_table_objects: list[str] = field(default_factory=list)
     episode_length_s: float = 70.0
 
@@ -52,10 +50,8 @@ class PickAndPlaceMapleTableEnvironment(ArenaEnvironmentFactory[PickAndPlaceMapl
 
         # Step 1: Retrieve assets from the registry
         background = self.asset_registry.get_asset_by_name("maple_table_robolab")()
-        pick_up_object = self.asset_registry.get_asset_by_name(registry_name=cfg.pick_up_object)(name="pick_up_object")
-        destination_location = self.asset_registry.get_asset_by_name(registry_name=cfg.destination_location)(
-            name="destination_location"
-        )
+        pick_up_object = self.asset_registry.get_asset_by_name("rubiks_cube_hot3d_robolab")(name="pick_up_object")
+        destination_location = self.asset_registry.get_asset_by_name("bowl_ycb_robolab")(name="destination_location")
 
         # Step 2: Describe spatial relationships
         table_reference = ObjectReference(

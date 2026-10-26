@@ -249,3 +249,28 @@ object's ``name``.
 Every episode row records the chosen name, for example
 ``"pick_up_object.asset_selection": "mustard_bottle_hot3d_robolab"``, and
 :doc:`recorded variation replay <../experiment_record_replay>` spawns the recorded asset.
+
+Selecting an asset from the command line
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Registered environments use stable scene-role names instead of one-off rigid-object selector
+flags. Select one asset by passing a one-entry list:
+
+.. code-block:: bash
+
+   python isaaclab_arena/scripts/environment_runner.py \
+     pick_and_place_maple_table \
+     pick_up_object.asset_selection.enabled=true \
+     pick_up_object.asset_selection.registry_names=[mustard_bottle_hot3d_robolab]
+
+The removed selectors are ``pick_and_place_maple_table``'s ``--pick_up_object`` and
+``--destination_location``; and ``--object`` on ``cube_goal_pose``, ``lift_object``,
+``galileo_pick_and_place``, ``franka_put_and_close_door``, ``tabletop_place_upright``,
+``kitchen_pick_and_place``, and ``gr1_put_and_close_door``. Use the role keys
+``pick_up_object``, ``destination_location``, ``object``, or ``placeable_object`` exposed by the
+selected environment.
+
+Selectors for optional object presence, deformable or articulated objects, object sets, and
+object-dependent task tuning remain environment options. In particular, use ``RigidObjectSet``
+when parallel environments in the same build should contain different assets; asset selection
+chooses one asset for all parallel environments in a build.

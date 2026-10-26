@@ -111,6 +111,29 @@ Do not prefix local overrides with `experiment_cfg.`; that prefix belongs to OSM
 Quote override tokens that contain shell-sensitive characters. Do not edit the source YAML when a
 declared field can be changed with an override.
 
+### Select rigid assets
+
+Use the stable scene-role variation key instead of an environment-specific object selector. To
+replace one asset for the whole Run:
+
+```text
+runs.<run>.variations.pick_up_object.asset_selection.enabled=true
+runs.<run>.variations.pick_up_object.asset_selection.registry_names=[mustard_bottle_hot3d_robolab]
+```
+
+To evaluate one asset per rebuild, list the assets and align the rebuild count:
+
+```text
+runs.<run>.variations.pick_up_object.asset_selection.enabled=true
+runs.<run>.variations.pick_up_object.asset_selection.registry_names=[cracker_box,mustard_bottle_hot3d_robolab]
+runs.<run>.num_rebuilds=2
+```
+
+Use the role exposed by the environment, such as `destination_location`, `held_asset`, or
+`fixed_asset`; align lists for roles that must change together. Use an environment's
+`RigidObjectSet` option when parallel environments in one rebuild must contain different objects.
+Asset selection chooses one registered rigid asset for all parallel environments in a rebuild.
+
 ## Execute and monitor
 
 Run the command in the selected ready runtime and wait for it to finish. Runs execute in YAML order

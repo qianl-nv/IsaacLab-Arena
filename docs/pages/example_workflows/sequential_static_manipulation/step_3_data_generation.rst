@@ -64,7 +64,6 @@ To start the annotation process run the following command:
      --mimic \
      --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback \
      --task put_item_in_fridge_and_close_door \
-     --object ranch_dressing_hope_robolab \
      --embodiment gr1_pink
 
 Follow the instructions described on the CLI to mark the completion of a Mimic subtask:
@@ -123,7 +122,6 @@ Generate the dataset:
      --mimic \
      --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback \
      --task put_item_in_fridge_and_close_door \
-     --object ranch_dressing_hope_robolab \
      --embodiment gr1_pink
 
 Data generation takes 30-60 minutes depending on hardware.
@@ -156,7 +154,6 @@ To do so, run the following command:
      --dataset_file $DATASET_DIR/ranch_bottle_into_fridge_generated_100.hdf5 \
      --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback \
      --task put_item_in_fridge_and_close_door \
-     --object ranch_dressing_hope_robolab \
      --embodiment gr1_pink
 
 You should see the robot perform the manipulation task. Note that the robot's arms shake due to the action noise

@@ -72,7 +72,6 @@ def test_zero_action_policy():
         policy_type="zero_action",
         example_environment="kitchen_pick_and_place",
         embodiment="franka_ik",
-        object_name="cracker_box",
         num_steps=NUM_STEPS,
     )
 

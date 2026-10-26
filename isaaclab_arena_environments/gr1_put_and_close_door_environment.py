@@ -31,7 +31,6 @@ GR1_EMBODIMENTS = ("gr1_joint", "gr1_pink")
 class GR1PutAndCloseDoorEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the GR1 put-and-close-door environment."""
 
-    object: str = "ranch_dressing_hope_robolab"
     object_set: list[str] | None = None
     kitchen_background: str = "lightwheel_kitchen_one_wall_farmhouse1"
     teleop_device: str | None = None
@@ -173,7 +172,7 @@ class GR1PutAndCloseDoorEnvironment(ArenaEnvironmentFactory[GR1PutAndCloseDoorEn
             objects = [self.asset_registry.get_asset_by_name(obj)() for obj in cfg.object_set]
             pickup_object = RigidObjectSet(name="object_set", objects=objects)
         else:
-            pickup_object = self.asset_registry.get_asset_by_name(cfg.object)()
+            pickup_object = self.asset_registry.get_asset_by_name("ranch_dressing_hope_robolab")(name="pick_up_object")
 
         pickup_object.add_relation(On(kitchen_counter_top))
         pickup_object.add_relation(

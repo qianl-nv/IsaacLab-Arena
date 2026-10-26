@@ -20,7 +20,6 @@ NUM_STEPS = 2
 def run_rl_train(
     example_environment: str,
     embodiment: str | None = None,
-    object_name: str | None = None,
     num_envs: int = 1,
     max_iterations: int = 1,
 ) -> str:
@@ -47,8 +46,6 @@ def run_rl_train(
     ]
     if embodiment is not None:
         args += ["--embodiment", embodiment]
-    if object_name is not None:
-        args += ["--object", object_name]
 
     t_start = time.time()
     run_subprocess(args)
@@ -61,7 +58,7 @@ def run_rl_train(
     return max(checkpoints, key=os.path.getmtime)
 
 
-def run_policy_runner(checkpoint_path: str, example_environment: str, embodiment: str, object_name: str) -> None:
+def run_policy_runner(checkpoint_path: str, example_environment: str, embodiment: str) -> None:
     args = [
         TestConstants.python_path,
         f"{TestConstants.evaluation_dir}/policy_runner.py",
@@ -74,8 +71,6 @@ def run_policy_runner(checkpoint_path: str, example_environment: str, embodiment
         example_environment,
         "--embodiment",
         embodiment,
-        "--object",
-        object_name,
     ]
     run_subprocess(args)
 
@@ -89,11 +84,9 @@ def test_rl_train_and_eval_lift_object(monkeypatch):
     checkpoint_path = run_rl_train(
         example_environment="lift_object",
         embodiment="franka_ik",
-        object_name="dex_cube",
     )
     run_policy_runner(
         checkpoint_path=checkpoint_path,
         example_environment="lift_object",
         embodiment="franka_ik",
-        object_name="dex_cube",
     )

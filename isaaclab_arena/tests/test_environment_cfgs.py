@@ -24,16 +24,29 @@ from isaaclab_arena_environments.cli import (
     build_environment_from_cli,
     ensure_environments_registered,
 )
+from isaaclab_arena_environments.cube_goal_pose_environment import CubeGoalPoseEnvironment
+from isaaclab_arena_environments.droid_deformable_pick_and_place_environment import (
+    DroidDeformablePickAndPlaceEnvironment,
+)
 from isaaclab_arena_environments.example_environment_base import ExampleEnvironmentBase
+from isaaclab_arena_environments.franka_put_and_close_door_environment import FrankaPutAndCloseDoorEnvironment
+from isaaclab_arena_environments.galileo_g1_locomanip_pick_and_place_environment import (
+    GalileoG1LocomanipPickAndPlaceEnvironment,
+)
+from isaaclab_arena_environments.galileo_pick_and_place_environment import GalileoPickAndPlaceEnvironment
+from isaaclab_arena_environments.gr1_open_microwave_environment import Gr1OpenMicrowaveEnvironment
 from isaaclab_arena_environments.gr1_put_and_close_door_environment import GR1PutAndCloseDoorEnvironment
 from isaaclab_arena_environments.gr1_table_multi_object_no_collision_environment import (
     GR1TableMultiObjectNoCollisionEnvironment,
 )
+from isaaclab_arena_environments.kitchen_pick_and_place_environment import KitchenPickAndPlaceEnvironment
 from isaaclab_arena_environments.lift_object_environment import LiftObjectEnvironment
 from isaaclab_arena_environments.pick_and_place_maple_table_environment import (
     PickAndPlaceMapleTableEnvironment,
     PickAndPlaceMapleTableEnvironmentCfg,
 )
+from isaaclab_arena_environments.tabletop_peginsert_environment import PegInsertEnvironment
+from isaaclab_arena_environments.tabletop_place_upright_environment import TableTopPlaceUprightEnvironment
 
 # TODO(cvolk, 2026-07-03): [typed-config-migration] Delete these compatibility tests with the legacy argparse
 # environment adapter.
@@ -133,6 +146,39 @@ def test_generated_cli_arguments_and_cfg_validation():
     )
     with pytest.raises(AssertionError, match="episode_length_s must be greater than zero"):
         _environment_cfg_from_cli(PickAndPlaceMapleTableEnvironment, invalid_episode_length_args)
+
+
+def test_rigid_asset_selectors_are_removed_but_structural_selectors_remain():
+    """Expose rigid substitutions as variations while preserving structurally distinct options."""
+    removed_options = {
+        PickAndPlaceMapleTableEnvironment: {"--pick_up_object", "--destination_location"},
+        CubeGoalPoseEnvironment: {"--object"},
+        LiftObjectEnvironment: {"--object"},
+        GalileoPickAndPlaceEnvironment: {"--object"},
+        FrankaPutAndCloseDoorEnvironment: {"--object"},
+        TableTopPlaceUprightEnvironment: {"--object"},
+        KitchenPickAndPlaceEnvironment: {"--object"},
+        GR1PutAndCloseDoorEnvironment: {"--object"},
+    }
+    for environment_factory_type, removed in removed_options.items():
+        parser = argparse.ArgumentParser()
+        add_environment_cli_args(parser, environment_factory_type)
+        generated_options = {option for action in parser._actions for option in action.option_strings}
+        assert generated_options.isdisjoint(removed)
+
+    for environment_factory_type, retained in (
+        (KitchenPickAndPlaceEnvironment, "--object_set"),
+        (GR1PutAndCloseDoorEnvironment, "--object_set"),
+        (Gr1OpenMicrowaveEnvironment, "--object"),
+        (DroidDeformablePickAndPlaceEnvironment, "--pick_object"),
+        (GalileoG1LocomanipPickAndPlaceEnvironment, "--object"),
+        (PegInsertEnvironment, "--object"),
+        (PegInsertEnvironment, "--destination_object"),
+    ):
+        parser = argparse.ArgumentParser()
+        add_environment_cli_args(parser, environment_factory_type)
+        generated_options = {option for action in parser._actions for option in action.option_strings}
+        assert retained in generated_options
 
 
 def test_build_environment_from_cli_calls_typed_build(monkeypatch):

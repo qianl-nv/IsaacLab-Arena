@@ -12,8 +12,10 @@ Run a registered environment:
     python isaaclab_arena/scripts/environment_runner.py \
         pick_and_place_maple_table \
         --embodiment droid_rel_joint_pos \
-        --pick_up_object banana_ycb_robolab \
-        --destination_location bowl_ycb_robolab
+        pick_up_object.asset_selection.enabled=true \
+        pick_up_object.asset_selection.registry_names=[banana_ycb_robolab] \
+        destination_location.asset_selection.enabled=true \
+        destination_location.asset_selection.registry_names=[bowl_ycb_robolab]
 
 Run an environment graph spec:
 

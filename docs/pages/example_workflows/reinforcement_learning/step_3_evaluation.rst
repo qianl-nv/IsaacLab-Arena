@@ -59,7 +59,7 @@ Method 1: Single Environment Evaluation
    Replace the checkpoint path with the path to your own checkpoint.
 
 Policy-specific arguments (``--policy_type``, ``--checkpoint_path``, etc.) must come **before** the
-environment name. Environment-specific arguments (``--object``, ``--embodiment``, etc.) must come
+environment name. Environment-specific arguments (``--embodiment``, etc.) must come
 **after** it.
 
 At the end of the run, metrics are printed to the console:

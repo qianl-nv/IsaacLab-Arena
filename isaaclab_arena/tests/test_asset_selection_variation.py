@@ -158,6 +158,73 @@ def _test_rigid_objects_have_disabled_asset_selection(simulation_app):
     return True
 
 
+def _test_migrated_environments_expose_stable_asset_selection_roles(simulation_app):
+    from isaaclab_arena_environments.cube_goal_pose_environment import (
+        CubeGoalPoseEnvironment,
+        CubeGoalPoseEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.franka_put_and_close_door_environment import (
+        FrankaPutAndCloseDoorEnvironment,
+        FrankaPutAndCloseDoorEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.galileo_pick_and_place_environment import (
+        GalileoPickAndPlaceEnvironment,
+        GalileoPickAndPlaceEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.gr1_put_and_close_door_environment import (
+        GR1PutAndCloseDoorEnvironment,
+        GR1PutAndCloseDoorEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.kitchen_pick_and_place_environment import (
+        KitchenPickAndPlaceEnvironment,
+        KitchenPickAndPlaceEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.lift_object_environment import LiftObjectEnvironment, LiftObjectEnvironmentCfg
+    from isaaclab_arena_environments.pick_and_place_maple_table_environment import (
+        PickAndPlaceMapleTableEnvironment,
+        PickAndPlaceMapleTableEnvironmentCfg,
+    )
+    from isaaclab_arena_environments.tabletop_place_upright_environment import (
+        TableTopPlaceUprightEnvironment,
+        TableTopPlaceUprightEnvironmentCfg,
+    )
+
+    cases = (
+        (
+            PickAndPlaceMapleTableEnvironment(),
+            PickAndPlaceMapleTableEnvironmentCfg(),
+            {"pick_up_object": "rubiks_cube_hot3d_robolab", "destination_location": "bowl_ycb_robolab"},
+        ),
+        (CubeGoalPoseEnvironment(), CubeGoalPoseEnvironmentCfg(), {"object": "dex_cube"}),
+        (LiftObjectEnvironment(), LiftObjectEnvironmentCfg(), {"pick_up_object": "dex_cube"}),
+        (GalileoPickAndPlaceEnvironment(), GalileoPickAndPlaceEnvironmentCfg(), {"pick_up_object": "power_drill"}),
+        (
+            FrankaPutAndCloseDoorEnvironment(),
+            FrankaPutAndCloseDoorEnvironmentCfg(),
+            {"pick_up_object": "dex_cube"},
+        ),
+        (
+            TableTopPlaceUprightEnvironment(),
+            TableTopPlaceUprightEnvironmentCfg(),
+            {"placeable_object": "mug"},
+        ),
+        (KitchenPickAndPlaceEnvironment(), KitchenPickAndPlaceEnvironmentCfg(), {"pick_up_object": "cracker_box"}),
+        (
+            GR1PutAndCloseDoorEnvironment(),
+            GR1PutAndCloseDoorEnvironmentCfg(),
+            {"pick_up_object": "ranch_dressing_hope_robolab"},
+        ),
+    )
+
+    for environment_factory, environment_cfg, expected_roles in cases:
+        arena_env = environment_factory.build(environment_cfg)
+        for role, registry_name in expected_roles.items():
+            asset = arena_env.scene.assets[role]
+            assert asset.registry_name == registry_name
+            assert not asset.get_variation("asset_selection").enabled
+    return True
+
+
 def _test_scene_validates_the_selected_asset(simulation_app):
     from isaaclab.sim import SimulationCfg
     from isaaclab_newton.physics import NewtonCfg
@@ -215,6 +282,12 @@ def test_asset_selection_rejects_invalid_configuration(registry_names, message_p
 def test_rigid_objects_have_disabled_asset_selection():
     assert run_function_with_persistent_simulation_app(
         _test_rigid_objects_have_disabled_asset_selection, headless=HEADLESS
+    )
+
+
+def test_migrated_environments_expose_stable_asset_selection_roles():
+    assert run_function_with_persistent_simulation_app(
+        _test_migrated_environments_expose_stable_asset_selection_roles, headless=HEADLESS
     )
 
 

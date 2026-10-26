@@ -70,11 +70,15 @@ def test_getting_started_experiment_composes_typed_runs():
     )
     assert runs["swap_objects"].environment == PickAndPlaceMapleTableEnvironmentCfg(
         embodiment="droid_rel_joint_pos",
-        pick_up_object="mustard_bottle_hot3d_robolab",
-        destination_location="wooden_bowl_hot3d_robolab",
         hdr="home_office_robolab",
         episode_length_s=1.5,
     )
+    assert runs["swap_objects"].variations == {
+        "pick_up_object.asset_selection.enabled": True,
+        "pick_up_object.asset_selection.registry_names": ["mustard_bottle_hot3d_robolab"],
+        "destination_location.asset_selection.enabled": True,
+        "destination_location.asset_selection.registry_names": ["wooden_bowl_hot3d_robolab"],
+    }
     assert runs["change_background_hdr"].environment.hdr == "billiard_hall_robolab"
     assert runs["parallel_envs"].environment.hdr == "home_office_robolab"
     assert all(run.environment.episode_length_s == 1.5 for run in runs.values())
@@ -210,7 +214,7 @@ runs:
   first:
     environment:
       type: pick_and_place_maple_table
-      destination_location: ${pick_up_object}
+      hdr: ${embodiment}
     policy:
       type: zero_action
   second:
@@ -234,7 +238,7 @@ runs:
     first_run = experiment_cfg.runs["first"]
     second_run = experiment_cfg.runs["second"]
     assert first_run.environment.light_intensity == 750.0
-    assert first_run.environment.destination_location == first_run.environment.pick_up_object
+    assert first_run.environment.hdr == first_run.environment.embodiment
     assert first_run.rollout_limit.num_steps == first_run.environment_builder.num_envs == 2
     assert first_run.variations["camera"]["enabled"] is True
     assert second_run.environment.light_intensity == 650.0

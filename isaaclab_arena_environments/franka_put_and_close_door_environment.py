@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class FrankaPutAndCloseDoorEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the Franka put-and-close-door environment."""
 
-    object: str = "dex_cube"
     embodiment: str = "franka_ik"
     teleop_device: str | None = None
 
@@ -51,7 +50,7 @@ class FrankaPutAndCloseDoorEnvironment(ArenaEnvironmentFactory[FrankaPutAndClose
         # Get assets
         background = self.asset_registry.get_asset_by_name("kitchen")()
         container = self.asset_registry.get_asset_by_name("microwave")()
-        pick_object = self.asset_registry.get_asset_by_name(cfg.object)()
+        pick_object = self.asset_registry.get_asset_by_name("dex_cube")(name="pick_up_object")
         embodiment = self.asset_registry.get_asset_by_name(cfg.embodiment)(enable_cameras=cfg.enable_cameras)
 
         if cfg.teleop_device is not None:

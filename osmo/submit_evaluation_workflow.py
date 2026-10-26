@@ -20,13 +20,13 @@ Usage examples:
     python -m osmo.submit_evaluation_workflow \
         --policy zero_action \
         --arena_env kitchen_pick_and_place \
-        --arena_env_args '--object cracker_box --embodiment franka_ik'
+        --arena_env_args '--embodiment franka_ik'
 
     # pi0 policy runner + server
     python -m osmo.submit_evaluation_workflow \
         --policy pi0 \
         --arena_env kitchen_pick_and_place \
-        --arena_env_args '--object cracker_box --embodiment franka_ik'
+        --arena_env_args '--embodiment franka_ik'
 
     # GR00T policy runner + server
     python -m osmo.submit_evaluation_workflow \

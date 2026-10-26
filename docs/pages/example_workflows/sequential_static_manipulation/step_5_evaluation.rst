@@ -114,8 +114,7 @@ Test the policy in a single environment with visualization via the GUI run:
      --num_steps 2000 \
      --enable_cameras \
      put_item_in_fridge_and_close_door \
-     --embodiment gr1_joint \
-     --object ranch_dressing_hope_robolab
+     --embodiment gr1_joint
 
 The evaluation should produce the following output on the console at the end of the evaluation.
 At the end of the evaluation, you should see the following output on the console indicating the metrics.
@@ -164,8 +163,7 @@ Parallel evaluation of the policy in multiple parallel environments is also supp
            --num_envs 10 \
            --enable_cameras \
            put_item_in_fridge_and_close_door \
-           --embodiment gr1_joint \
-           --object ranch_dressing_hope_robolab
+           --embodiment gr1_joint
 
    .. tab-item:: Distribute Multi-GPU Evaluation
 
@@ -183,8 +181,7 @@ Parallel evaluation of the policy in multiple parallel environments is also supp
            --enable_cameras \
            --distributed \
            put_item_in_fridge_and_close_door \
-           --embodiment gr1_joint \
-           --object ranch_dressing_hope_robolab
+           --embodiment gr1_joint
 
 
 And during the evaluation, you should see the following output on the console at the end of the evaluation
@@ -296,7 +293,6 @@ The evaluation batch can be specified in a config file, with examples shown belo
                "num_envs": 10,
                "enable_cameras": true,
                "environment": "put_item_in_fridge_and_close_door",
-               "object": "ranch_dressing_hope_robolab",
                "embodiment": "gr1_joint"
             },
             "num_steps": 500,
@@ -314,8 +310,11 @@ The evaluation batch can be specified in a config file, with examples shown belo
                "num_envs": 10,
                "enable_cameras": true,
                "environment": "put_item_in_fridge_and_close_door",
-               "object": "jug",
                "embodiment": "gr1_joint"
+            },
+            "variations": {
+               "pick_up_object.asset_selection.enabled": true,
+               "pick_up_object.asset_selection.registry_names": ["jug"]
             },
             "num_steps": 500,
             "policy_type": "isaaclab_arena_gr00t.policy.gr00t_remote_closedloop_policy.Gr00tRemoteClosedloopPolicy",

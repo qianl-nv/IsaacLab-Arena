@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class LiftObjectEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the lift-object environment."""
 
-    object: str = "dex_cube"
     teleop_device: str | None = None
     embodiment: str = "franka_joint_pos"
     """Use joint control by default because it is more reliable than IK for RL training."""
@@ -42,7 +41,7 @@ class LiftObjectEnvironment(ArenaEnvironmentFactory[LiftObjectEnvironmentCfg]):
         from isaaclab_arena.utils.pose import Pose
 
         background = self.asset_registry.get_asset_by_name("table")()
-        pick_up_object = self.asset_registry.get_asset_by_name(cfg.object)()
+        pick_up_object = self.asset_registry.get_asset_by_name("dex_cube")(name="pick_up_object")
 
         # Add ground plane and light to the scene
         ground_plane = self.asset_registry.get_asset_by_name("ground_plane")()

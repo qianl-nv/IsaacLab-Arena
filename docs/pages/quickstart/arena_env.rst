@@ -80,8 +80,6 @@ Run the environment with a Rubik's cube, bowl, and home-office background:
    python isaaclab_arena/scripts/environment_runner.py \
      pick_and_place_maple_table \
      --embodiment droid_rel_joint_pos \
-     --pick_up_object rubiks_cube_hot3d_robolab \
-     --destination_location bowl_ycb_robolab \
      --hdr home_office_robolab
 
 .. figure:: ../../images/default_srl_pnp.png
@@ -104,9 +102,11 @@ Keep the same environment and task, but replace the pick-up object and destinati
    python isaaclab_arena/scripts/environment_runner.py \
      pick_and_place_maple_table \
      --embodiment droid_rel_joint_pos \
-     --pick_up_object mustard_bottle_hot3d_robolab \
-     --destination_location wooden_bowl_hot3d_robolab \
-     --hdr home_office_robolab
+     --hdr home_office_robolab \
+     pick_up_object.asset_selection.enabled=true \
+     pick_up_object.asset_selection.registry_names=[mustard_bottle_hot3d_robolab] \
+     destination_location.asset_selection.enabled=true \
+     destination_location.asset_selection.registry_names=[wooden_bowl_hot3d_robolab]
 
 .. figure:: ../../images/swap_objects.gif
    :width: 100%
@@ -126,8 +126,6 @@ Keep the original objects, but select a different background panorama and ambien
    python isaaclab_arena/scripts/environment_runner.py \
      pick_and_place_maple_table \
      --embodiment droid_rel_joint_pos \
-     --pick_up_object rubiks_cube_hot3d_robolab \
-     --destination_location bowl_ycb_robolab \
      --hdr billiard_hall_robolab
 
 .. figure:: ../../images/swap_hdr.gif

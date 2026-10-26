@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class CubeGoalPoseEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the cube goal-pose environment."""
 
-    object: str = "dex_cube"
     background: str = "table"
     embodiment: str = "franka_ik"
     teleop_device: str | None = None
@@ -45,7 +44,7 @@ class CubeGoalPoseEnvironment(ArenaEnvironmentFactory[CubeGoalPoseEnvironmentCfg
         # Add the asset registry from the arena migration package
         background = self.asset_registry.get_asset_by_name(cfg.background)()
         light = self.asset_registry.get_asset_by_name("light")()
-        object = self.asset_registry.get_asset_by_name(cfg.object)()
+        object = self.asset_registry.get_asset_by_name("dex_cube")(name="object")
         object.set_initial_pose(
             Pose(
                 position_xyz=(0.1, 0.0, 0.2),

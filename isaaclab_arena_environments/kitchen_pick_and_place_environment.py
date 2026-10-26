@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class KitchenPickAndPlaceEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the kitchen pick-and-place environment."""
 
-    object: str = "cracker_box"
     object_set: list[str] | None = None
     embodiment: str = "franka_ik"
     teleop_device: str | None = None
@@ -59,7 +58,7 @@ class KitchenPickAndPlaceEnvironment(ArenaEnvironmentFactory[KitchenPickAndPlace
             objects = [self.asset_registry.get_asset_by_name(obj)() for obj in cfg.object_set]
             pick_up_object = RigidObjectSet(name="object_set", objects=objects)
         else:
-            pick_up_object = self.asset_registry.get_asset_by_name(cfg.object)()
+            pick_up_object = self.asset_registry.get_asset_by_name("cracker_box")(name="pick_up_object")
         pick_up_object.add_relation(On(table_top_reference, clearance_m=0.02))
         pick_up_object.add_relation(AtPosition(x=0.4, y=0.0))
 

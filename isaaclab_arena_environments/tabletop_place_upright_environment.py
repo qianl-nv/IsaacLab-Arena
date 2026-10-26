@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class TableTopPlaceUprightEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the tabletop place-upright environment."""
 
-    object: str = "mug"
     background: str = "table"
     embodiment: str = "agibot"
     teleop_device: str | None = "keyboard"
@@ -65,14 +64,15 @@ class TableTopPlaceUprightEnvironment(ArenaEnvironmentFactory[TableTopPlaceUprig
                         "roll": (-1.57, -1.57),
                         "yaw": (-0.57, 0.57),
                     },
-                    "asset_cfgs": [SceneEntityCfg("mug")],
+                    "asset_cfgs": [SceneEntityCfg("placeable_object")],
                 },
             )
 
         # Add the asset registry from the arena migration package
         background = self.asset_registry.get_asset_by_name(cfg.background)()
-        placeable_object = self.asset_registry.get_asset_by_name(cfg.object)(
-            initial_pose=Pose(position_xyz=(0.05, 0.0, 0.75), rotation_xyzw=(1.0, 0.0, 0.0, 0.0))
+        placeable_object = self.asset_registry.get_asset_by_name("mug")(
+            name="placeable_object",
+            initial_pose=Pose(position_xyz=(0.05, 0.0, 0.75), rotation_xyzw=(1.0, 0.0, 0.0, 0.0)),
         )
         if cfg.embodiment == "agibot":
             embodiment = self.asset_registry.get_asset_by_name(cfg.embodiment)(

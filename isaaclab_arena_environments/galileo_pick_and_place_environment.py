@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class GalileoPickAndPlaceEnvironmentCfg(ArenaEnvironmentCfg):
     """Configure the Galileo pick-and-place environment."""
 
-    object: str = "power_drill"
     embodiment: str = "gr1_pink"
     teleop_device: str | None = None
 
@@ -40,7 +39,7 @@ class GalileoPickAndPlaceEnvironment(ArenaEnvironmentFactory[GalileoPickAndPlace
         from isaaclab_arena.utils.pose import Pose
 
         background = self.asset_registry.get_asset_by_name("galileo")()
-        pick_up_object = self.asset_registry.get_asset_by_name(cfg.object)()
+        pick_up_object = self.asset_registry.get_asset_by_name("power_drill")(name="pick_up_object")
         embodiment = self.asset_registry.get_asset_by_name(cfg.embodiment)(enable_cameras=cfg.enable_cameras)
 
         if cfg.teleop_device is not None:

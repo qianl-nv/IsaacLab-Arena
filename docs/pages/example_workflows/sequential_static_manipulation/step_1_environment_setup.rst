@@ -130,7 +130,6 @@ Replay the downloaded dataset to verify the environment setup:
      --dataset_file "${DATASET_DIR}/ranch_bottle_into_fridge_annotated.hdf5" \
      --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback \
      --task put_item_in_fridge_and_close_door \
-     --object ranch_dressing_hope_robolab \
      --embodiment gr1_pink
 
 You should see the GR1 robot replaying the demonstrations, performing the sequential

@@ -72,13 +72,11 @@ def environment_registration_callback() -> list[str]:
         --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback
         --task lift_object
         --num_envs 512
-        --object cracker_box
         agent.policy.activation=relu
 
     In this case the "lift_object" environment is registered with Isaac Lab before
     running the RSL RL training script. The training script will then run the
-    training for the lift_object environment. In the example above we
-    also use an environment flag to set the object to be a cracker box and
+    training for the lift_object environment. In the example above we also use
     Hydra to set the policy activation to be ReLU.
 
     """

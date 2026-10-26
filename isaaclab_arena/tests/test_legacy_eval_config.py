@@ -42,7 +42,6 @@ def test_legacy_jobs_become_concrete_run_configs():
             "arena_env_args": {
                 "environment": "pick_and_place_maple_table",
                 "embodiment": "droid_rel_joint_pos",
-                "pick_up_object": "mustard_bottle_hot3d_robolab",
                 "num_envs": 4,
                 "env_spacing": 2.5,
                 "enable_cameras": True,
@@ -51,7 +50,11 @@ def test_legacy_jobs_become_concrete_run_configs():
             "policy_config_dict": {},
             "num_steps": 20,
             "language_instruction": "Move the bottle.",
-            "variations": {"light": {"intensity": {"enabled": True}}},
+            "variations": {
+                "light": {"intensity": {"enabled": True}},
+                "pick_up_object.asset_selection.enabled": True,
+                "pick_up_object.asset_selection.registry_names": ["mustard_bottle_hot3d_robolab"],
+            },
         }]
     }
 
@@ -61,7 +64,6 @@ def test_legacy_jobs_become_concrete_run_configs():
     assert run.environment == PickAndPlaceMapleTableEnvironmentCfg(
         enable_cameras=True,
         embodiment="droid_rel_joint_pos",
-        pick_up_object="mustard_bottle_hot3d_robolab",
     )
     assert run.environment_builder.num_envs == 4
     assert run.environment_builder.env_spacing == 2.5
@@ -69,7 +71,11 @@ def test_legacy_jobs_become_concrete_run_configs():
     assert run.environment_builder.language_instruction == "Move the bottle."
     assert run.policy == ZeroActionPolicyCfg()
     assert run.rollout_limit.num_steps == 20
-    assert run.variations == {"light": {"intensity": {"enabled": True}}}
+    assert run.variations == {
+        "light": {"intensity": {"enabled": True}},
+        "pick_up_object.asset_selection.enabled": True,
+        "pick_up_object.asset_selection.registry_names": ["mustard_bottle_hot3d_robolab"],
+    }
 
 
 def test_legacy_graph_environment_stays_in_the_existing_cli_path():
@@ -174,6 +180,34 @@ def test_registered_environment_rejects_arguments_missing_from_its_typed_config(
     }
 
     with pytest.raises(AssertionError, match="unknown_environment_field"):
+        run_cfgs_from_legacy_eval_config(legacy_config, device="cpu")
+
+
+@pytest.mark.parametrize(
+    ("environment", "removed_field"),
+    [
+        ("pick_and_place_maple_table", "pick_up_object"),
+        ("pick_and_place_maple_table", "destination_location"),
+        ("cube_goal_pose", "object"),
+        ("lift_object", "object"),
+        ("galileo_pick_and_place", "object"),
+        ("franka_put_and_close_door", "object"),
+        ("tabletop_place_upright", "object"),
+        ("kitchen_pick_and_place", "object"),
+        ("put_item_in_fridge_and_close_door", "object"),
+    ],
+)
+def test_legacy_registered_environment_rejects_removed_rigid_asset_selectors(environment, removed_field):
+    legacy_config = {
+        "jobs": [{
+            "name": "removed_selector",
+            "arena_env_args": {"environment": environment, removed_field: "unused"},
+            "policy_type": "zero_action",
+            "num_steps": 2,
+        }]
+    }
+
+    with pytest.raises(AssertionError, match=removed_field):
         run_cfgs_from_legacy_eval_config(legacy_config, device="cpu")
 
 

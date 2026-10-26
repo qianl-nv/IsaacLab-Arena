@@ -70,7 +70,6 @@ Step 1: Start Recording
         --num_success_steps 10 \
         --external_callback isaaclab_arena.environments.isaaclab_interop.environment_registration_callback \
         --task put_item_in_fridge_and_close_door \
-        --object ranch_dressing_hope_robolab \
         --embodiment gr1_pink \
         --arena_teleop_device openxr
 
