@@ -24,3 +24,4 @@ from isaaclab_arena.tasks import (  # noqa: F401
     sorting_task,
     turn_knob_task,
 )
+from isaaclab_arena_environments.workbench_cleanup import tasks as workbench_cleanup_tasks  # noqa: F401

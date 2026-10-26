@@ -1,0 +1,220 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+embodiment:
+  id: operator
+  registry_name: no_embodiment
+background:
+  id: workbench
+  registry_name: cleanup_workbench
+  params:
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/furniture_workbench_standard_e01/simready_usd/sm_furniture_workbench_standard_e01_01.usd
+    collision_mode: mesh
+    repair_collision_mesh_non_watertight: false
+objects:
+- id: socket_set
+  registry_name: cleanup_socket_set
+  params:
+    initial_pose:
+      position_xyz:
+      - 0.02
+      - 0.535
+      - 0.672
+      rotation_xyzw:
+      - 0
+      - 0
+      - 0.70710678
+      - 0.70710678
+    scale:
+    - 0.9
+    - 0.9
+    - 0.9
+    usd_path: hf://huggingface.co/datasets/ForgeCAD/simready-assets/resolve/0573053fa2c9174ca2a4678a462ec4dfd3035d59/ratchet_socket_set/simready_usd/ratchet_socket_set.usda
+- id: oscilloscope
+  registry_name: cleanup_oscilloscope
+  params:
+    initial_pose:
+      position_xyz:
+      - -0.04
+      - -0.5
+      - 0.672
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/testingTool_oscilloscope_a01/simready_usd/sm_testingTool_oscilloscope_a01_01.usd
+- id: overhead_bin
+  registry_name: simready_usd_object
+  params:
+    initial_pose:
+      position_xyz:
+      - -0.08
+      - 0.34
+      - 1.207
+    usd_path: hf://huggingface.co/datasets/PalatialSim/palatial-nv-asset-library/resolve/69a87329036cec0440403351c12230970c4e67d8/D00814/simready_usd/D00814.usd
+- id: outlet
+  registry_name: cleanup_outlet
+  params:
+    initial_pose:
+      position_xyz:
+      - -0.2
+      - -0.70
+      - 0.86
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/equipment_powerOutlet_wallMount_b01/simready_usd/sm_equipment_powerOutlet_wallMount_b01_01.usd
+- id: power_plug
+  registry_name: cleanup_power_plug
+  params:
+    initial_pose:
+      position_xyz:
+      - -0.145
+      - -0.70
+      - 0.89
+- id: slotted_screwdriver
+  registry_name: cleanup_tool
+  params:
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_slotted_55mm_a01/simready_usd/sm_handTool_screwdriver_slotted_55mm_a01_01.usd
+- id: torx_screwdriver
+  registry_name: cleanup_tool
+  params:
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_torx_t10_a01/simready_usd/sm_handTool_screwdriver_torx_t10_a01_01.usd
+- id: phillips_screwdriver
+  registry_name: cleanup_tool
+  params:
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_phillips_ph2_a01/simready_usd/sm_handTool_screwdriver_phillips_ph2_a01_01.usd
+- id: combination_wrench
+  registry_name: cleanup_tool
+  params:
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_wrench_combination_a01/simready_usd/sm_handTool_wrench_combination_a01_01.usd
+- id: small_wrench
+  registry_name: cleanup_tool
+  params:
+    scale:
+    - 0.75
+    - 0.75
+    - 0.75
+    usd_path: hf://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_wrench_combination_a01/simready_usd/sm_handTool_wrench_combination_a01_01.usd
+object_references:
+- id: tabletop
+  parent_id: workbench
+  prim_path: Tabletop
+  object_type: rigid
+  params: {}
+- id: clutter_area
+  parent_id: workbench
+  prim_path: ClutterArea
+  object_type: base
+  params: {}
+- id: top_rack
+  parent_id: workbench
+  prim_path: TopRack
+  object_type: rigid
+  params: {}
+- id: left_drawers
+  parent_id: workbench
+  prim_path: Bench
+  object_type: articulation
+  params:
+    openable_joint_name: joint_drawersA_01_joint_00
+    collision_mode: mesh
+    repair_collision_mesh_non_watertight: false
+- id: top_left_drawer
+  parent_id: workbench
+  prim_path: Bench/Geometry/drawersA_01_obj_01
+  object_type: base
+  params:
+    collision_mode: mesh
+    repair_collision_mesh_non_watertight: false
+relations:
+- kind: is_anchor
+  subject: tabletop
+- kind: is_anchor
+  subject: clutter_area
+- kind: is_anchor
+  subject: top_rack
+- kind: is_anchor
+  subject: outlet
+- kind: is_anchor
+  subject: power_plug
+- kind: 'on'
+  subject: socket_set
+  reference: tabletop
+  params:
+    clearance_m: 0.012
+- kind: 'on'
+  subject: oscilloscope
+  reference: tabletop
+  params:
+    clearance_m: 0.012
+- kind: 'on'
+  subject: overhead_bin
+  reference: top_rack
+  params:
+    clearance_m: 0.012
+    edge_margin_m: 0.01
+- kind: clutter_on
+  subject: slotted_screwdriver
+  reference: clutter_area
+  params:
+    spread: 0.8
+    gap_m: 0.008
+    clearance_m: 0.015
+    random_yaw: true
+- kind: clutter_on
+  subject: torx_screwdriver
+  reference: clutter_area
+  params:
+    spread: 0.8
+    gap_m: 0.008
+    clearance_m: 0.015
+    random_yaw: true
+- kind: clutter_on
+  subject: phillips_screwdriver
+  reference: clutter_area
+  params:
+    spread: 0.8
+    gap_m: 0.008
+    clearance_m: 0.015
+    random_yaw: true
+- kind: clutter_on
+  subject: combination_wrench
+  reference: clutter_area
+  params:
+    spread: 0.8
+    gap_m: 0.008
+    clearance_m: 0.015
+    random_yaw: true
+- kind: clutter_on
+  subject: small_wrench
+  reference: clutter_area
+  params:
+    spread: 0.8
+    gap_m: 0.008
+    clearance_m: 0.015
+    random_yaw: true
+- kind: is_anchor
+  subject: oscilloscope
+- kind: is_anchor
+  subject: overhead_bin
+- kind: is_anchor
+  subject: socket_set
+placer_params:
+  random_yaw_init: false
+  min_unique_layouts_per_env: 1
+  resolve_on_reset: false
+  max_placement_attempts: 2
+  solver_params:
+    clearance_m: 0.002
+    max_iters: 150
+    save_position_history: false
+  allow_best_loss_fallbacks: false
+env_cfg_override:
+  viewer:
+    eye:
+    - 2.15
+    - -1.8
+    - 1.8
+    lookat:
+    - 0
+    - 0
+    - 0.75
+  sim:
+    dt: 0.008333333333333333
+  decimation: 2
