@@ -4,8 +4,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import random
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from isaaclab_arena.assets.asset_definition import AssetDefinition
 from isaaclab_arena.utils.singleton import SingletonMeta
 
 if TYPE_CHECKING:
@@ -93,26 +95,49 @@ class AssetRegistry(Registry):
     def __init__(self):
         super().__init__()
 
-    def get_asset_by_name(self, registry_name: str) -> type["Asset"]:
+    def register(self, component: Any, key: str | None = None):
+        """Register an asset definition or wrap a legacy asset factory as one."""
+        definition = component if isinstance(component, AssetDefinition) else AssetDefinition.from_factory(component)
+        if key is not None:
+            assert (
+                key == definition.registry_name
+            ), f"Asset registration key {key!r} does not match definition name {definition.registry_name!r}"
+        super().register(definition, definition.registry_name)
+
+    def get_asset_definition(self, registry_name: str) -> AssetDefinition:
+        """Return the asset definition registered under ``registry_name``."""
+        ensure_assets_registered()
+        definition = self.get_component_by_name(registry_name)
+        assert isinstance(definition, AssetDefinition)
+        return definition
+
+    def get_asset_by_name(self, registry_name: str) -> Callable[..., "Asset"]:
         """Return the asset class registered under ``registry_name``. Call the class to create an asset.
 
         Args:
             registry_name: Key of the asset class in the asset registry.
         """
-        ensure_assets_registered()
-        return self.get_component_by_name(registry_name)
+        return self.get_asset_definition(registry_name).factory
 
-    def get_assets_by_tag(self, tag: str) -> list[type["Asset"]]:
-        """Gets a list of assets by tag.
+    def create_asset(self, registry_name: str, **instance_params: Any) -> "Asset":
+        """Create an instance from the asset definition registered under ``registry_name``."""
+        return self.get_asset_definition(registry_name).create(**instance_params)
+
+    def get_asset_definitions_by_tag(self, tag: str) -> list[AssetDefinition]:
+        """Return the registered asset definitions carrying ``tag``."""
+        ensure_assets_registered()
+        return [definition for definition in self._components.values() if tag in definition.tags]
+
+    def get_assets_by_tag(self, tag: str) -> list[Callable[..., "Asset"]]:
+        """Return the registered asset factories carrying ``tag``.
 
         Args:
             tag (str): The tag of the assets.
 
         Returns:
-            list[Asset]: The list of assets.
+            Factories for the matching assets.
         """
-        ensure_assets_registered()
-        return [asset for asset in self._components.values() if tag in asset.tags]
+        return [definition.factory for definition in self.get_asset_definitions_by_tag(tag)]
 
     def get_assets_with_all_tags(self, tags: list[str]) -> list[str]:
         """Return the registry names of the asset classes whose ``tags`` include every tag in ``tags``.
@@ -128,18 +153,18 @@ class AssetRegistry(Registry):
         ensure_assets_registered()
         return sorted(
             registry_name
-            for registry_name, asset_class in self._components.items()
-            if all(tag in asset_class.tags for tag in tags)
+            for registry_name, definition in self._components.items()
+            if all(tag in definition.tags for tag in tags)
         )
 
-    def get_random_asset_by_tag(self, tag: str) -> type["Asset"]:
-        """Gets a random asset which has the given tag.
+    def get_random_asset_by_tag(self, tag: str) -> Callable[..., "Asset"]:
+        """Return a random registered asset factory carrying ``tag``.
 
         Args:
             tag (str): The tag of the assets.
 
         Returns:
-            Asset: The random asset.
+            Factory for the selected asset.
         """
         ensure_assets_registered()
         assets = self.get_assets_by_tag(tag)

@@ -7,9 +7,27 @@ variation keys such as ``<name>.mass``, its prim path, its contact sensor, and r
 use it. Most assets are objects (``Object``): spawned from a USD file or a spawn configuration
 as a rigid, articulated, or static body. A robot (an embodiment) is an asset but not an object.
 
-Arena ships with a library of asset classes, and new ones can be added by registering them.
-Each asset class is registered under a ``registry_name``, such as ``rubiks_cube_hot3d_robolab``.
-``asset_registry.get_asset_by_name()`` returns the class. Calling the class creates an asset.
+Arena ships with a library of asset definitions, and new ones can be added by registering a
+class, factory, or definition. Each definition is registered under a ``registry_name``, such as
+``rubiks_cube_hot3d_robolab``. A definition holds catalogue metadata and a factory while the
+created asset holds its environment-local name, pose, relations, and variations.
+
+Use ``create_asset()`` to construct an asset directly:
+
+.. code-block:: python
+
+   pick_up_object = asset_registry.create_asset("cracker_box", name="pick_up_object")
+
+Use ``get_asset_definition()`` when catalogue metadata or separate lookup and construction are
+needed:
+
+.. code-block:: python
+
+   cracker_box_definition = asset_registry.get_asset_definition("cracker_box")
+   pick_up_object = cracker_box_definition.create(name="pick_up_object")
+
+For compatibility, ``asset_registry.get_asset_by_name()`` still returns the registered class or
+factory. Calling it creates an asset.
 A library object such as ``CrackerBox`` is named after its registry name unless you pass ``name``,
 for example to name it after its role in the task:
 
@@ -26,8 +44,8 @@ Most code does both steps in one line:
 
 .. code-block:: python
 
-   background = asset_registry.get_asset_by_name("kitchen")()
-   cracker_box = asset_registry.get_asset_by_name("cracker_box")()
+   background = asset_registry.create_asset("kitchen")
+   cracker_box = asset_registry.create_asset("cracker_box")
 
 Registering a new asset
 -----------------------
@@ -48,7 +66,24 @@ Once registered, the class is available in the registry like any other asset cla
 
 .. code-block:: python
 
-   obj = asset_registry.get_asset_by_name("my_object")()
+   obj = asset_registry.create_asset("my_object")
+
+For a data-oriented catalogue entry, register an ``AssetDefinition`` directly. Its factory may
+still be a specialized runtime class, so objects, deformables, embodiments, backgrounds, and
+lights can share the definition API without sharing one runtime implementation:
+
+.. code-block:: python
+
+   MY_OBJECT_DEFINITION = register_asset_definition(
+       AssetDefinition(
+           registry_name="my_object",
+           factory=MyObject,
+           tags=("object", "graspable"),
+           asset_kind=AssetKind.OBJECT,
+           object_type=ObjectType.RIGID,
+           usd_path="path/to/my_object.usd",
+       )
+   )
 
 Assets can also be tagged to make them discoverable by category:
 

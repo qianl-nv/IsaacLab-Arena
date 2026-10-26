@@ -91,11 +91,11 @@ def _ensure_scene_lighting(graph_spec: ArenaEnvGraphSpec, assets_by_node_id: dic
         return
 
     dome_node_id = _unique_node_id(set(assets_by_node_id), _DEFAULT_DOME_LIGHT_NODE_ID)
-    dome_light = AssetRegistry().get_asset_by_name(_DEFAULT_DOME_LIGHT_ASSET_NAME)()
+    dome_light = AssetRegistry().create_asset(_DEFAULT_DOME_LIGHT_ASSET_NAME)
     assets_by_node_id[dome_node_id] = dome_light
 
     directional_node_id = _unique_node_id(set(assets_by_node_id), _DEFAULT_DIRECTIONAL_LIGHT_NODE_ID)
-    directional_light = AssetRegistry().get_asset_by_name(_DEFAULT_DIRECTIONAL_LIGHT_ASSET_NAME)()
+    directional_light = AssetRegistry().create_asset(_DEFAULT_DIRECTIONAL_LIGHT_ASSET_NAME)
     directional_light.off()  # a lighting-direction variation turns it back on at build time
     # Let the direction variation dim this dome when it activates, so shadows show.
     directional_light.set_dome_light(dome_light)
@@ -174,23 +174,23 @@ def instantiate_assets_from_spec(
     embodiment_params = parse_asset_params(graph_spec.embodiment.params)
     if enable_cameras:
         embodiment_params.setdefault("enable_cameras", True)
-    assets_by_node_id[graph_spec.embodiment.id] = asset_registry.get_asset_by_name(graph_spec.embodiment.registry_name)(
-        **embodiment_params
+    assets_by_node_id[graph_spec.embodiment.id] = asset_registry.create_asset(
+        graph_spec.embodiment.registry_name, **embodiment_params
     )
 
-    assets_by_node_id[graph_spec.background.id] = asset_registry.get_asset_by_name(graph_spec.background.registry_name)(
-        **parse_asset_params(graph_spec.background.params)
+    assets_by_node_id[graph_spec.background.id] = asset_registry.create_asset(
+        graph_spec.background.registry_name, **parse_asset_params(graph_spec.background.params)
     )
 
     for obj in graph_spec.objects:
         params = parse_asset_params(obj.params)
         params.setdefault("name", obj.id)
-        assets_by_node_id[obj.id] = asset_registry.get_asset_by_name(obj.registry_name)(**params)
+        assets_by_node_id[obj.id] = asset_registry.create_asset(obj.registry_name, **params)
 
     for object_set in graph_spec.object_sets or []:
         assets_by_node_id[object_set.id] = RigidObjectSet(
             name=object_set.id,
-            objects=[asset_registry.get_asset_by_name(registry_name)() for registry_name in object_set.members],
+            objects=[asset_registry.create_asset(registry_name) for registry_name in object_set.members],
             random_choice=object_set.random_choice,
             **parse_asset_params(object_set.params),
         )

@@ -44,6 +44,14 @@ def _test_arena_env_graph_conversion_builds_sequential_pick_and_place_task(simul
     assert arena_env.task.subtasks[1].pick_up_object.name == "mug_ycb_robolab"
     assert all(subtask.destination_location.name == "bowl_ycb_robolab" for subtask in arena_env.task.subtasks)
     assert all(subtask.background_scene.name == "maple_table_robolab" for subtask in arena_env.task.subtasks)
+    assert arena_env.embodiment.get_asset_definition().registry_name == "droid_abs_joint_pos"
+    for asset_name in (
+        "maple_table_robolab",
+        "rubiks_cube_hot3d_robolab",
+        "bowl_ycb_robolab",
+        "mug_ycb_robolab",
+    ):
+        assert arena_env.scene.assets[asset_name].get_asset_definition().registry_name == asset_name
 
     return True
 

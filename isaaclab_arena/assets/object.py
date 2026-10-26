@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import torch
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from isaaclab.sensors.contact_sensor.contact_sensor_cfg import ContactSensorCfg
@@ -24,6 +24,9 @@ from isaaclab_arena.utils.pose import Pose
 from isaaclab_arena.utils.usd.helpers import has_light, open_stage
 from isaaclab_arena.utils.usd.rigid_bodies import read_asset_rigid_body_paths
 from isaaclab_arena.variations.asset_selection_variation import AssetSelectionVariation
+
+if TYPE_CHECKING:
+    from isaaclab_arena.assets.asset_definition import AssetDefinition
 
 
 class Object(RootedObjectBase):
@@ -69,6 +72,8 @@ class Object(RootedObjectBase):
         """Explicit local bounds. None derives bounds from object_cfg.spawn."""
         self._selected_asset: Object | None = None
         """Asset selected in place of this object's declared asset, or None when no selection was made."""
+        self._selected_asset_definition: AssetDefinition | None = None
+        """Registry definition selected in place of this object's declared definition."""
         # TODO(cvolk, 2026.10.13): Replace this per-object cache with one cache in spawn_cfg_geometry.py
         # shared across objects, keyed by get_geometry_key(), so objects and asset-selection candidates that
         # use the same asset compute its geometry once.
@@ -95,10 +100,15 @@ class Object(RootedObjectBase):
         self.registry_name = registry_name
         self.object_cfg.spawn = deepcopy(selected_asset.object_cfg.spawn)
         self._selected_asset = selected_asset
+        self._selected_asset_definition = selected_asset.get_asset_definition()
 
     def get_spawned_asset(self) -> Object:
         """Return the asset whose spawn configuration and simulation check this object uses."""
         return self._selected_asset if self._selected_asset is not None else self
+
+    def get_spawned_asset_definition(self) -> AssetDefinition | None:
+        """Return the definition whose asset is spawned, when it was built through the registry."""
+        return self._selected_asset_definition or self.get_asset_definition()
 
     def get_bounding_box(self) -> AxisAlignedBoundingBox:
         """Get local bounding box (relative to object origin).

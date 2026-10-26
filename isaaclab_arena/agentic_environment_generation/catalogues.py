@@ -66,8 +66,8 @@ def build_asset_catalogue(registry: AssetRegistry | None = None) -> AssetCatalog
     # Classify by registry tags, not issubclass(Background/Object/EmbodimentBase): importing those
     # types pulls in pxr before SimulationApp and breaks unit tests.
     for name in registry.get_all_keys():
-        cls = registry.get_asset_by_name(name)
-        tags = getattr(cls, "tags", None) or []
+        definition = registry.get_asset_definition(name)
+        tags = definition.tags
         # TODO(xinjieyao): Support agentic environment generation consuming procedural assets.
         if "procedural" in tags:
             continue
@@ -78,7 +78,7 @@ def build_asset_catalogue(registry: AssetRegistry | None = None) -> AssetCatalog
         # Only assets existed in the catalogue are exposed.
         elif "object" in tags:
             # Exposed so the agent can honour type constraints, e.g. object-set members must be rigid.
-            object_type = getattr(cls, "object_type", None)
+            object_type = definition.object_type
             catalogue.objects.append({
                 "name": name,
                 "tags": [t for t in tags if t != "object"],

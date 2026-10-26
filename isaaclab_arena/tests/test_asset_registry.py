@@ -19,10 +19,23 @@ OBJECT_SEPARATION = 0.5
 
 
 def _test_default_assets_registered(simulation_app):
+    from isaaclab_arena.assets.asset_definition import AssetKind
+    from isaaclab_arena.assets.object_type import ObjectType
     from isaaclab_arena.assets.registries import AssetRegistry
 
     asset_registry = AssetRegistry()
     assert asset_registry is not None
+    cracker_box_definition = asset_registry.get_asset_definition("cracker_box")
+    assert cracker_box_definition.asset_kind is AssetKind.OBJECT
+    assert asset_registry.get_asset_by_name("cracker_box") is cracker_box_definition.factory
+    cracker_box = asset_registry.create_asset("cracker_box", name="registered_cracker_box")
+    assert cracker_box.get_asset_definition() is cracker_box_definition
+    assert cracker_box.name == "registered_cracker_box"
+    assert asset_registry.get_asset_definition("deformable_cube").asset_kind is AssetKind.OBJECT
+    assert asset_registry.get_asset_definition("deformable_cube").object_type is ObjectType.DEFORMABLE
+    assert asset_registry.get_asset_definition("franka_ik").asset_kind is AssetKind.EMBODIMENT
+    assert asset_registry.get_asset_definition("packing_table").asset_kind is AssetKind.BACKGROUND
+    assert asset_registry.get_asset_definition("light").asset_kind is AssetKind.LIGHT
     num_background_assets = len(asset_registry.get_assets_by_tag("background"))
     print(f"Number of background assets registered: {num_background_assets}")
     assert num_background_assets > 0

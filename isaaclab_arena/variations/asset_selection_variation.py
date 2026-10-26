@@ -115,13 +115,14 @@ def _build_rigid_object(registry_name: str) -> Object:
     assert asset_registry.is_registered(
         registry_name
     ), f"'{registry_name}' is not a registered asset. Use the registry name of a rigid object."
-    asset_class_or_factory = asset_registry.get_asset_by_name(registry_name)
+    definition = asset_registry.get_asset_definition(registry_name)
+    asset_class_or_factory = definition.factory
     # Check a declared type before building the asset, which for a wrong name can open or download its USD. Library
     # object classes and register_asset_factory functions declare one.
-    declared_object_type = getattr(asset_class_or_factory, "object_type", None)
+    declared_object_type = definition.object_type
     if declared_object_type is not None:
         _assert_rigid_object_type(registry_name, asset_class_or_factory.__name__, declared_object_type)
-    candidate_asset = asset_class_or_factory()
+    candidate_asset = definition.create()
     # Classes such as ProceduralCube set their object type only in __init__. Assets that are not objects, such as
     # embodiments, have none, so they are built before this check rejects them.
     _assert_rigid_object_type(

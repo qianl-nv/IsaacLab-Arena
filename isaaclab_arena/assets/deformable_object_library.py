@@ -16,8 +16,10 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab_physx.sim.schemas import PhysxCollisionCfg, PhysxDeformableBodyPropertiesCfg
 from isaaclab_physx.sim.spawners.materials import PhysxDeformableBodyMaterialCfg, PhysxSurfaceDeformableBodyMaterialCfg
 
+from isaaclab_arena.assets.asset_definition import AssetDefinition, AssetKind
 from isaaclab_arena.assets.deformable_object import DeformableObject
-from isaaclab_arena.assets.register import register_asset
+from isaaclab_arena.assets.object_type import ObjectType
+from isaaclab_arena.assets.register import register_asset, register_asset_definition
 from isaaclab_arena.utils.pose import Pose, PosePerEnv
 
 
@@ -27,6 +29,7 @@ class LibraryDeformableObject(DeformableObject):
     registry_name: str
     """Key of this asset class in the asset registry."""
 
+    object_type = ObjectType.DEFORMABLE
     tags = ["object", "deformable", "physx"]
     spawner_cfg: DeformableObjectSpawnerCfg
 
@@ -56,7 +59,6 @@ class LibraryDeformableObject(DeformableObject):
         )
 
 
-@register_asset
 class DeformableCube(LibraryDeformableObject):
     """PhysX deformable cube used by the DROID pick-and-place environment."""
 
@@ -72,6 +74,17 @@ class DeformableCube(LibraryDeformableObject):
             density=300.0,
         ),
     )
+
+
+DEFORMABLE_CUBE_DEFINITION = register_asset_definition(
+    AssetDefinition(
+        registry_name=DeformableCube.registry_name,
+        factory=DeformableCube,
+        tags=tuple(DeformableCube.tags),
+        asset_kind=AssetKind.OBJECT,
+        object_type=DeformableCube.object_type,
+    )
+)
 
 
 @register_asset

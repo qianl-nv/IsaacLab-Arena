@@ -7,6 +7,7 @@ from collections.abc import Callable
 from types import get_original_bases
 from typing import TYPE_CHECKING, TypeVar, get_args, get_origin
 
+from isaaclab_arena.assets.asset_definition import AssetDefinition
 from isaaclab_arena.assets.object_type import ObjectType
 from isaaclab_arena.assets.registries import (
     AssetRegistry,
@@ -35,6 +36,16 @@ def register_asset(cls):
     else:
         AssetRegistry().register(cls, cls.registry_name)
     return cls
+
+
+def register_asset_definition(definition: AssetDefinition) -> AssetDefinition:
+    """Register an asset definition and return it."""
+    registry = AssetRegistry()
+    if registry.is_registered(definition.registry_name, ensure_loaded=False):
+        print(f"WARNING: Asset {definition.registry_name} is already registered. Doing nothing.")
+    else:
+        registry.register(definition)
+    return definition
 
 
 def register_asset_factory(

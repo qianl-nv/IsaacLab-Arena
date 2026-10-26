@@ -21,6 +21,7 @@ from isaaclab_arena.affordances.openable import Openable
 from isaaclab_arena.affordances.placeable import Placeable
 from isaaclab_arena.affordances.pressable import Pressable
 from isaaclab_arena.affordances.turnable import Turnable
+from isaaclab_arena.assets.asset_definition import AssetDefinition, AssetKind
 from isaaclab_arena.assets.lightwheel_lazy import LightwheelLazyPath
 from isaaclab_arena.assets.nucleus import ARENA_NUCLEUS_DIR
 from isaaclab_arena.assets.object import Object
@@ -30,7 +31,7 @@ from isaaclab_arena.assets.object_utils import (
     RIGID_BODY_PROPS_HIGH_PRECISION,
     RIGID_BODY_PROPS_MEDIUM_PRECISION,
 )
-from isaaclab_arena.assets.register import register_asset
+from isaaclab_arena.assets.register import register_asset, register_asset_definition
 from isaaclab_arena.utils.pose import Pose
 
 
@@ -84,7 +85,6 @@ class LibraryObject(Object):
         )
 
 
-@register_asset
 class CrackerBox(LibraryObject):
     """
     Encapsulates the pick-up object config for a pick-and-place environment.
@@ -93,6 +93,18 @@ class CrackerBox(LibraryObject):
     registry_name = "cracker_box"
     tags = ["object"]
     usd_path = f"{ISAAC_NUCLEUS_DIR}/Props/YCB/Axis_Aligned_Physics/003_cracker_box.usd"
+
+
+CRACKER_BOX_DEFINITION = register_asset_definition(
+    AssetDefinition(
+        registry_name=CrackerBox.registry_name,
+        factory=CrackerBox,
+        tags=tuple(CrackerBox.tags),
+        asset_kind=AssetKind.OBJECT,
+        object_type=CrackerBox.object_type,
+        usd_path=CrackerBox.usd_path,
+    )
+)
 
 
 @register_asset

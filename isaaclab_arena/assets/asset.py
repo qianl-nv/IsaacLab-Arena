@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from isaaclab.sim import SimulationCfg
 
+    from isaaclab_arena.assets.asset_definition import AssetDefinition
     from isaaclab_arena.variations.variation_base import VariationBase
 
 
@@ -31,6 +32,11 @@ class Asset:
         self.name = name
         self.tags = tags
         self.variations: dict[str, VariationBase] = {}
+        self._asset_definition: AssetDefinition | None = None
+
+    def get_asset_definition(self) -> AssetDefinition | None:
+        """Return the registry definition that created this asset, when available."""
+        return self._asset_definition
 
     def add_variation(self, variation: VariationBase) -> None:
         """Attach a variation under its instance ``name``, which must not already be attached.

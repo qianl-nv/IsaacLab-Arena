@@ -13,24 +13,26 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from isaaclab_arena.assets.asset_definition import AssetDefinition
 from isaaclab_arena.assets.object_type import ObjectType
 from isaaclab_arena.assets.registries import AssetRegistry, ObjectRelationLibraryRegistry, TaskRegistry
 from isaaclab_arena.assets.simready_constants import SIMREADY_USD_OBJECT_REGISTRY_NAME
 
 
-def _extract_asset_usd_path(asset_cls: type, **params: Any) -> str | None:
+def _extract_asset_usd_path(definition: AssetDefinition, **params: Any) -> str | None:
     """Return the asset's root USD path or URL, or ``None`` if not extractable."""
-    class_usd = getattr(asset_cls, "usd_path", None)
-    if isinstance(class_usd, str) and class_usd:
-        return class_usd
+    declared_usd_path = definition.resolve_usd_path()
+    if declared_usd_path:
+        return declared_usd_path
 
     # Defer conversion imports until runtime; conversion utilities also import these schema types.
     from isaaclab_arena.environment_spec.arena_env_graph_conversion_utils import parse_asset_params
 
-    # Instantiate when usd_path is set lazily (e.g. Lightwheel backgrounds).
+    # Compatibility fallback for legacy factories whose path is resolved during construction
+    # (for example, Lightwheel backgrounds). Native definitions should declare resource metadata.
     # TODO(qianl): add support for embodiments, whose robot USD lives in scene_config.robot.spawn.
     try:
-        instance = asset_cls(**parse_asset_params(params))
+        instance = definition.create(**parse_asset_params(params))
     except Exception:
         return None
 
@@ -46,7 +48,7 @@ def _assert_registered_asset_name(registry_name: str, object_type: ObjectType | 
     """
     assert AssetRegistry().is_registered(registry_name), f"Unknown asset registry_name '{registry_name}'"
     if object_type is not None:
-        declared_type = getattr(AssetRegistry().get_asset_by_name(registry_name), "object_type", None)
+        declared_type = AssetRegistry().get_asset_definition(registry_name).object_type
         assert (
             declared_type is object_type
         ), f"Asset '{registry_name}' must be a {object_type.value} object, got {declared_type}"
@@ -89,8 +91,8 @@ class AssetSpec(BaseModel):
 
     def resolve_usd_path(self) -> str:
         """Return the USD path or URL for this registered asset instance."""
-        asset_cls = AssetRegistry().get_asset_by_name(self.registry_name)
-        usd_path = _extract_asset_usd_path(asset_cls, **self.params)
+        definition = AssetRegistry().get_asset_definition(self.registry_name)
+        usd_path = _extract_asset_usd_path(definition, **self.params)
         assert usd_path, f"asset {self.registry_name!r} has no usd_path"
         return usd_path
 
