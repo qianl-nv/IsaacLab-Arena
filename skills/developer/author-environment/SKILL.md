@@ -60,6 +60,25 @@ Read only the references relevant to the requested behavior:
 
 ## Validate and hand off
 
+For agentic graph inspection and preview, invoke the maintained sidecar wrapper inside the Arena
+runtime. It writes one JSON result to stdout, logs diagnostics to stderr or `runtime.log`, and puts
+artifacts plus `report.json` under the required output directory:
+
+```bash
+python isaaclab_arena/scripts/arena_author.py graph snapshot \
+  --env-spec path/to/env_graph.yaml --output artifacts/authoring/snapshot
+python isaaclab_arena/scripts/arena_author.py graph preview \
+  --env-spec path/to/env_graph.yaml --output artifacts/authoring/preview \
+  --num-envs 1 --num-steps 20
+```
+
+One-shot graph commands start and stop a sidecar automatically. To amortize Kit startup, run
+`python isaaclab_arena/scripts/arena_author.py sim serve` in a supervised terminal, use
+`sim status` to discover capabilities, and always finish with `sim stop`. Pass the same global
+`--socket` before the command group when overriding the checkout-specific default. Treat exit code
+0 as completed, 1 as an operation/runtime failure, and 2 as invalid command usage. Read
+`report.json` and its artifact hashes before interpreting images or video.
+
 Use [dev-container](../dev-container/SKILL.md) for the clone's runtime and host-user execution,
 [setup-arena](../../user/setup-arena/SKILL.md) for requested runtime preparation, and
 [run-tests](../run-tests/SKILL.md) for pytest. Run lint and source inspection on the host.
