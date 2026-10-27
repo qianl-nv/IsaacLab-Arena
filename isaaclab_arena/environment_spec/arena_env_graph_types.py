@@ -24,6 +24,10 @@ def _extract_asset_usd_path(asset_cls: type, **params: Any) -> str | None:
     if isinstance(class_usd, str) and class_usd:
         return class_usd
 
+    param_usd = params.get("usd_path")
+    if isinstance(param_usd, str) and param_usd:
+        return param_usd
+
     # Defer conversion imports until runtime; conversion utilities also import these schema types.
     from isaaclab_arena.environment_spec.arena_env_graph_conversion_utils import parse_asset_params
 

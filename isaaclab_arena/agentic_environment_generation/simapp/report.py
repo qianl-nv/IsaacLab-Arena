@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -59,13 +60,14 @@ class AuthoringReport(ReportModel):
 
 def validated_output_dir(output: str | Path) -> Path:
     """Create and return a non-symlinked output directory."""
-    output = Path(output).expanduser()
-    existing = output
-    while not existing.exists() and existing != existing.parent:
-        existing = existing.parent
-    assert not existing.is_symlink(), f"Output path traverses a symlink: {existing}"
+    output = Path(os.path.abspath(Path(output).expanduser()))
+    for component in reversed((output, *output.parents)):
+        if component.exists():
+            assert not component.is_symlink(), f"Output path traverses a symlink: {component}"
     output.mkdir(parents=True, exist_ok=True)
-    assert output.is_dir() and not output.is_symlink(), f"Output must be a real directory: {output}"
+    assert output.is_dir(), f"Output must be a directory: {output}"
+    for component in reversed((output, *output.parents)):
+        assert not component.is_symlink(), f"Output path traverses a symlink: {component}"
     return output.resolve()
 
 
