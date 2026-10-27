@@ -302,17 +302,15 @@ def print_env_graph(spec: ArenaEnvGraphSpec) -> None:
 
 def build_env_from_env_graph_spec(env_graph_spec_path: Path, args_cli: argparse.Namespace) -> ManagerBasedEnv:
     """Build a gymnasium env from an environment graph spec YAML."""
+    from isaaclab_arena.agentic_environment_generation.simapp.environment_runtime import make_env_from_graph_spec
     from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
-    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
 
     loaded_env_graph_spec = ArenaEnvGraphSpec.from_yaml(env_graph_spec_path)
-    arena_env = loaded_env_graph_spec.to_arena_env()
     # TODO(cvolk, 2026-07-06): [typed-config-migration] Pass ArenaEnvBuilderCfg into this function after this
     # runner stops carrying all configuration in one argparse Namespace.
-    builder = ArenaEnvBuilder(arena_env, arena_env_builder_cfg_from_argparse(args_cli))
-    env = builder.make_registered()
+    env = make_env_from_graph_spec(loaded_env_graph_spec, arena_env_builder_cfg_from_argparse(args_cli))
     print(
-        f"[runner] built env {arena_env.name!r} from environment graph spec {env_graph_spec_path}",
+        f"[runner] built env {loaded_env_graph_spec.env_name!r} from environment graph spec {env_graph_spec_path}",
         flush=True,
     )
     return env
@@ -320,21 +318,12 @@ def build_env_from_env_graph_spec(env_graph_spec_path: Path, args_cli: argparse.
 
 def run_zero_action_policy(env: ManagerBasedEnv, num_steps: int) -> None:
     """Run the zero-action policy for a given number of steps."""
-    import torch
+    from isaaclab_arena.agentic_environment_generation.simapp.environment_runtime import run_zero_action_steps
 
-    from isaaclab_arena.policy.zero_action_policy import ZeroActionPolicy, ZeroActionPolicyCfg
+    def _print_episode_done(step: int, env_ids: list[int]) -> None:
+        print(f"[runner] step {step}: episode done for env_ids {env_ids}", flush=True)
 
-    policy = ZeroActionPolicy(ZeroActionPolicyCfg())
-    obs, _ = env.reset()
-    policy.reset()
-    for step in range(num_steps):
-        with torch.inference_mode():
-            action = policy.get_action(env, obs)
-            obs, _, terminated, truncated, _ = env.step(action)
-        if (terminated | truncated).any():
-            env_ids = (terminated | truncated).nonzero().flatten()
-            print(f"[runner] step {step}: episode done for env_ids {env_ids.tolist()}", flush=True)
-            policy.reset(env_ids=env_ids)
+    run_zero_action_steps(env, num_steps, on_episode_done=_print_episode_done)
     env.close()
     print("[runner] done.", flush=True)
 

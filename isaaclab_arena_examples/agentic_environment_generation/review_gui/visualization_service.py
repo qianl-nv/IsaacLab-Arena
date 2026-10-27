@@ -13,13 +13,10 @@ import sys
 
 import streamlit as st
 
+from isaaclab_arena.agentic_environment_generation.simapp.client import SimAppError, simapp_socket_from_env
+from isaaclab_arena.agentic_environment_generation.simapp.kit_viewport import thumbnail_cache_dir
 from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
 from isaaclab_arena.utils.usd.prim_tree import UsdPrimRecord
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.client import (
-    SimAppError,
-    simapp_socket_from_env,
-)
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.kit_viewport import thumbnail_cache_dir
 from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp_connector import (
     clear_simapp_client,
     ensure_simapp,

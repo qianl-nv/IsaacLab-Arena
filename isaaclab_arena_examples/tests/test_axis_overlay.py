@@ -5,7 +5,7 @@
 
 """Unit tests for review-GUI axis overlay helpers."""
 
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.axis_overlay import (
+from isaaclab_arena.agentic_environment_generation.simapp.axis_overlay import (
     AXIS_X_COLOR,
     AXIS_Y_COLOR,
     AXIS_Z_COLOR,
