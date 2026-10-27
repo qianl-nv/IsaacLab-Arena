@@ -8,13 +8,18 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import gymnasium as gym
+
     from isaaclab.envs import ManagerBasedEnv
 
+    from isaaclab_arena.environments.isaaclab_arena_environment import IsaacLabArenaEnvironment
     from isaaclab_arena.offline_placement.post_physics_validation import PlacementOutcome
+    from isaaclab_arena.offline_placement.recording_config import PlacementRecordingCfg
     from isaaclab_arena.offline_placement.settled_placement_params import SettledPlacementParams
     from isaaclab_arena.relations.placement_asset import PlaceableAsset
     from isaaclab_arena.utils.pose import Pose
@@ -150,3 +155,108 @@ def write_settled_layouts(
             "sampling": sampling,
         })
     write_placement_samples(output, samples, validation=validation)
+
+
+def record_placements_to_jsonl(
+    env: gym.Env,
+    output: str | Path,
+    *,
+    min_layouts: int,
+    max_batches: int,
+    params: SettledPlacementParams | None = None,
+    render: bool = False,
+    scene_assets: list[PlaceableAsset] | None = None,
+) -> PlacementRecordingSummary:
+    """Collect accepted poses up to a target or batch budget and write them as JSONL."""
+    from isaaclab_arena.offline_placement.settled_placement import resolve_settle_params
+    from isaaclab_arena.relations.placement_events import get_placement_pool
+
+    output = Path(output)
+    assert not output.exists(), f"Output already exists: {output}"
+    pool = get_placement_pool(env)
+    assert pool is not None, "Recording requires a pooled placement reset event"
+    assets = list(pool.objects)
+    for asset in scene_assets or []:
+        if asset not in assets:
+            assets.append(asset)
+    validate_recording_assets(env, assets)
+    settle = resolve_settle_params(assets, params)
+    poses, validation, attempted, rejections = collect_layouts_until_count(
+        env,
+        min_layouts,
+        max_batches,
+        settle,
+        render=render,
+        scene_assets=assets,
+    )
+    accepted = len(validation)
+    summary = PlacementRecordingSummary(output=None, accepted=accepted, attempted=attempted, rejections=rejections)
+    if accepted == 0:
+        return summary
+    write_settled_layouts(env, output, assets, poses, validation, settle.num_steps)
+    summary.output = output
+    return summary
+
+
+def record_settled_placement_layouts(
+    cfg: PlacementRecordingCfg,
+    *,
+    device: str = "cuda:0",
+    arena_env: IsaacLabArenaEnvironment | None = None,
+) -> PlacementRecordingSummary:
+    """Build an environment, collect accepted settled poses, and close it."""
+    from isaaclab_arena.assets.object_set import RigidObjectSet
+    from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
+    from isaaclab_arena.environment_spec.placer_params_cfg_override import build_placer_params_from_override
+    from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
+    from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
+
+    assert not Path(cfg.output).exists(), f"Output already exists: {cfg.output}"
+    assert cfg.num_envs > 0 and cfg.layouts_per_env > 0, "Environment and layout counts must be positive"
+    assert cfg.min_layouts > 0 and cfg.max_batches > 0, "Layout target and batch budget must be positive"
+    assert (
+        cfg.max_batches * cfg.num_envs >= cfg.min_layouts
+    ), "Batch budget cannot supply the requested accepted layout count"
+    assert (cfg.viewer_eye is None) == (cfg.viewer_lookat is None), "Set viewer_eye and viewer_lookat together"
+
+    if arena_env is None:
+        spec = ArenaEnvGraphSpec.from_yaml(cfg.env_spec)
+        assert not spec.object_sets, "Resolve object sets before recording reusable layouts"
+        arena_env = spec.to_arena_env()
+    scene_assets = arena_env.get_placement_assets()
+    assert not any(isinstance(asset, RigidObjectSet) for asset in scene_assets), "Resolve object sets before recording"
+    placer_params = arena_env.placer_params
+    if placer_params is None:
+        placer_params = build_placer_params_from_override(None)
+    arena_env.placer_params = dataclass_replace(
+        placer_params,
+        placement_seed=cfg.seed,
+        min_unique_layouts_per_env=cfg.layouts_per_env,
+        resolve_on_reset=True,
+    )
+
+    print(f"[recording] Solving placements for {cfg.num_envs} environments...", flush=True)
+    env = ArenaEnvBuilder(
+        arena_env,
+        ArenaEnvBuilderCfg(
+            num_envs=cfg.num_envs,
+            env_spacing=cfg.env_spacing,
+            seed=cfg.seed,
+            device=device,
+            presets=cfg.presets,
+        ),
+    ).make_registered()
+    try:
+        if cfg.viewer_eye is not None:
+            env.unwrapped.sim.set_camera_view(cfg.viewer_eye, cfg.viewer_lookat)
+        return record_placements_to_jsonl(
+            env,
+            cfg.output,
+            min_layouts=cfg.min_layouts,
+            max_batches=cfg.max_batches,
+            params=cfg.settle,
+            render=cfg.render,
+            scene_assets=scene_assets,
+        )
+    finally:
+        env.close()

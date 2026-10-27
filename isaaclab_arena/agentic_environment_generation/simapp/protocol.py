@@ -55,7 +55,40 @@ class RunSimPreviewRequest(RequestBase):
     env_spacing: float = Field(gt=0.0, le=1000.0)
 
 
-JobOperation = Annotated[RenderSpecRequest | RunSimPreviewRequest, Field(discriminator="cmd")]
+class InspectAssetRequest(RequestBase):
+    cmd: Literal["inspect_asset"] = "inspect_asset"
+    usd_path: str = Field(min_length=1, max_length=8192)
+    variants: dict[str, str] = Field(default_factory=dict)
+
+
+class ProbeAssetRequest(RequestBase):
+    cmd: Literal["probe_asset"] = "probe_asset"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+    object_name: str = Field(min_length=1, max_length=256)
+    num_steps: int = Field(default=30, ge=1, le=10_000)
+    env_spacing: float = Field(default=3.0, gt=0.0, le=1000.0)
+
+
+class SceneCheckRequest(RequestBase):
+    cmd: Literal["check_scene"] = "check_scene"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+    output_path: str = Field(min_length=1, max_length=8192)
+    mode: Literal["sampled", "pool", "static"] = "sampled"
+    configuration: dict[str, Any] = Field(default_factory=dict)
+
+
+class CaptureEvidenceRequest(RequestBase):
+    cmd: Literal["capture_evidence"] = "capture_evidence"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+    num_envs: int = Field(default=1, ge=1, le=128)
+    num_steps: int = Field(default=20, ge=1, le=100_000)
+    env_spacing: float = Field(default=3.0, gt=0.0, le=1000.0)
+
+
+JobOperation = Annotated[
+    RenderSpecRequest | RunSimPreviewRequest | ProbeAssetRequest | SceneCheckRequest | CaptureEvidenceRequest,
+    Field(discriminator="cmd"),
+]
 
 
 class SubmitJobRequest(RequestBase):
@@ -84,6 +117,10 @@ Request = Annotated[
     | CapabilitiesRequest
     | RenderSpecRequest
     | RunSimPreviewRequest
+    | InspectAssetRequest
+    | ProbeAssetRequest
+    | SceneCheckRequest
+    | CaptureEvidenceRequest
     | SubmitJobRequest
     | JobStatusRequest
     | JobResultRequest

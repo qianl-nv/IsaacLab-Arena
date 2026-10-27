@@ -94,11 +94,12 @@ def run_sim_preview(
     import gymnasium as gym
     import yaml
 
+    from isaaclab.envs import VideoRecorderCfg
+
     from isaaclab_arena.agentic_environment_generation.simapp.environment_runtime import (
         env_builder_from_graph_spec,
         run_zero_action_steps,
     )
-    from isaaclab_arena.video.video_recording import VideoRecordingCfg, wrap_env_for_video
 
     started_at = time.monotonic()
     _preview_log(started_at, "run_sim_preview started")
@@ -120,11 +121,6 @@ def run_sim_preview(
     cache_dir = sim_preview_cache_dir()
     stamp = int(time.time() * 1000)
     video_dir = cache_dir / f"{preview_name}_{stamp}"
-    video_cfg = VideoRecordingCfg(
-        record_viewport_video=True,
-        video_base_dir=str(video_dir),
-    )
-
     pool_layouts = builder_cfg.num_envs * _PREVIEW_LAYOUTS_PER_ENV
     env = None
     completed = False
@@ -135,14 +131,23 @@ def run_sim_preview(
         )
         t_relations = time.monotonic()
         env_cfg, env_kwargs = builder.build_env_cfg()
+        env_cfg.video_recorders = [
+            VideoRecorderCfg(
+                source="visualizer:kit",
+                output_dir=str(video_dir),
+                output_filename_prefix="preview",
+                video_length=num_steps,
+            )
+        ]
+        camera_metadata = _kit_camera_metadata(env_cfg)
         _preview_log(started_at, f"relation solver finished ({time.monotonic() - t_relations:.1f}s)")
 
         _preview_log(started_at, "spawning sim scene (gym.make)…")
         t_spawn = time.monotonic()
-        env = builder.make_registered(env_cfg, env_kwargs, render_mode=video_cfg.render_mode)
+        env = builder.make_registered(env_cfg, env_kwargs)
         _preview_log(started_at, f"sim scene ready ({time.monotonic() - t_spawn:.1f}s)")
+        camera_metadata = _active_kit_camera_metadata(camera_metadata)
 
-        env = wrap_env_for_video(env, video_cfg, num_steps=num_steps, num_episodes=None)
         run_zero_action_steps(
             env,
             num_steps,
@@ -171,6 +176,7 @@ def run_sim_preview(
             "num_envs": num_envs,
             "env_spacing": env_spacing,
             "num_steps": num_steps,
+            "camera_metadata": camera_metadata,
         }
     finally:
         _close_env_and_reset_sim(env, app=app, suppress_exceptions=True)
@@ -179,3 +185,70 @@ def run_sim_preview(
         with suppress(Exception):
             if preview_name in gym.registry:
                 del gym.registry[preview_name]
+
+
+def _kit_camera_metadata(env_cfg) -> dict[str, Any]:
+    """Return the effective Kit visualizer camera configuration."""
+    visualizer_cfgs = getattr(env_cfg.sim, "visualizer_cfgs", ()) or ()
+    cfg = next((cfg for cfg in visualizer_cfgs if getattr(cfg, "visualizer_type", None) == "kit"), None)
+    if cfg is None:
+        return {"status": "unsupported", "reason": "environment has no Kit visualizer configuration"}
+    return {
+        "status": "completed",
+        "eye": list(cfg.eye),
+        "lookat": list(cfg.lookat),
+        "focal_length_mm": float(cfg.focal_length),
+        "width_px": int(cfg.window_width),
+        "height_px": int(cfg.window_height),
+        "origin_type": str(cfg.origin_type),
+        "origin_env_index": int(cfg.origin_env_index),
+        "origin_track_path": cfg.origin_track_path,
+        "provenance": "resolved_env_configuration",
+    }
+
+
+def _active_kit_camera_metadata(fallback: dict[str, Any]) -> dict[str, Any]:
+    """Read the active viewport camera pose, intrinsics, and resolution."""
+    try:
+        import omni.usd
+        from omni.kit.viewport.utility import get_active_viewport
+        from pxr import Usd, UsdGeom
+
+        viewport = get_active_viewport()
+        stage = omni.usd.get_context().get_stage()
+        camera_path = str(viewport.camera_path)
+        camera = UsdGeom.Camera(stage.GetPrimAtPath(camera_path))
+        assert camera, f"active viewport camera is invalid: {camera_path}"
+        transform = UsdGeom.XformCache(Usd.TimeCode.Default()).GetLocalToWorldTransform(camera.GetPrim())
+        translation = transform.ExtractTranslation()
+        quaternion = transform.ExtractRotationQuat()
+        imaginary = quaternion.GetImaginary()
+        width_px, height_px = viewport.resolution
+        focal_length_mm = float(camera.GetFocalLengthAttr().Get())
+        horizontal_aperture_mm = float(camera.GetHorizontalApertureAttr().Get())
+        vertical_aperture_mm = float(camera.GetVerticalApertureAttr().Get())
+        return {
+            "status": "completed",
+            "camera_prim_path": camera_path,
+            "position_w": [float(value) for value in translation],
+            "rotation_wxyz": [
+                float(quaternion.GetReal()),
+                float(imaginary[0]),
+                float(imaginary[1]),
+                float(imaginary[2]),
+            ],
+            "focal_length_mm": focal_length_mm,
+            "horizontal_aperture_mm": horizontal_aperture_mm,
+            "vertical_aperture_mm": vertical_aperture_mm,
+            "width_px": int(width_px),
+            "height_px": int(height_px),
+            "fx_px": focal_length_mm / horizontal_aperture_mm * width_px,
+            "fy_px": focal_length_mm / vertical_aperture_mm * height_px,
+            "provenance": "active_kit_viewport",
+        }
+    except Exception as exc:
+        return {
+            **fallback,
+            "status": "incomplete",
+            "reason": f"active viewport camera metadata unavailable: {exc}",
+        }

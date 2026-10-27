@@ -190,6 +190,158 @@ def _run_preview(args: argparse.Namespace) -> int:
     return 0 if report.status == "completed" else 1
 
 
+def _load_yaml_mapping(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    import yaml
+
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(value, dict), f"Expected a YAML mapping in {path}"
+    return value
+
+
+def _run_asset_inspect(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    runtime_log = output_dir / "runtime.log"
+    started_at = time.monotonic()
+    report = AuthoringReport(
+        command="asset inspect",
+        status="incomplete",
+        inputs={"usd": args.usd},
+        effective_configuration={"variants": _load_yaml_mapping(args.variants)},
+    )
+    try:
+        with _managed_client(args.socket, runtime_log) as client:
+            response = client.inspect_asset(args.usd, variants=report.effective_configuration["variants"])
+        result_path = output_dir / "inspection.json"
+        result_path.write_text(json.dumps(response["result"], indent=2) + "\n", encoding="utf-8")
+        report.artifacts.append(artifact_record(result_path, output_dir))
+        report.status = "completed" if response["result"]["topology"]["compatible"] else "incomplete"
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status in ("completed", "incomplete") else 1
+
+
+def _run_asset_probe(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    runtime_log = output_dir / "runtime.log"
+    started_at = time.monotonic()
+    report = AuthoringReport(
+        command="asset probe",
+        status="incomplete",
+        inputs={"env_spec": str(args.env_spec.resolve()), "object_name": args.object},
+        effective_configuration={"num_steps": args.num_steps, "env_spacing": args.env_spacing},
+    )
+    try:
+        with _managed_client(args.socket, runtime_log) as client:
+            response = client.probe_asset(
+                args.env_spec.read_text(encoding="utf-8"),
+                object_name=args.object,
+                num_steps=args.num_steps,
+                env_spacing=args.env_spacing,
+            )
+        result_path = output_dir / "probe.json"
+        result_path.write_text(json.dumps(response["result"], indent=2) + "\n", encoding="utf-8")
+        report.artifacts.append(artifact_record(result_path, output_dir))
+        report.status = "completed"
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status == "completed" else 1
+
+
+def _run_scene_check(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    runtime_log = output_dir / "runtime.log"
+    started_at = time.monotonic()
+    configuration = _load_yaml_mapping(args.config)
+    report = AuthoringReport(
+        command="scene check",
+        status="incomplete",
+        inputs={"env_spec": str(args.env_spec.resolve())},
+        effective_configuration={"mode": args.mode, **configuration},
+    )
+    try:
+        with _managed_client(args.socket, runtime_log) as client:
+            response = client.check_scene(
+                args.env_spec.read_text(encoding="utf-8"),
+                output_path=str(output_dir),
+                mode=args.mode,
+                configuration=configuration,
+            )
+        result = response["result"]
+        result_path = output_dir / "scene_check.json"
+        result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        report.artifacts.append(artifact_record(result_path, output_dir))
+        placements_path = result.get("placements_path")
+        if placements_path and Path(placements_path).is_file():
+            report.artifacts.append(artifact_record(placements_path, output_dir))
+        report.status = result.get("status", "completed")
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status in ("completed", "incomplete", "unsupported") else 1
+
+
+def _run_evidence_capture(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    runtime_log = output_dir / "runtime.log"
+    started_at = time.monotonic()
+    report = AuthoringReport(
+        command="evidence capture",
+        status="incomplete",
+        inputs={"env_spec": str(args.env_spec.resolve())},
+        effective_configuration={
+            "num_envs": args.num_envs,
+            "num_steps": args.num_steps,
+            "env_spacing": args.env_spacing,
+        },
+    )
+    try:
+        with _managed_client(args.socket, runtime_log) as client:
+            response = client.capture_evidence(
+                args.env_spec.read_text(encoding="utf-8"),
+                num_envs=args.num_envs,
+                num_steps=args.num_steps,
+                env_spacing=args.env_spacing,
+            )
+        result = response["result"]
+        video_path = Path(result["video_path"])
+        output_video = output_dir / "evidence.mp4"
+        shutil.copy2(video_path, output_video)
+        with contextlib.suppress(OSError):
+            video_path.unlink()
+        metadata_path = output_dir / "evidence.json"
+        metadata_path.write_text(json.dumps(result["capture"], indent=2) + "\n", encoding="utf-8")
+        report.artifacts.extend([
+            artifact_record(output_video, output_dir),
+            artifact_record(metadata_path, output_dir),
+        ])
+        camera_status = result["capture"]["camera_metadata"]["status"]
+        report.status = "completed" if camera_status == "completed" else "incomplete"
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status in ("completed", "incomplete") else 1
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--socket", type=Path, default=_default_socket_path())
@@ -219,6 +371,40 @@ def _parser() -> argparse.ArgumentParser:
     preview.add_argument("--num-steps", type=int, default=20)
     preview.add_argument("--env-spacing", type=float, default=3.0)
     preview.set_defaults(handler=_run_preview)
+
+    asset_parser = subparsers.add_parser("asset", help="Inspect or probe asset physics.")
+    asset_commands = asset_parser.add_subparsers(dest="command", required=True)
+    inspect = asset_commands.add_parser("inspect", help="Inspect authored USD physics.")
+    inspect.add_argument("--usd", required=True)
+    inspect.add_argument("--variants", type=Path, default=None, help="Optional YAML mapping of USD variants.")
+    inspect.add_argument("--output", type=Path, required=True)
+    inspect.set_defaults(handler=_run_asset_inspect)
+    probe = asset_commands.add_parser("probe", help="Probe one object in a spawned graph scene.")
+    probe.add_argument("--env-spec", type=Path, required=True)
+    probe.add_argument("--object", required=True)
+    probe.add_argument("--num-steps", type=int, default=30)
+    probe.add_argument("--env-spacing", type=float, default=3.0)
+    probe.add_argument("--output", type=Path, required=True)
+    probe.set_defaults(handler=_run_asset_probe)
+
+    scene_parser = subparsers.add_parser("scene", help="Run scene and placement checks.")
+    scene_commands = scene_parser.add_subparsers(dest="command", required=True)
+    check = scene_commands.add_parser("check", help="Check sampled, pooled, or static scene state.")
+    check.add_argument("--env-spec", type=Path, required=True)
+    check.add_argument("--config", type=Path, default=None)
+    check.add_argument("--mode", choices=("sampled", "pool", "static"), default="sampled")
+    check.add_argument("--output", type=Path, required=True)
+    check.set_defaults(handler=_run_scene_check)
+
+    evidence_parser = subparsers.add_parser("evidence", help="Capture viewport evidence.")
+    evidence_commands = evidence_parser.add_subparsers(dest="command", required=True)
+    capture = evidence_commands.add_parser("capture", help="Capture bounded preview evidence.")
+    capture.add_argument("--env-spec", type=Path, required=True)
+    capture.add_argument("--num-envs", type=int, default=1)
+    capture.add_argument("--num-steps", type=int, default=20)
+    capture.add_argument("--env-spacing", type=float, default=3.0)
+    capture.add_argument("--output", type=Path, required=True)
+    capture.set_defaults(handler=_run_evidence_capture)
     return parser
 
 

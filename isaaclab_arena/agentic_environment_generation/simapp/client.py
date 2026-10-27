@@ -131,6 +131,73 @@ class SimAppClient:
             )
         return response
 
+    def inspect_asset(self, usd_path: str, *, variants: dict[str, str] | None = None) -> dict[str, Any]:
+        """Inspect authored USD physics without modifying the source asset."""
+        with self._lock:
+            response = self._request({
+                "cmd": "inspect_asset",
+                "usd_path": usd_path,
+                "variants": variants or {},
+            })
+        return self._successful_response(response, "asset inspection")
+
+    def probe_asset(
+        self,
+        yaml_text: str,
+        *,
+        object_name: str,
+        num_steps: int,
+        env_spacing: float,
+    ) -> dict[str, Any]:
+        """Run a bounded passive probe of one spawned scene object."""
+        with self._lock:
+            response = self._request({
+                "cmd": "probe_asset",
+                "yaml_text": yaml_text,
+                "object_name": object_name,
+                "num_steps": num_steps,
+                "env_spacing": env_spacing,
+            })
+        return self._successful_response(response, "asset probe")
+
+    def check_scene(
+        self,
+        yaml_text: str,
+        *,
+        output_path: str,
+        mode: str,
+        configuration: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run scene preflight and placement checks."""
+        with self._lock:
+            response = self._request({
+                "cmd": "check_scene",
+                "yaml_text": yaml_text,
+                "output_path": output_path,
+                "mode": mode,
+                "configuration": configuration,
+            })
+        return self._successful_response(response, "scene check")
+
+    def capture_evidence(
+        self,
+        yaml_text: str,
+        *,
+        num_envs: int,
+        num_steps: int,
+        env_spacing: float,
+    ) -> dict[str, Any]:
+        """Capture a bounded viewport preview with frame-event metadata."""
+        with self._lock:
+            response = self._request({
+                "cmd": "capture_evidence",
+                "yaml_text": yaml_text,
+                "num_envs": num_envs,
+                "num_steps": num_steps,
+                "env_spacing": env_spacing,
+            })
+        return self._successful_response(response, "evidence capture")
+
     def ping(self) -> bool:
         """Cheap liveness check round-trip — returns True on a healthy reply."""
         with self._lock:
@@ -170,6 +237,12 @@ class SimAppClient:
         """Cancel a pending sidecar job."""
         with self._lock:
             return self._request({"cmd": "cancel", "job_id": job_id})
+
+    @staticmethod
+    def _successful_response(response: dict[str, Any], operation: str) -> dict[str, Any]:
+        if not response.get("ok"):
+            raise SimAppError(f"SimApp {operation} failed: {response.get('error', 'unknown')}")
+        return response
 
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._sock is None:
