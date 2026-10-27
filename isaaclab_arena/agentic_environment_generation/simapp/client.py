@@ -255,7 +255,7 @@ def wait_for_simapp_socket(
     raise SimAppError(f"Timed out after {timeout_s:.0f}s waiting for SimApp at {socket_path}.{detail}")
 
 
-def spawn_simapp_process(socket_path: str) -> subprocess.Popen[Any]:
+def spawn_simapp_process(socket_path: str, *, runtime_log_path: str | None = None) -> subprocess.Popen[Any]:
     """Launch the SimApp server subprocess bound to ``socket_path``."""
     if Path(socket_path).exists():
         Path(socket_path).unlink()
@@ -266,7 +266,9 @@ def spawn_simapp_process(socket_path: str) -> subprocess.Popen[Any]:
         "--socket",
         socket_path,
     ]
-    return subprocess.Popen(cmd, env=os.environ.copy())
+    if runtime_log_path is not None:
+        cmd.extend(["--runtime-log", runtime_log_path])
+    return subprocess.Popen(cmd, env=os.environ.copy(), stdout=sys.stderr, stderr=sys.stderr)
 
 
 def stop_simapp_process(proc: subprocess.Popen[Any] | None, socket_path: str) -> None:
