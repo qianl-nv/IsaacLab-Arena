@@ -1,0 +1,56 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+env_name: jetson_thor_packing
+external_yaml: scene.yaml
+task:
+  composition: sequential
+  description: Pack both AC leads, the USB cable and the power adapter into their lower
+    compartments. Seat the upper cardboard tray on the carton ledges, then place the
+    Jetson AGX Thor Developer Kit in its lined housing. Leave every part settled in place.
+  desired_subtask_success_state: [true, true, true, true, true, true]
+  subtasks:
+  - kind: ObjectInTask
+    params:
+      object: ac_cable_us
+      target: ac_bay
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
+  - kind: ObjectInTask
+    params:
+      object: ac_cable_eu
+      target: ac_bay
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
+  - kind: ObjectInTask
+    params:
+      object: usb_cable
+      target: usb_bay
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
+  - kind: ObjectInTask
+    params:
+      object: power_supply
+      target: power_bay
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
+  - kind: EnterHousingTask
+    params:
+      object: board_tray
+      target: carton
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
+  - kind: EnterHousingTask
+    params:
+      object: thor_board
+      target: board_tray
+      consecutive_success_steps: 20
+      linear_velocity_threshold: 0.015
+      angular_velocity_threshold: 0.1
