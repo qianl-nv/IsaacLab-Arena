@@ -28,12 +28,16 @@ from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
     PROTOCOL_VERSION,
     CancelJobRequest,
     CapabilitiesRequest,
+    CaptureEvidenceRequest,
+    InspectAssetRequest,
     JobOperation,
     JobResultRequest,
     JobStatusRequest,
     PingRequest,
+    ProbeAssetRequest,
     RenderSpecRequest,
     RunSimPreviewRequest,
+    SceneCheckRequest,
     ShutdownRequest,
     SubmitJobRequest,
     parse_request,
@@ -152,12 +156,22 @@ def _serve_connection(
                             "capabilities",
                             "render_spec",
                             "run_sim_preview",
+                            "inspect_asset",
+                            "probe_asset",
+                            "check_scene",
+                            "capture_evidence",
                             "submit",
                             "status",
                             "result",
                             "cancel",
                         ],
-                        "job_operations": ["render_spec", "run_sim_preview"],
+                        "job_operations": [
+                            "render_spec",
+                            "run_sim_preview",
+                            "probe_asset",
+                            "check_scene",
+                            "capture_evidence",
+                        ],
                         "single_flight": True,
                     },
                 ),
@@ -254,10 +268,44 @@ def _serve_connection(
 
 def _execute_operation(app, req: JobOperation, render_fn, spec_cls) -> dict[str, Any]:
     """Execute one validated simulation operation."""
+    if isinstance(req, InspectAssetRequest):
+        from isaaclab_arena.agentic_environment_generation.simapp.asset_inspection import inspect_usd_asset
+
+        return inspect_usd_asset(req.usd_path, variants=req.variants)
     if isinstance(req, RenderSpecRequest):
         return _handle_render_spec(app, req, render_fn, spec_cls)
     if isinstance(req, RunSimPreviewRequest):
         return _handle_run_sim_preview(app, req)
+    if isinstance(req, ProbeAssetRequest):
+        from isaaclab_arena.agentic_environment_generation.simapp.runtime_probe import probe_graph_object
+
+        return probe_graph_object(
+            app,
+            req.yaml_text,
+            object_name=req.object_name,
+            num_steps=req.num_steps,
+            env_spacing=req.env_spacing,
+        )
+    if isinstance(req, SceneCheckRequest):
+        from isaaclab_arena.agentic_environment_generation.simapp.scene_check import check_graph_scene
+
+        return check_graph_scene(
+            app,
+            req.yaml_text,
+            output_path=req.output_path,
+            mode=req.mode,
+            configuration=req.configuration,
+        )
+    if isinstance(req, CaptureEvidenceRequest):
+        from isaaclab_arena.agentic_environment_generation.simapp.evidence import capture_graph_evidence
+
+        return capture_graph_evidence(
+            app,
+            req.yaml_text,
+            num_envs=req.num_envs,
+            num_steps=req.num_steps,
+            env_spacing=req.env_spacing,
+        )
     raise TypeError(f"unsupported operation: {type(req).__name__}")
 
 

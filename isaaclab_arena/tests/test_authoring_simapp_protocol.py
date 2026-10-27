@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -18,6 +19,7 @@ from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
     response_dict,
 )
 from isaaclab_arena.agentic_environment_generation.simapp.server import _serve_connection
+from isaaclab_arena.agentic_environment_generation.simapp.sim_preview import _kit_camera_metadata
 
 
 def test_protocol_request_defaults_version_and_request_id() -> None:
@@ -32,6 +34,44 @@ def test_protocol_rejects_unknown_fields_and_invalid_bounds() -> None:
         parse_request({"cmd": "run_sim_preview", "yaml_text": "x", "num_envs": 0, "num_steps": 1, "env_spacing": 1})
     with pytest.raises(ValidationError):
         parse_request({"cmd": "ping", "unexpected": True})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"cmd": "inspect_asset", "usd_path": "asset.usd"},
+        {"cmd": "probe_asset", "yaml_text": "env_name: test", "object_name": "cube"},
+        {
+            "cmd": "check_scene",
+            "yaml_text": "env_name: test",
+            "output_path": "/tmp/report",
+            "mode": "static",
+        },
+        {"cmd": "capture_evidence", "yaml_text": "env_name: test"},
+    ],
+)
+def test_authoring_requests_are_typed(payload: dict) -> None:
+    request = parse_request(payload)
+    assert request.cmd == payload["cmd"]
+    assert request.protocol_version == PROTOCOL_VERSION
+
+
+def test_camera_metadata_uses_resolved_kit_visualizer_configuration() -> None:
+    kit_cfg = SimpleNamespace(
+        visualizer_type="kit",
+        eye=(1.0, 2.0, 3.0),
+        lookat=(0.0, 0.0, 0.5),
+        focal_length=24.0,
+        window_width=1280,
+        window_height=720,
+        origin_type="world",
+        origin_env_index=0,
+        origin_track_path=None,
+    )
+    metadata = _kit_camera_metadata(SimpleNamespace(sim=SimpleNamespace(visualizer_cfgs=[kit_cfg])))
+    assert metadata["status"] == "completed"
+    assert metadata["eye"] == [1.0, 2.0, 3.0]
+    assert metadata["focal_length_mm"] == 24.0
 
 
 def test_response_preserves_envelope_and_legacy_result_fields() -> None:
