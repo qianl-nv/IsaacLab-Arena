@@ -29,6 +29,9 @@ from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
     CancelJobRequest,
     CapabilitiesRequest,
     CaptureEvidenceRequest,
+    CheckTaskRequest,
+    FinishForceSessionRequest,
+    ForceCommandRequest,
     InspectAssetRequest,
     JobOperation,
     JobResultRequest,
@@ -36,9 +39,11 @@ from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
     PingRequest,
     ProbeAssetRequest,
     RenderSpecRequest,
+    RunForceRequest,
     RunSimPreviewRequest,
     SceneCheckRequest,
     ShutdownRequest,
+    StartForceSessionRequest,
     SubmitJobRequest,
     parse_request,
     response_dict,
@@ -80,6 +85,62 @@ def _write_response(writer: TextIO, payload: dict[str, Any]) -> None:
     writer.flush()
 
 
+def _handle_force_session_request(req, writer: TextIO, app, force_sessions: dict[str, Any]) -> None:
+    """Handle one stateful force-session lifecycle request."""
+    if isinstance(req, StartForceSessionRequest):
+        if force_sessions:
+            _write_response(
+                writer,
+                response_dict(
+                    req,
+                    error_code="SESSION_BUSY",
+                    error="Only one active force session is supported.",
+                ),
+            )
+            return
+        from isaaclab_arena.agentic_environment_generation.force.runtime import ForceSession
+
+        session_id = uuid4().hex
+        try:
+            force_sessions[session_id] = ForceSession(app, req.yaml_text)
+        except Exception as exc:
+            _log_current_exception()
+            _write_response(writer, response_dict(req, error_code="SESSION_START_FAILED", error=str(exc)))
+        else:
+            _write_response(
+                writer,
+                response_dict(req, result={"session_id": session_id, "state": "ready"}),
+            )
+        return
+
+    session = force_sessions.get(req.session_id)
+    if session is None:
+        _write_response(
+            writer,
+            response_dict(
+                req,
+                error_code="SESSION_NOT_FOUND",
+                error=f"Unknown force session: {req.session_id}",
+            ),
+        )
+        return
+    if isinstance(req, ForceCommandRequest):
+        acknowledgement = session.execute(req.command)
+        _write_response(writer, response_dict(req, result={"acknowledgement": acknowledgement}))
+        return
+
+    assert isinstance(req, FinishForceSessionRequest)
+    force_sessions.pop(req.session_id)
+    try:
+        final_state = session.controller.inspect()
+    finally:
+        session.close()
+    _write_response(
+        writer,
+        response_dict(req, result={"session_id": req.session_id, "state": "closed", "final_state": final_state}),
+    )
+
+
 def _serve_connection(
     reader: TextIO,
     writer: TextIO,
@@ -88,6 +149,7 @@ def _serve_connection(
     render_fn,
     spec_cls,
     jobs: dict[str, _Job],
+    force_sessions: dict[str, Any],
 ) -> bool:
     """Handle JSON-RPC requests until disconnect; return True after ``shutdown``."""
     while raw_line := reader.readline(MAX_REQUEST_BYTES + 1):
@@ -137,6 +199,9 @@ def _serve_connection(
             continue
 
         if isinstance(req, ShutdownRequest):
+            for session in force_sessions.values():
+                session.close()
+            force_sessions.clear()
             _write_response(writer, response_dict(req))
             return True
 
@@ -160,6 +225,11 @@ def _serve_connection(
                             "probe_asset",
                             "check_scene",
                             "capture_evidence",
+                            "run_force",
+                            "start_force_session",
+                            "force_command",
+                            "finish_force_session",
+                            "check_task",
                             "submit",
                             "status",
                             "result",
@@ -171,6 +241,8 @@ def _serve_connection(
                             "probe_asset",
                             "check_scene",
                             "capture_evidence",
+                            "run_force",
+                            "check_task",
                         ],
                         "single_flight": True,
                     },
@@ -178,7 +250,17 @@ def _serve_connection(
             )
             continue
 
+        if isinstance(req, (StartForceSessionRequest, ForceCommandRequest, FinishForceSessionRequest)):
+            _handle_force_session_request(req, writer, app, force_sessions)
+            continue
+
         if isinstance(req, SubmitJobRequest):
+            if force_sessions:
+                _write_response(
+                    writer,
+                    response_dict(req, error_code="SESSION_BUSY", error="Finish the active force session first."),
+                )
+                continue
             job_id = uuid4().hex
             jobs[job_id] = _Job(req.operation)
             _write_response(writer, response_dict(req, result={"job_id": job_id, "state": "pending"}))
@@ -256,6 +338,8 @@ def _serve_connection(
             continue
 
         try:
+            if force_sessions:
+                raise RuntimeError("Finish the active force session before running another simulation operation.")
             result = _execute_operation(app, req, render_fn, spec_cls)
         except Exception as exc:
             _log_current_exception()
@@ -306,6 +390,14 @@ def _execute_operation(app, req: JobOperation, render_fn, spec_cls) -> dict[str,
             num_steps=req.num_steps,
             env_spacing=req.env_spacing,
         )
+    if isinstance(req, RunForceRequest):
+        from isaaclab_arena.agentic_environment_generation.force.runtime import run_force_commands
+
+        return run_force_commands(app, req.yaml_text, req.commands)
+    if isinstance(req, CheckTaskRequest):
+        from isaaclab_arena.agentic_environment_generation.force.runtime import check_task_scenarios
+
+        return check_task_scenarios(app, req.yaml_text, req.scenarios)
     raise TypeError(f"unsupported operation: {type(req).__name__}")
 
 
@@ -337,6 +429,7 @@ def _serve_socket(socket_path: str, runtime_log_path: str | None = None) -> int:
     server.listen(5)
     print(f"[simapp] listening on {path}", file=sys.stderr)
     jobs: dict[str, _Job] = {}
+    force_sessions: dict[str, Any] = {}
 
     try:
         while True:
@@ -352,6 +445,7 @@ def _serve_socket(socket_path: str, runtime_log_path: str | None = None) -> int:
                         render_fn=render_thumbnails_with_app,
                         spec_cls=ArenaEnvGraphSpec,
                         jobs=jobs,
+                        force_sessions=force_sessions,
                     )
                 finally:
                     reader.close()
@@ -359,6 +453,9 @@ def _serve_socket(socket_path: str, runtime_log_path: str | None = None) -> int:
                 if should_exit:
                     break
     finally:
+        for session in force_sessions.values():
+            with contextlib.suppress(Exception):
+                session.close()
         server.close()
         path.unlink(missing_ok=True)
         with contextlib.suppress(Exception):

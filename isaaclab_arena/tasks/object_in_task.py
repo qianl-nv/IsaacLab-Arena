@@ -15,7 +15,12 @@ from isaaclab_arena.assets.asset import Asset
 from isaaclab_arena.assets.register import register_task
 from isaaclab_arena.metrics.success_rate import SuccessRateMetric
 from isaaclab_arena.progress_tracking.completion_criteria import CompletionCriteria
-from isaaclab_arena.tasks.predicates.spatial import object_in_target_aabb, object_settled_in_target_aabb
+from isaaclab_arena.tasks.predicates.spatial import (
+    ContainmentGeometry,
+    object_in_target,
+    object_outside_target,
+    object_settled_in_target_aabb,
+)
 from isaaclab_arena.tasks.predicates.temporal import TrueForConsecutiveStepsCfg
 from isaaclab_arena.tasks.task_base import TaskBase
 from isaaclab_arena.tasks.task_termination_cfg import TaskTerminationCfg
@@ -37,8 +42,10 @@ class ObjectInTask(TaskBase):
         task_description: str | None = None,
         contact_force_threshold: float = 0.01,
         minimum_contained_fraction: float = 1.0,
+        require_entry_after_activation: bool = False,
+        containment_geometry: ContainmentGeometry = "world_aabb",
     ):
-        """Configure one object and target with settled AABB containment.
+        """Configure one object and target with settled containment.
 
         Args:
             object: Object to deposit.
@@ -49,7 +56,9 @@ class ObjectInTask(TaskBase):
             episode_length_s: Episode timeout in seconds; None uses the standard task default.
             task_description: Optional task description.
             contact_force_threshold: Minimum destination contact force in newtons.
-            minimum_contained_fraction: Required object AABB volume fraction inside the target, in (0, 1].
+            minimum_contained_fraction: Required object geometry fraction inside the target, in (0, 1].
+            require_entry_after_activation: Require an observed outside-to-inside transition after reset.
+            containment_geometry: Geometry approximation used for containment checks.
         """
         super().__init__(episode_length_s=episode_length_s, task_description=task_description)
         assert 0 < minimum_contained_fraction <= 1
@@ -61,6 +70,8 @@ class ObjectInTask(TaskBase):
         self.consecutive_success_steps = consecutive_success_steps
         self.linear_velocity_threshold = linear_velocity_threshold
         self.angular_velocity_threshold = angular_velocity_threshold
+        self.require_entry_after_activation = require_entry_after_activation
+        self.containment_geometry = containment_geometry
         self.scene_config = self.make_scene_cfg()
 
     def make_scene_cfg(self):
@@ -72,34 +83,48 @@ class ObjectInTask(TaskBase):
         return self.scene_config
 
     def get_termination_cfg(self) -> TaskTerminationCfg:
+        predicate_sequence = []
+        if self.require_entry_after_activation:
+            predicate_sequence.append(
+                partial(
+                    object_outside_target,
+                    object_name=self.object.name,
+                    target_name=self.target.name,
+                    minimum_contained_fraction=self.minimum_contained_fraction,
+                    containment_geometry=self.containment_geometry,
+                )
+            )
+        predicate_sequence.extend([
+            # Record entering the target as a separate progress milestone.
+            # The settling step rechecks containment throughout its consecutive-step window.
+            partial(
+                object_in_target,
+                object_name=self.object.name,
+                target_name=self.target.name,
+                minimum_contained_fraction=self.minimum_contained_fraction,
+                containment_geometry=self.containment_geometry,
+            ),
+            TrueForConsecutiveStepsCfg(
+                predicate=partial(
+                    object_settled_in_target_aabb,
+                    object_name=self.object.name,
+                    target_name=self.target.name,
+                    contact_sensor_cfg=self.contact_sensor_cfg,
+                    minimum_contained_fraction=self.minimum_contained_fraction,
+                    contact_force_threshold=self.contact_force_threshold,
+                    linear_velocity_threshold=self.linear_velocity_threshold,
+                    angular_velocity_threshold=self.angular_velocity_threshold,
+                    containment_geometry=self.containment_geometry,
+                ),
+                required_steps=self.consecutive_success_steps,
+            ),
+        ])
         return TaskTerminationCfg(
             timeout_s=self.episode_length_s,
             success=[
                 CompletionCriteria(
                     name="object_in",
-                    predicate_sequence=[
-                        # Record entering the target as a separate progress milestone.
-                        # The settling step rechecks containment throughout its consecutive-step window.
-                        partial(
-                            object_in_target_aabb,
-                            object_name=self.object.name,
-                            target_name=self.target.name,
-                            minimum_contained_fraction=self.minimum_contained_fraction,
-                        ),
-                        TrueForConsecutiveStepsCfg(
-                            predicate=partial(
-                                object_settled_in_target_aabb,
-                                object_name=self.object.name,
-                                target_name=self.target.name,
-                                contact_sensor_cfg=self.contact_sensor_cfg,
-                                minimum_contained_fraction=self.minimum_contained_fraction,
-                                contact_force_threshold=self.contact_force_threshold,
-                                linear_velocity_threshold=self.linear_velocity_threshold,
-                                angular_velocity_threshold=self.angular_velocity_threshold,
-                            ),
-                            required_steps=self.consecutive_success_steps,
-                        ),
-                    ],
+                    predicate_sequence=predicate_sequence,
                 ),
             ],
         )
