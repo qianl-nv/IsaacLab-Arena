@@ -31,14 +31,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-from isaaclab_arena.agentic_environment_generation.spec_io import DEFAULT_AGENTIC_OUTPUT_DIR
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.client import (
+from isaaclab_arena.agentic_environment_generation.simapp.client import (
     SIMAPP_SOCKET_ENV,
     SimAppError,
     spawn_simapp_process,
     stop_simapp_process,
     wait_for_simapp_socket,
 )
+from isaaclab_arena.agentic_environment_generation.spec_io import DEFAULT_AGENTIC_OUTPUT_DIR
 
 _REVIEW_GUI_DIR = Path(__file__).resolve().parent / "review_gui"
 

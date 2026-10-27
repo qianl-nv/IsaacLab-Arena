@@ -13,6 +13,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from isaaclab_arena.agentic_environment_generation.simapp.client import (
+    SimAppClient,
+    spawn_simapp_process,
+    stop_simapp_process,
+    wait_for_simapp_socket,
+)
+from isaaclab_arena.agentic_environment_generation.simapp.sim_preview import _preview_cfg, parse_sim_preview_params
 from isaaclab_arena.agentic_environment_generation.simready_search_interface import SimReadySearchConfig
 from isaaclab_arena.agentic_environment_generation.spec_io import env_graph_spec_path, write_env_graph_spec
 from isaaclab_arena.assets.object_type import ObjectType
@@ -39,16 +46,6 @@ from isaaclab_arena_examples.agentic_environment_generation.review_gui.generatio
     _get_generation_agent,
     available_inference_endpoints,
     run_generation_pipeline,
-)
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.client import (
-    SimAppClient,
-    spawn_simapp_process,
-    stop_simapp_process,
-    wait_for_simapp_socket,
-)
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.sim_preview import (
-    _preview_cfg,
-    parse_sim_preview_params,
 )
 from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp_connector import (
     ENV_SPACING_M,

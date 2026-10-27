@@ -3,25 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""SimulationApp boot helpers for the review GUI SimApp subprocess."""
+"""Compatibility imports for the maintained SimApp boot helpers."""
 
-from __future__ import annotations
+from isaaclab_arena.agentic_environment_generation.simapp.boot import launch_args, launch_simulation_app
 
-import argparse
-import sys
-
-from isaaclab_arena.utils.isaaclab_utils.simulation_app import get_app_launcher
-
-
-def launch_args() -> argparse.Namespace:
-    """AppLauncher args for the review GUI SimApp (Kit UI + viewport capture)."""
-    return argparse.Namespace(visualizer=["kit"], enable_cameras=True, livestream=-1)
-
-
-def launch_simulation_app():
-    """Boot Isaac Sim's ``SimulationApp`` with the Kit visualizer, or ``None`` on failure."""
-    try:
-        return get_app_launcher(launch_args()).app
-    except Exception as exc:
-        print(f"[simapp] SimulationApp launch failed: {exc}", file=sys.stderr)
-        return None
+__all__ = ["launch_args", "launch_simulation_app"]

@@ -12,15 +12,15 @@ from pathlib import Path
 
 import streamlit as st
 
+from isaaclab_arena.agentic_environment_generation.simapp.client import (
+    SimAppClient,
+    SimAppError,
+    simapp_socket_from_env,
+)
 from isaaclab_arena.environments.arena_env_builder_cfg import ArenaEnvBuilderCfg
 from isaaclab_arena_examples.agentic_environment_generation.review_gui.editor_panel import (
     SpecParseResult,
     validate_yaml_text,
-)
-from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.client import (
-    SimAppClient,
-    SimAppError,
-    simapp_socket_from_env,
 )
 
 _DEFAULT_BUILDER_CFG = ArenaEnvBuilderCfg()
