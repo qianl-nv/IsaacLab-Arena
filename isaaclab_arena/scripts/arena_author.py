@@ -342,6 +342,119 @@ def _run_evidence_capture(args: argparse.Namespace) -> int:
     return 0 if report.status in ("completed", "incomplete") else 1
 
 
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    commands = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        value = json.loads(line)
+        assert isinstance(value, dict), f"{path}:{line_number} must contain a JSON object."
+        commands.append(value)
+    assert commands, f"No commands found in {path}."
+    return commands
+
+
+def _run_force(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    started_at = time.monotonic()
+    report = AuthoringReport(
+        command="force run",
+        status="incomplete",
+        inputs={"env_spec": str(args.env_spec.resolve()), "commands": str(args.commands.resolve())},
+    )
+    try:
+        with _managed_client(args.socket, output_dir / "runtime.log") as client:
+            response = client.run_force(
+                args.env_spec.read_text(encoding="utf-8"),
+                _load_jsonl(args.commands),
+            )
+        result = response["result"]
+        result_path = output_dir / "force_run.json"
+        result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        report.artifacts.append(artifact_record(result_path, output_dir))
+        report.status = result["status"]
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status == "completed" else 1
+
+
+def _existing_client(socket_path: Path) -> SimAppClient:
+    client = _connect(socket_path)
+    if client is None:
+        raise SimAppError("A force session requires a persistent sidecar; run `arena_author.py sim serve` first.")
+    return client
+
+
+def _serve_force(args: argparse.Namespace) -> int:
+    client = _existing_client(args.socket)
+    try:
+        response = client.start_force_session(args.env_spec.read_text(encoding="utf-8"))
+    finally:
+        client.disconnect()
+    _json_stdout({"command": "force serve", "status": "completed", **response["result"]})
+    return 0
+
+
+def _send_force_command(args: argparse.Namespace) -> int:
+    if args.command_json is not None:
+        command = json.loads(args.command_json)
+    else:
+        command = json.loads(args.command_file.read_text(encoding="utf-8"))
+    assert isinstance(command, dict), "The force command must be a JSON object."
+    client = _existing_client(args.socket)
+    try:
+        response = client.force_command(args.session, command)
+    finally:
+        client.disconnect()
+    acknowledgement = response["result"]["acknowledgement"]
+    _json_stdout({"command": "force command", **acknowledgement})
+    return 0 if acknowledgement["status"] == "completed" else 1
+
+
+def _finish_force(args: argparse.Namespace) -> int:
+    client = _existing_client(args.socket)
+    try:
+        response = client.finish_force_session(args.session)
+    finally:
+        client.disconnect()
+    _json_stdout({"command": "force finish", "status": "completed", **response["result"]})
+    return 0
+
+
+def _run_task_check(args: argparse.Namespace) -> int:
+    output_dir = validated_output_dir(args.output)
+    started_at = time.monotonic()
+    report = AuthoringReport(
+        command="task check",
+        status="incomplete",
+        inputs={"env_spec": str(args.env_spec.resolve()), "scenarios": str(args.scenarios.resolve())},
+    )
+    try:
+        scenario_document = _load_yaml_mapping(args.scenarios)
+        scenarios = scenario_document.get("scenarios")
+        assert isinstance(scenarios, list), f"{args.scenarios} must contain a scenarios list."
+        with _managed_client(args.socket, output_dir / "runtime.log") as client:
+            response = client.check_task(args.env_spec.read_text(encoding="utf-8"), scenarios)
+        result = response["result"]
+        result_path = output_dir / "task_check.json"
+        result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        report.artifacts.append(artifact_record(result_path, output_dir))
+        report.status = result["status"]
+    except Exception as exc:
+        report.status = "failed"
+        report.error_code = type(exc).__name__
+        report.error = str(exc)
+    report.timings_s["total"] = time.monotonic() - started_at
+    write_report(report, output_dir)
+    _json_stdout(report.model_dump(mode="json"))
+    return 0 if report.status == "completed" else 1
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--socket", type=Path, default=_default_socket_path())
@@ -405,6 +518,34 @@ def _parser() -> argparse.ArgumentParser:
     capture.add_argument("--env-spacing", type=float, default=3.0)
     capture.add_argument("--output", type=Path, required=True)
     capture.set_defaults(handler=_run_evidence_capture)
+
+    force_parser = subparsers.add_parser("force", help="Run bounded physical-force commands.")
+    force_commands = force_parser.add_subparsers(dest="command", required=True)
+    force_run = force_commands.add_parser("run", help="Run a finite JSONL command sequence.")
+    force_run.add_argument("--env-spec", type=Path, required=True)
+    force_run.add_argument("--commands", type=Path, required=True)
+    force_run.add_argument("--output", type=Path, required=True)
+    force_run.set_defaults(handler=_run_force)
+    force_serve = force_commands.add_parser("serve", help="Create a session on a persistent sidecar.")
+    force_serve.add_argument("--env-spec", type=Path, required=True)
+    force_serve.set_defaults(handler=_serve_force)
+    force_command = force_commands.add_parser("command", help="Send one command to an active session.")
+    force_command.add_argument("--session", required=True)
+    command_source = force_command.add_mutually_exclusive_group(required=True)
+    command_source.add_argument("--command-json")
+    command_source.add_argument("--command-file", type=Path)
+    force_command.set_defaults(handler=_send_force_command)
+    force_finish = force_commands.add_parser("finish", help="Close a force session.")
+    force_finish.add_argument("--session", required=True)
+    force_finish.set_defaults(handler=_finish_force)
+
+    task_parser = subparsers.add_parser("task", help="Check task semantics in isolated scenarios.")
+    task_commands = task_parser.add_subparsers(dest="command", required=True)
+    task_check = task_commands.add_parser("check", help="Run task scenario checks.")
+    task_check.add_argument("--env-spec", type=Path, required=True)
+    task_check.add_argument("--scenarios", type=Path, required=True)
+    task_check.add_argument("--output", type=Path, required=True)
+    task_check.set_defaults(handler=_run_task_check)
     return parser
 
 

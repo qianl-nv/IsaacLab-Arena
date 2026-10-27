@@ -514,6 +514,7 @@ class ProgressTracker:
         self._task_success = torch.zeros(num_envs, dtype=torch.bool, device=device)
         self._events: list[list[PredicateEvent]] = [[] for _ in range(num_envs)]
         self._last_processed_step = torch.full((num_envs,), -1, dtype=torch.long, device=device)
+        self._latest_predicate_results: dict[int, torch.Tensor] = {}
         self._requires_step_index = any(runner._consecutive_step_requirements for runner in self.runners)
         tracked_event_names = [event_cfg.name for event_cfg in tracked_events or []]
         assert len(set(tracked_event_names)) == len(tracked_event_names), "Tracked event names must be unique."
@@ -602,6 +603,9 @@ class ProgressTracker:
                 active_envs = active_envs & subtask_was_complete
         self._task_success = self._compute_task_success(env, predicate_results_this_step)
         self._step_tracked_events(env, step_index, predicate_results_this_step)
+        self._latest_predicate_results = {
+            predicate_key: result.clone() for predicate_key, (result, _) in predicate_results_this_step.items()
+        }
         if step_index is not None:
             # The environment increments episode_length_buf in place; keep our own snapshot.
             self._last_processed_step.copy_(step_index)
@@ -692,6 +696,8 @@ class ProgressTracker:
             env_ids = env_ids.tolist()
         self._task_success[env_ids] = False
         self._last_processed_step[env_ids] = -1
+        for result in self._latest_predicate_results.values():
+            result[env_ids] = False
         for runner in self.runners:
             runner.reset(env_ids)
         for event_runner in self._tracked_event_runners:
@@ -764,6 +770,40 @@ class ProgressTracker:
                 requirement["first_satisfied_step"] = first_satisfied_steps.get(key)
                 summary.append(requirement)
         return summary
+
+    def get_diagnostics(self, env_idx: int) -> dict:
+        """Return cached predicate and sequence diagnostics without reevaluating predicates."""
+        assert 0 <= env_idx < self.num_envs, f"env_idx must be in [0, {self.num_envs}), got {env_idx}"
+        criteria_diagnostics = {}
+        for runner in self.runners:
+            sequence_diagnostics = {}
+            for sequence_name, chain in runner.predicate_chains.items():
+                current_index = int(runner.current_predicate_index[sequence_name][env_idx].item())
+                predicate_diagnostics = []
+                for predicate_index, (predicate, _) in enumerate(chain):
+                    cached_result = self._latest_predicate_results.get(id(predicate))
+                    predicate_diagnostics.append({
+                        "index": predicate_index,
+                        "name": _predicate_repr(predicate),
+                        "cached_result": bool(cached_result[env_idx].item()) if cached_result is not None else None,
+                        "completed": predicate_index < current_index,
+                        "active": predicate_index == current_index and current_index < len(chain),
+                    })
+                sequence_diagnostics[sequence_name] = {
+                    "current_predicate_index": current_index,
+                    "is_complete": bool(runner.sequence_complete[sequence_name][env_idx].item()),
+                    "score": float(runner.sequence_score[sequence_name][env_idx].item()),
+                    "predicates": predicate_diagnostics,
+                }
+            criteria_diagnostics[runner.completion_criteria.name] = {
+                "is_complete": bool(runner.is_complete()[env_idx].item()),
+                "sequences": sequence_diagnostics,
+            }
+        return {
+            "last_processed_step": int(self._last_processed_step[env_idx].item()),
+            "task_success": bool(self._task_success[env_idx].item()),
+            "criteria": criteria_diagnostics,
+        }
 
     def get_events(self) -> list[list[PredicateEvent]]:
         """Get all events for all envs."""

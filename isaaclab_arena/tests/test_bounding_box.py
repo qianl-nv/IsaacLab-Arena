@@ -7,6 +7,7 @@
 
 import math
 import torch
+from types import SimpleNamespace
 
 import pytest
 
@@ -287,6 +288,21 @@ def test_volume_fraction_within_partial_targets():
     )
     # Both targets contain the four x=0 corners, but overlap different volumes.
     torch.testing.assert_close(object_bounds.volume_fraction_within(targets), torch.tensor([0.1, 0.9]))
+
+
+def test_transformed_vertex_containment_records_selected_geometry():
+    """Transformed-vertex containment uses the requested vertex-fraction approximation."""
+    from isaaclab_arena.tasks.predicates.spatial import object_in_target
+
+    vertices_W = torch.tensor([[[0.1, 0.1, 0.1], [0.9, 0.9, 0.9], [0.2, 0.8, 0.5], [1.1, 0.5, 0.5]]])
+    target_aabb_W = AxisAlignedBoundingBox((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+    world = SimpleNamespace(
+        get_vertices_w=lambda _name: vertices_W,
+        get_aabb_w=lambda _name: target_aabb_W,
+    )
+    env = SimpleNamespace(arena_world=world)
+    assert object_in_target(env, "object", "target", 0.75, "transformed_vertices").item()
+    assert not object_in_target(env, "object", "target", 0.76, "transformed_vertices").item()
 
 
 def test_translated_by_tuple_keeps_cuda_device():

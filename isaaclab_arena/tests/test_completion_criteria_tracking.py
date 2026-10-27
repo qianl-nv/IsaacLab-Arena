@@ -362,6 +362,30 @@ def _test_named_predicate_sequences_advance_independently(simulation_app) -> boo
     return True
 
 
+def _test_diagnostics_reuse_latest_predicate_results(simulation_app) -> bool:
+    """Diagnostics expose the latest cached value without invoking predicates again."""
+    from isaaclab_arena.progress_tracking.completion_criteria import CompletionCriteria
+    from isaaclab_arena.progress_tracking.progress_tracker import ProgressTracker
+
+    env = _MockEnv(num_envs=1)
+    predicate = _MockPredicate(num_envs=1, name="ready")
+    predicate.set([True])
+    tracker = ProgressTracker(
+        completion_criteria=[CompletionCriteria(name="goal", predicate_sequence=[predicate])],
+        num_envs=1,
+        device="cpu",
+    )
+    _advance_step(env)
+    tracker.step(env, step_index=env.episode_length_buf)
+    predicate.set([False])
+    diagnostics = tracker.get_diagnostics(0)
+    assert diagnostics["task_success"]
+    predicate_record = diagnostics["criteria"]["goal"]["sequences"]["default_sequence"]["predicates"][0]
+    assert predicate_record["cached_result"] is True
+    assert predicate_record["completed"]
+    return True
+
+
 def _test_state_machine_advances_sequentially(simulation_app) -> bool:
     """A single CompletionCriteria with a 3 predicate chain advances one step per satisfied predicate."""
     from isaaclab_arena.progress_tracking.completion_criteria import CompletionCriteria
@@ -933,6 +957,13 @@ def test_state_machine_advances_sequentially():
     assert run_function_with_persistent_simulation_app(_test_state_machine_advances_sequentially, headless=HEADLESS)
 
 
+def test_diagnostics_reuse_latest_predicate_results():
+    assert run_function_with_persistent_simulation_app(
+        _test_diagnostics_reuse_latest_predicate_results,
+        headless=HEADLESS,
+    )
+
+
 def test_state_machine_ignores_out_of_order_success():
     assert run_function_with_persistent_simulation_app(
         _test_state_machine_ignores_out_of_order_success, headless=HEADLESS
@@ -977,6 +1008,7 @@ if __name__ == "__main__":
     test_criteria_rejects_invalid_inputs()
     test_list_and_named_sequence_track_identically()
     test_named_predicate_sequences_advance_independently()
+    test_diagnostics_reuse_latest_predicate_results()
     test_state_machine_advances_sequentially()
     test_state_machine_ignores_out_of_order_success()
     test_state_machine_logical_any()

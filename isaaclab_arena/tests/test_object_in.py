@@ -59,7 +59,13 @@ def _test_apple_in_microwave(_simulation_app):
         scene=Scene(assets=[microwave, apple]),
         embodiment=FrankaJointPosEmbodiment(),
         # Sim 6.2 leaves this round apple with a small residual spin after the drop.
-        task=ObjectInTask(apple, microwave, angular_velocity_threshold=0.2, episode_length_s=30.0),
+        task=ObjectInTask(
+            apple,
+            microwave,
+            angular_velocity_threshold=0.2,
+            episode_length_s=30.0,
+            require_entry_after_activation=True,
+        ),
     )
     env = ArenaEnvBuilder(arena_env, ArenaEnvBuilderCfg(solve_relations=False)).make_registered()
     try:
@@ -67,6 +73,7 @@ def _test_apple_in_microwave(_simulation_app):
         # Gym wrappers do not forward Arena/Isaac Lab attributes; keep env.step wrapped.
         base = env.unwrapped
         policy = ZeroActionPolicy(ZeroActionPolicyCfg())
+        assert len(arena_env.task.get_termination_cfg().success[0].predicate_sequence) == 3
         with torch.inference_mode():
 
             def check_outside(env, terminated):

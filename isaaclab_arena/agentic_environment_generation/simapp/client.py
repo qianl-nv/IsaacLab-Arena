@@ -198,6 +198,40 @@ class SimAppClient:
             })
         return self._successful_response(response, "evidence capture")
 
+    def run_force(self, yaml_text: str, commands: list[dict[str, Any]]) -> dict[str, Any]:
+        """Run a finite physical-force command list."""
+        with self._lock:
+            response = self._request({"cmd": "run_force", "yaml_text": yaml_text, "commands": commands})
+        return self._successful_response(response, "force run")
+
+    def start_force_session(self, yaml_text: str) -> dict[str, Any]:
+        """Create one sidecar-owned physical-force session."""
+        with self._lock:
+            response = self._request({"cmd": "start_force_session", "yaml_text": yaml_text})
+        return self._successful_response(response, "force session start")
+
+    def force_command(self, session_id: str, command: dict[str, Any]) -> dict[str, Any]:
+        """Send one acknowledged command to a physical-force session."""
+        with self._lock:
+            response = self._request({
+                "cmd": "force_command",
+                "session_id": session_id,
+                "command": command,
+            })
+        return self._successful_response(response, "force command")
+
+    def finish_force_session(self, session_id: str) -> dict[str, Any]:
+        """Close a physical-force session and return its final state."""
+        with self._lock:
+            response = self._request({"cmd": "finish_force_session", "session_id": session_id})
+        return self._successful_response(response, "force session finish")
+
+    def check_task(self, yaml_text: str, scenarios: list[dict[str, Any]]) -> dict[str, Any]:
+        """Run isolated task scenarios."""
+        with self._lock:
+            response = self._request({"cmd": "check_task", "yaml_text": yaml_text, "scenarios": scenarios})
+        return self._successful_response(response, "task check")
+
     def ping(self) -> bool:
         """Cheap liveness check round-trip — returns True on a healthy reply."""
         with self._lock:

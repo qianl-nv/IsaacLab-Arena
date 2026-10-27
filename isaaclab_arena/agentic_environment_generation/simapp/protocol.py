@@ -85,8 +85,42 @@ class CaptureEvidenceRequest(RequestBase):
     env_spacing: float = Field(default=3.0, gt=0.0, le=1000.0)
 
 
+class RunForceRequest(RequestBase):
+    cmd: Literal["run_force"] = "run_force"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+    commands: list[dict[str, Any]] = Field(min_length=1, max_length=1000)
+
+
+class StartForceSessionRequest(RequestBase):
+    cmd: Literal["start_force_session"] = "start_force_session"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+
+
+class ForceCommandRequest(RequestBase):
+    cmd: Literal["force_command"] = "force_command"
+    session_id: str = Field(min_length=1, max_length=128)
+    command: dict[str, Any]
+
+
+class FinishForceSessionRequest(RequestBase):
+    cmd: Literal["finish_force_session"] = "finish_force_session"
+    session_id: str = Field(min_length=1, max_length=128)
+
+
+class CheckTaskRequest(RequestBase):
+    cmd: Literal["check_task"] = "check_task"
+    yaml_text: str = Field(max_length=8 * 1024 * 1024)
+    scenarios: list[dict[str, Any]] = Field(min_length=1, max_length=32)
+
+
 JobOperation = Annotated[
-    RenderSpecRequest | RunSimPreviewRequest | ProbeAssetRequest | SceneCheckRequest | CaptureEvidenceRequest,
+    RenderSpecRequest
+    | RunSimPreviewRequest
+    | ProbeAssetRequest
+    | SceneCheckRequest
+    | CaptureEvidenceRequest
+    | RunForceRequest
+    | CheckTaskRequest,
     Field(discriminator="cmd"),
 ]
 
@@ -121,6 +155,11 @@ Request = Annotated[
     | ProbeAssetRequest
     | SceneCheckRequest
     | CaptureEvidenceRequest
+    | RunForceRequest
+    | StartForceSessionRequest
+    | ForceCommandRequest
+    | FinishForceSessionRequest
+    | CheckTaskRequest
     | SubmitJobRequest
     | JobStatusRequest
     | JobResultRequest

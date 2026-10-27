@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
+from isaaclab_arena.agentic_environment_generation.force.commands import parse_force_command
 from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
     PROTOCOL_VERSION,
     RenderSpecRequest,
@@ -48,6 +49,16 @@ def test_protocol_rejects_unknown_fields_and_invalid_bounds() -> None:
             "mode": "static",
         },
         {"cmd": "capture_evidence", "yaml_text": "env_name: test"},
+        {
+            "cmd": "run_force",
+            "yaml_text": "env_name: test",
+            "commands": [{"command_id": "inspect", "action": "inspect"}],
+        },
+        {
+            "cmd": "check_task",
+            "yaml_text": "env_name: test",
+            "scenarios": [{"name": "initial", "commands": []}],
+        },
     ],
 )
 def test_authoring_requests_are_typed(payload: dict) -> None:
@@ -83,6 +94,30 @@ def test_response_preserves_envelope_and_legacy_result_fields() -> None:
     assert response["state"] == "ready"
 
 
+def test_force_commands_are_strict_and_bounded() -> None:
+    command = parse_force_command({
+        "command_id": "move-cube",
+        "action": "move",
+        "object_name": "cube",
+        "goal": {"position_xyz": [0.1, 0.2, 0.3], "relative_to": "table"},
+    })
+    assert command.action == "move"
+    assert command.goal.position_xyz == (0.1, 0.2, 0.3)
+    with pytest.raises(ValidationError):
+        parse_force_command({
+            "command_id": "unbounded",
+            "action": "wait",
+            "duration_s": 31.0,
+        })
+    with pytest.raises(ValidationError):
+        parse_force_command({
+            "command_id": "typo",
+            "action": "release",
+            "object_name": "cube",
+            "unexpected": True,
+        })
+
+
 def test_job_can_be_submitted_inspected_and_cancelled_without_execution() -> None:
     requests = [
         {
@@ -100,7 +135,15 @@ def test_job_can_be_submitted_inspected_and_cancelled_without_execution() -> Non
     reader = io.StringIO("".join(json.dumps(request) + "\n" for request in requests))
     writer = io.StringIO()
     jobs = {}
-    assert not _serve_connection(reader, writer, app=None, render_fn=None, spec_cls=None, jobs=jobs)
+    assert not _serve_connection(
+        reader,
+        writer,
+        app=None,
+        render_fn=None,
+        spec_cls=None,
+        jobs=jobs,
+        force_sessions={},
+    )
 
     submit_response = json.loads(writer.getvalue())
     job_id = submit_response["job_id"]
@@ -111,7 +154,15 @@ def test_job_can_be_submitted_inspected_and_cancelled_without_execution() -> Non
     ]
     reader = io.StringIO("".join(json.dumps(request) + "\n" for request in follow_up))
     writer = io.StringIO()
-    assert not _serve_connection(reader, writer, app=None, render_fn=None, spec_cls=None, jobs=jobs)
+    assert not _serve_connection(
+        reader,
+        writer,
+        app=None,
+        render_fn=None,
+        spec_cls=None,
+        jobs=jobs,
+        force_sessions={},
+    )
     status, cancel, result = (json.loads(line) for line in writer.getvalue().splitlines())
     assert status["state"] == "pending"
     assert cancel["state"] == "cancelled"

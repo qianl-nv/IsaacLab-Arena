@@ -70,6 +70,12 @@ python isaaclab_arena/scripts/arena_author.py graph snapshot \
 python isaaclab_arena/scripts/arena_author.py graph preview \
   --env-spec path/to/env_graph.yaml --output artifacts/authoring/preview \
   --num-envs 1 --num-steps 20
+python isaaclab_arena/scripts/arena_author.py force run \
+  --env-spec path/to/env_graph.yaml --commands path/to/commands.jsonl \
+  --output artifacts/authoring/force
+python isaaclab_arena/scripts/arena_author.py task check \
+  --env-spec path/to/env_graph.yaml --scenarios path/to/scenarios.yaml \
+  --output artifacts/authoring/task
 ```
 
 One-shot graph commands start and stop a sidecar automatically. To amortize Kit startup, run
@@ -78,6 +84,13 @@ One-shot graph commands start and stop a sidecar automatically. To amortize Kit 
 `--socket` before the command group when overriding the checkout-specific default. Treat exit code
 0 as completed, 1 as an operation/runtime failure, and 2 as invalid command usage. Read
 `report.json` and its artifact hashes before interpreting images or video.
+
+Stateful force control requires the persistent sidecar. Create one owner with `force serve
+--env-spec ...`, retain the returned session ID, send one strict JSON object at a time with
+`force command --session ... --command-json ...`, and guarantee cleanup with `force finish
+--session ...` before `sim stop`. Prefer finite `force run` for repeatable checks. Commands are
+bounded and acknowledged; a successful move means the target was approached through normal
+`env.step()` physics, while environment construction/reset remains identified as setup.
 
 Use [dev-container](../dev-container/SKILL.md) for the clone's runtime and host-user execution,
 [setup-arena](../../user/setup-arena/SKILL.md) for requested runtime preparation, and

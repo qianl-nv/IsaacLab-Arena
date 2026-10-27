@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import torch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors.contact_sensor.contact_sensor import ContactSensor
@@ -545,6 +545,68 @@ def object_in_target_aabb(
     return object_aabb_W.volume_fraction_within(target_aabb_W) >= minimum_contained_fraction
 
 
+ContainmentGeometry = Literal["world_aabb", "transformed_vertices"]
+
+
+def object_in_target(
+    env: IsaacLabArenaManagerBasedRLEnv,
+    object_name: str,
+    target_name: str,
+    minimum_contained_fraction: float = 1.0,
+    containment_geometry: ContainmentGeometry = "world_aabb",
+) -> torch.Tensor:
+    """Check target containment using the selected explicit geometry approximation.
+
+    ``world_aabb`` measures intersecting world-AABB volume. ``transformed_vertices``
+    checks the fraction of transformed cached object vertices inside the target's
+    world AABB. Full vertex containment is exact for a convex source hull and a box
+    target; lower fractions count vertices rather than volume.
+    """
+    if containment_geometry == "world_aabb":
+        return object_in_target_aabb(env, object_name, target_name, minimum_contained_fraction)
+    assert containment_geometry == "transformed_vertices", f"Unknown containment geometry: {containment_geometry!r}"
+    object_vertices_W = env.arena_world.get_vertices_w(object_name)
+    target_aabb_W = env.arena_world.get_aabb_w(target_name)
+    inside = (object_vertices_W >= target_aabb_W.min_point[:, None, :]) & (
+        object_vertices_W <= target_aabb_W.max_point[:, None, :]
+    )
+    contained_vertex_fraction = inside.all(dim=-1).to(torch.float32).mean(dim=-1)
+    return contained_vertex_fraction >= minimum_contained_fraction
+
+
+def object_outside_target(
+    env: IsaacLabArenaManagerBasedRLEnv,
+    object_name: str,
+    target_name: str,
+    minimum_contained_fraction: float = 1.0,
+    containment_geometry: ContainmentGeometry = "world_aabb",
+) -> torch.Tensor:
+    """Check that an object has not yet reached the required target containment."""
+    return ~object_in_target(
+        env,
+        object_name,
+        target_name,
+        minimum_contained_fraction,
+        containment_geometry,
+    )
+
+
+def object_outside_target_aabb(
+    env: IsaacLabArenaManagerBasedRLEnv,
+    object_name: str,
+    target_name: str,
+    minimum_contained_fraction: float = 1.0,
+) -> torch.Tensor:
+    """Check that an object has not reached the required world-AABB containment."""
+    return object_outside_target(
+        env,
+        object_name,
+        target_name,
+        minimum_contained_fraction,
+        "world_aabb",
+    )
+
+
 def object_in_contact_with_target(
     env: IsaacLabArenaManagerBasedRLEnv,
     contact_sensor_cfg: SceneEntityCfg,
@@ -578,6 +640,7 @@ def object_settled_in_target_aabb(
     contact_force_threshold: float,
     linear_velocity_threshold: float,
     angular_velocity_threshold: float,
+    containment_geometry: ContainmentGeometry = "world_aabb",
 ) -> torch.Tensor:
     """Check world-AABB volume containment, target contact, and low velocity for the current step.
 
@@ -594,7 +657,13 @@ def object_settled_in_target_aabb(
     Returns:
         One Boolean result per environment.
     """
-    contained = object_in_target_aabb(env, object_name, target_name, minimum_contained_fraction)
+    contained = object_in_target(
+        env,
+        object_name,
+        target_name,
+        minimum_contained_fraction,
+        containment_geometry,
+    )
     touching = object_in_contact_with_target(env, contact_sensor_cfg, contact_force_threshold)
     settled = velocity_below_threshold(env, object_name, linear_velocity_threshold, angular_velocity_threshold)
     return contained & touching & settled
