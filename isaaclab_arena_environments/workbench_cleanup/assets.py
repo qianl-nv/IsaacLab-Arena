@@ -309,6 +309,7 @@ class CleanupPowerPlug(Object):
             if name == "Grip":
                 UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
         super().__init__(
+            name=self.registry_name,
             usd_path=_save(stage, "plug.usda"),
             object_type=self.object_type,
             spawn_cfg_addon={"rigid_props": RigidBodyPropertiesCfg(disable_gravity=True, linear_damping=4.0)},

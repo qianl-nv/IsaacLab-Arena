@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 import torch
 import tqdm
 
@@ -72,6 +73,18 @@ def _test_all_assets_in_registry(simulation_app, physics_backend: PhysicsBackend
         asset_classes = [asset_cls for asset_cls in asset_classes if "newton_only" in asset_cls.tags]
     else:
         asset_classes = [asset_cls for asset_cls in asset_classes if "newton_only" not in asset_cls.tags]
+    # Assets backed by a user-selected USD are valid registry entries but cannot participate in
+    # this default-construction smoke test. Their graph workflows supply the required parameters.
+    asset_classes = [
+        asset_cls
+        for asset_cls in asset_classes
+        if not any(
+            parameter.default is inspect.Parameter.empty
+            and parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            and parameter.name != "self"
+            for parameter in inspect.signature(asset_cls).parameters.values()
+        )
+    ]
     assert asset_classes, f"No objects selected for {physics_backend}"
     for idx, asset_cls in enumerate(asset_classes):
         asset = asset_cls()

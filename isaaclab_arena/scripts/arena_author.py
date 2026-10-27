@@ -165,7 +165,7 @@ def _run_preview(args: argparse.Namespace) -> int:
         },
     )
     try:
-        yaml_text = args.env_spec.read_text(encoding="utf-8")
+        yaml_text = _expanded_env_yaml(args.env_spec)
         with _managed_client(args.socket, runtime_log) as client:
             response = client.run_sim_preview(
                 yaml_text,
@@ -198,6 +198,18 @@ def _load_yaml_mapping(path: Path | None) -> dict[str, Any]:
     value = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict), f"Expected a YAML mapping in {path}"
     return value
+
+
+def _expanded_env_yaml(path: Path) -> str:
+    """Load an environment graph and inline any external YAML before transport."""
+    import yaml
+
+    from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
+
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    spec = ArenaEnvGraphSpec.from_yaml(path)
+    return yaml.safe_dump(spec.to_dict(), sort_keys=False)
 
 
 def _run_asset_inspect(args: argparse.Namespace) -> int:
@@ -240,7 +252,7 @@ def _run_asset_probe(args: argparse.Namespace) -> int:
     try:
         with _managed_client(args.socket, runtime_log) as client:
             response = client.probe_asset(
-                args.env_spec.read_text(encoding="utf-8"),
+                _expanded_env_yaml(args.env_spec),
                 object_name=args.object,
                 num_steps=args.num_steps,
                 env_spacing=args.env_spacing,
@@ -273,7 +285,7 @@ def _run_scene_check(args: argparse.Namespace) -> int:
     try:
         with _managed_client(args.socket, runtime_log) as client:
             response = client.check_scene(
-                args.env_spec.read_text(encoding="utf-8"),
+                _expanded_env_yaml(args.env_spec),
                 output_path=str(output_dir),
                 mode=args.mode,
                 configuration=configuration,
@@ -313,7 +325,7 @@ def _run_evidence_capture(args: argparse.Namespace) -> int:
     try:
         with _managed_client(args.socket, runtime_log) as client:
             response = client.capture_evidence(
-                args.env_spec.read_text(encoding="utf-8"),
+                _expanded_env_yaml(args.env_spec),
                 num_envs=args.num_envs,
                 num_steps=args.num_steps,
                 env_spacing=args.env_spacing,
@@ -365,7 +377,7 @@ def _run_force(args: argparse.Namespace) -> int:
     try:
         with _managed_client(args.socket, output_dir / "runtime.log") as client:
             response = client.run_force(
-                args.env_spec.read_text(encoding="utf-8"),
+                _expanded_env_yaml(args.env_spec),
                 _load_jsonl(args.commands),
             )
         result = response["result"]
@@ -393,7 +405,7 @@ def _existing_client(socket_path: Path) -> SimAppClient:
 def _serve_force(args: argparse.Namespace) -> int:
     client = _existing_client(args.socket)
     try:
-        response = client.start_force_session(args.env_spec.read_text(encoding="utf-8"))
+        response = client.start_force_session(_expanded_env_yaml(args.env_spec))
     finally:
         client.disconnect()
     _json_stdout({"command": "force serve", "status": "completed", **response["result"]})
@@ -439,7 +451,7 @@ def _run_task_check(args: argparse.Namespace) -> int:
         scenarios = scenario_document.get("scenarios")
         assert isinstance(scenarios, list), f"{args.scenarios} must contain a scenarios list."
         with _managed_client(args.socket, output_dir / "runtime.log") as client:
-            response = client.check_task(args.env_spec.read_text(encoding="utf-8"), scenarios)
+            response = client.check_task(_expanded_env_yaml(args.env_spec), scenarios)
         result = response["result"]
         result_path = output_dir / "task_check.json"
         result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

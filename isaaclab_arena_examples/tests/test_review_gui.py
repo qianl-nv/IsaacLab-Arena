@@ -47,6 +47,9 @@ from isaaclab_arena_examples.agentic_environment_generation.review_gui.generatio
     available_inference_endpoints,
     run_generation_pipeline,
 )
+from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.client import (
+    SimAppClient as LegacySimAppClient,
+)
 from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp_connector import (
     ENV_SPACING_M,
     NUM_ENVS,
@@ -548,6 +551,9 @@ class TestTrySaveEnvGraphSpec:
 
 
 class TestSimAppClient:
+    def test_legacy_import_path_uses_maintained_client(self) -> None:
+        assert LegacySimAppClient is SimAppClient
+
     def test_disconnect_leaves_server_listening(self, tmp_path: Path) -> None:
         """Boot probe must not send shutdown — Streamlit connects after wait_for_simapp_socket."""
         import json
@@ -607,6 +613,60 @@ class TestSimAppClient:
 
 class TestSimAppSimPreview:
     @pytest.mark.with_subprocess
+    def test_repeated_render_uses_cache_and_supports_panorama(
+        self,
+        valid_spec: ArenaEnvGraphSpec,
+        tmp_path: Path,
+    ) -> None:
+        yaml_text = yaml.safe_dump(valid_spec.to_dict(), sort_keys=False)
+        socket_path = tmp_path / "render_spec.sock"
+        proc = spawn_simapp_process(str(socket_path))
+        client = None
+        try:
+            wait_for_simapp_socket(str(socket_path), proc, timeout_s=180.0, poll_interval_s=0.5)
+            client = SimAppClient.connect(str(socket_path))
+            warm = client._request({
+                "cmd": "render_spec",
+                "yaml_text": yaml_text,
+                "background_panorama": False,
+            })
+            for path in warm["paths"].values():
+                Path(path).unlink(missing_ok=True)
+
+            first = client._request({
+                "cmd": "render_spec",
+                "yaml_text": yaml_text,
+                "background_panorama": False,
+            })
+            first_paths = {name: Path(path) for name, path in first["paths"].items()}
+            assert first_paths and all(path.stat().st_size > 0 for path in first_paths.values())
+            first_mtimes = {name: path.stat().st_mtime_ns for name, path in first_paths.items()}
+
+            second = client._request({
+                "cmd": "render_spec",
+                "yaml_text": yaml_text,
+                "background_panorama": False,
+            })
+            assert second["paths"] == first["paths"]
+            assert {name: path.stat().st_mtime_ns for name, path in first_paths.items()} == first_mtimes
+
+            panorama = client._request({
+                "cmd": "render_spec",
+                "yaml_text": yaml_text,
+                "background_panorama": True,
+            })
+            panorama_path = Path(panorama["paths"][valid_spec.background.id])
+            assert panorama_path.is_file() and panorama_path.stat().st_size > 0
+            assert panorama_path != first_paths[valid_spec.background.id]
+            assert client.ping()
+            client.shutdown()
+            client = None
+        finally:
+            if client is not None:
+                client.disconnect()
+            stop_simapp_process(proc, str(socket_path))
+
+    @pytest.mark.with_subprocess
     def test_run_sim_preview_via_simapp_subprocess(self, tmp_path: Path) -> None:
         yaml_text = _VALID_SPEC_YAML_PATH.read_text(encoding="utf-8")
         socket_path = tmp_path / "sim_preview.sock"
@@ -631,6 +691,18 @@ class TestSimAppSimPreview:
 
             video_path.unlink()
             video_path.parent.rmdir()
+
+            repeated = client.run_sim_preview(
+                yaml_text,
+                num_envs=1,
+                num_steps=1,
+                env_spacing=ENV_SPACING_M,
+            )
+            repeated_video_path = Path(repeated["video_path"])
+            assert repeated_video_path.is_file() and repeated_video_path.stat().st_size > 0
+            repeated_video_path.unlink()
+            repeated_video_path.parent.rmdir()
+            assert client.ping()
 
             client.shutdown()
         finally:

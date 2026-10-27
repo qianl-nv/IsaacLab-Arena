@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from isaaclab_arena.agentic_environment_generation.force.commands import parse_force_command
 from isaaclab_arena.agentic_environment_generation.simapp.protocol import (
+    MAX_REQUEST_BYTES,
     PROTOCOL_VERSION,
     RenderSpecRequest,
     parse_request,
@@ -40,6 +41,17 @@ def test_protocol_rejects_unknown_fields_and_invalid_bounds() -> None:
 @pytest.mark.parametrize(
     "payload",
     [
+        {"cmd": "ping"},
+        {"cmd": "shutdown"},
+        {"cmd": "capabilities"},
+        {"cmd": "render_spec", "yaml_text": "env_name: test"},
+        {
+            "cmd": "run_sim_preview",
+            "yaml_text": "env_name: test",
+            "num_envs": 1,
+            "num_steps": 1,
+            "env_spacing": 1.0,
+        },
         {"cmd": "inspect_asset", "usd_path": "asset.usd"},
         {"cmd": "probe_asset", "yaml_text": "env_name: test", "object_name": "cube"},
         {
@@ -59,6 +71,24 @@ def test_protocol_rejects_unknown_fields_and_invalid_bounds() -> None:
             "yaml_text": "env_name: test",
             "scenarios": [{"name": "initial", "commands": []}],
         },
+        {"cmd": "start_force_session", "yaml_text": "env_name: test"},
+        {
+            "cmd": "force_command",
+            "session_id": "session",
+            "command": {"command_id": "inspect", "action": "inspect"},
+        },
+        {"cmd": "finish_force_session", "session_id": "session"},
+        {
+            "cmd": "submit",
+            "operation": {
+                "cmd": "run_force",
+                "yaml_text": "env_name: test",
+                "commands": [{"command_id": "inspect", "action": "inspect"}],
+            },
+        },
+        {"cmd": "status", "job_id": "job"},
+        {"cmd": "result", "job_id": "job"},
+        {"cmd": "cancel", "job_id": "job"},
     ],
 )
 def test_authoring_requests_are_typed(payload: dict) -> None:
@@ -167,3 +197,54 @@ def test_job_can_be_submitted_inspected_and_cancelled_without_execution() -> Non
     assert status["state"] == "pending"
     assert cancel["state"] == "cancelled"
     assert result["error_code"] == "JOB_CANCELLED"
+
+
+def test_server_reports_capabilities_and_stable_missing_resource_errors() -> None:
+    requests = [
+        {"cmd": "capabilities", "request_id": "capabilities"},
+        {"cmd": "status", "request_id": "job", "job_id": "missing"},
+        {
+            "cmd": "force_command",
+            "request_id": "session",
+            "session_id": "missing",
+            "command": {"command_id": "inspect", "action": "inspect"},
+        },
+    ]
+    reader = io.StringIO("".join(json.dumps(request) + "\n" for request in requests))
+    writer = io.StringIO()
+    assert not _serve_connection(
+        reader,
+        writer,
+        app=None,
+        render_fn=None,
+        spec_cls=None,
+        jobs={},
+        force_sessions={},
+    )
+    capabilities, missing_job, missing_session = (json.loads(line) for line in writer.getvalue().splitlines())
+    assert "check_task" in capabilities["result"]["commands"]
+    assert "run_force" in capabilities["result"]["job_operations"]
+    assert missing_job["error_code"] == "JOB_NOT_FOUND"
+    assert missing_session["error_code"] == "SESSION_NOT_FOUND"
+
+
+def test_server_rejects_invalid_json_request_and_oversized_input() -> None:
+    invalid_request = json.dumps({"cmd": "ping", "unexpected": True}) + "\n"
+    oversized = "x" * (MAX_REQUEST_BYTES + 1) + "\n"
+    reader = io.StringIO("{bad json\n" + invalid_request + oversized)
+    writer = io.StringIO()
+    assert not _serve_connection(
+        reader,
+        writer,
+        app=None,
+        render_fn=None,
+        spec_cls=None,
+        jobs={},
+        force_sessions={},
+    )
+    responses = [json.loads(line) for line in writer.getvalue().splitlines()]
+    assert [response["error_code"] for response in responses[:3]] == [
+        "INVALID_JSON",
+        "INVALID_REQUEST",
+        "REQUEST_TOO_LARGE",
+    ]
