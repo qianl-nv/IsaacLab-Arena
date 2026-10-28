@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">Proposed Arena asset physics inspector</title>
+  <desc id="desc">Concept output showing a drawer collision slice, body and joint diagnostics, and the measured type of weak tray contact seen in the Thor packing task. The illustration is not a simulator screenshot.</desc>
+  <defs>
+    <pattern id="hatch" width="12" height="12" patternUnits="userSpaceOnUse">
+      <path d="M-3 3L3-3M0 12L12 0M9 15L15 9" stroke="#d94c43" stroke-width="2"/>
+    </pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse">
+      <path d="M0 0L8 4L0 8Z" fill="#28747e"/>
+    </marker>
+    <style>
+      text { font-family: DejaVu Sans, Arial, sans-serif; fill: #203145; }
+      .title { font-size: 27px; font-weight: 700; }
+      .heading { font-size: 21px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 15px; }
+      .mono { font-family: DejaVu Sans Mono, monospace; font-size: 16px; }
+      .muted { fill: #58697b; }
+      .red { fill: #b63732; }
+      .green { fill: #16745b; }
+      .panel { fill: white; stroke: #d5dfe9; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="#edf2f7"/>
+  <rect width="1280" height="98" fill="#14283e"/>
+  <text x="30" y="43" class="title" style="fill:white">Asset physics inspector</text>
+  <text x="30" y="76" class="body" style="fill:#cedce9">CONCEPT OUTPUT • Illustrative geometry and UI • Not a simulator capture</text>
+
+  <rect x="24" y="118" width="720" height="403" rx="12" class="panel"/>
+  <text x="48" y="151" class="heading">Drawer opening: collision slice</text>
+  <text x="48" y="180" class="small muted">Visual shell + collision occupancy + joint axis</text>
+  <path d="M108 250H657V404H630V277H134V404H108Z" fill="#94afd0" stroke="#52729d" stroke-width="2"/>
+  <path d="M159 332V393H587V332" fill="none" stroke="#28747e" stroke-width="13"/>
+  <rect x="175" y="292" width="398" height="83" fill="#ffe7e4" opacity="0.85"/>
+  <rect x="175" y="292" width="398" height="83" fill="url(#hatch)" stroke="#c54c45" stroke-width="2"/>
+  <rect x="265" y="312" width="208" height="48" rx="7" fill="#354456" stroke="#172334" stroke-width="2"/>
+  <text x="305" y="343" class="body" style="fill:white">socket case</text>
+  <path d="M175 220H573" stroke="#28747e" stroke-width="3" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="258" y="209" class="small">Prismatic joint travel / axis</text>
+  <path d="M540 369L626 436" stroke="#bd403a" stroke-width="2"/>
+  <text x="48" y="452" class="body red">Potential collision volume inside a visible opening</text>
+  <text x="48" y="482" class="small muted">Show cooked geometry when available; label proxies and unsupported SDFs.</text>
+
+  <rect x="764" y="118" width="492" height="403" rx="12" class="panel"/>
+  <text x="788" y="151" class="heading">Inspection findings</text>
+  <text x="788" y="184" class="mono">object: socket_set</text>
+  <line x1="788" y1="201" x2="1232" y2="201" stroke="#d5dfe9"/>
+  <text x="788" y="229" class="body">Body graph</text>
+  <text x="788" y="259" class="body red">Disconnected insert → identify source prim</text>
+  <text x="788" y="295" class="body">Collider ownership</text>
+  <text x="788" y="325" class="small muted">Collider → rigid-body ancestor → joint tree</text>
+  <text x="788" y="361" class="body">Mass / inertia</text>
+  <text x="788" y="391" class="small muted">Authored values and runtime effective values</text>
+  <text x="788" y="427" class="body">Evidence exports</text>
+  <text x="788" y="457" class="mono">report.json · bodies.json · overlay.png</text>
+  <text x="788" y="489" class="small muted">Inspect read-only; emit optional repair configuration.</text>
+
+  <rect x="24" y="541" width="1232" height="189" rx="12" class="panel"/>
+  <text x="48" y="576" class="heading">Runtime contact probe: Thor tray</text>
+  <text x="48" y="609" class="body">Contained: true</text>
+  <text x="48" y="639" class="body red">Carton contact: approximately 0.00536 N &lt; 0.01 N</text>
+  <text x="48" y="671" class="small muted">Observed failure type from the construction run.</text>
+  <text x="48" y="699" class="small muted">Inspect all filtered contact pairs before assigning a cause.</text>
+  <rect x="690" y="596" width="500" height="12" fill="#c49d67"/>
+  <rect x="690" y="608" width="26" height="48" fill="#9e7749"/>
+  <rect x="1164" y="608" width="26" height="48" fill="#9e7749"/>
+  <rect x="860" y="616" width="20" height="40" fill="#c8b99d"/>
+  <rect x="999" y="616" width="20" height="40" fill="#c8b99d"/>
+  <path d="M735 655V612M1144 655V612" stroke="#28747e" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="714" y="687" class="small green">Correction: carton ledges 2 mm above dividers</text>
+  <text x="714" y="712" class="small muted">Schematic exaggerates the gap; measure contact again.</text>
+</svg>

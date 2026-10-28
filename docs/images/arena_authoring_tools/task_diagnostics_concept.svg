@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="730" viewBox="0 0 1280 730" role="img" aria-labelledby="title desc">
+  <title id="title">Proposed Arena task diagnostics timeline</title>
+  <desc id="desc">Concept output distinguishing historical completion from current task success across packing, removing, and replacing a board. The contact diagnostic and event-to-frame links are proposed displays, not new validation results.</desc>
+  <style>
+    text { font-family: DejaVu Sans, Arial, sans-serif; fill: #203145; }
+    .title { font-size: 27px; font-weight: 700; }
+    .heading { font-size: 21px; font-weight: 700; }
+    .body { font-size: 17px; }
+    .small { font-size: 15px; }
+    .muted { fill: #58697b; }
+    .mono { font-family: DejaVu Sans Mono, monospace; font-size: 16px; }
+    .green { fill: #d6f0e3; stroke: #74b89d; }
+    .red { fill: #ffe1dc; stroke: #d58a7e; }
+    .gray { fill: #e8edf3; stroke: #bac6d3; }
+    .panel { fill: white; stroke: #d5dfe9; stroke-width: 1.5; }
+  </style>
+  <rect width="1280" height="730" fill="#edf2f7"/>
+  <rect width="1280" height="98" fill="#14283e"/>
+  <text x="30" y="43" class="title" style="fill:white">Task diagnostics and evidence timeline</text>
+  <text x="30" y="76" class="body" style="fill:#cedce9">CONCEPT OUTPUT • Illustrative timeline • Native progress remains the success authority</text>
+
+  <rect x="24" y="118" width="1232" height="316" rx="12" class="panel"/>
+  <text x="48" y="153" class="heading">Board placement: history and current truth</text>
+  <text x="375" y="193" class="body">Initial</text>
+  <text x="599" y="193" class="body">Packed</text>
+  <text x="819" y="193" class="body">Removed</text>
+  <text x="1039" y="193" class="body">Replaced</text>
+  <text x="48" y="244" class="body">Historical completion</text>
+  <text x="48" y="303" class="body">Required current state</text>
+  <text x="48" y="362" class="body">Native task success</text>
+  <rect x="330" y="216" width="202" height="42" rx="6" class="gray"/>
+  <rect x="550" y="216" width="202" height="42" rx="6" class="green"/>
+  <rect x="770" y="216" width="202" height="42" rx="6" class="green"/>
+  <rect x="990" y="216" width="218" height="42" rx="6" class="green"/>
+  <rect x="330" y="275" width="202" height="42" rx="6" class="gray"/>
+  <rect x="550" y="275" width="202" height="42" rx="6" class="green"/>
+  <rect x="770" y="275" width="202" height="42" rx="6" class="red"/>
+  <rect x="990" y="275" width="218" height="42" rx="6" class="green"/>
+  <rect x="330" y="334" width="202" height="42" rx="6" class="gray"/>
+  <rect x="550" y="334" width="202" height="42" rx="6" class="green"/>
+  <rect x="770" y="334" width="202" height="42" rx="6" class="red"/>
+  <rect x="990" y="334" width="218" height="42" rx="6" class="green"/>
+  <g class="body" text-anchor="middle">
+    <text x="431" y="243">false</text><text x="651" y="243">true</text><text x="871" y="243">true</text><text x="1099" y="243">true</text>
+    <text x="431" y="302">false</text><text x="651" y="302">true</text><text x="871" y="302">false</text><text x="1099" y="302">true</text>
+    <text x="431" y="361">false</text><text x="651" y="361">true</text><text x="871" y="361">false</text><text x="1099" y="361">true</text>
+  </g>
+  <text x="48" y="410" class="small muted">One cached snapshot per control step • Current failure revokes success without erasing the milestone</text>
+
+  <rect x="24" y="454" width="590" height="248" rx="12" class="panel"/>
+  <text x="48" y="489" class="heading">Predicate details at the selected step</text>
+  <text x="48" y="523" class="mono">object: board_tray   target: carton</text>
+  <text x="48" y="555" class="body">Containment</text><text x="375" y="555" class="body">passed</text>
+  <text x="48" y="586" class="body">Contact ≥ 0.01 N</text><text x="375" y="586" class="body" style="fill:#af3832">failed</text>
+  <text x="48" y="617" class="body">Settling window</text><text x="375" y="617" class="body">0 / 20 steps</text>
+  <text x="48" y="650" class="small muted">Show measured force and speeds with their thresholds.</text>
+  <text x="48" y="678" class="small muted">Inspect cached results; never advance counters to observe.</text>
+
+  <rect x="634" y="454" width="622" height="248" rx="12" class="panel"/>
+  <text x="658" y="489" class="heading">Linked evidence and scope</text>
+  <rect x="658" y="510" width="150" height="74" rx="5" fill="#e9dfcb" stroke="#bfac8a"/>
+  <rect x="842" y="510" width="150" height="74" rx="5" fill="#e9dfcb" stroke="#bfac8a"/>
+  <rect x="1026" y="510" width="204" height="74" rx="5" fill="#dae5ee" stroke="#9db2c4"/>
+  <text x="733" y="553" text-anchor="middle" class="small">Start PNG</text>
+  <text x="917" y="553" text-anchor="middle" class="small">End PNG</text>
+  <text x="1128" y="553" text-anchor="middle" class="small">Failure PNG + trace</text>
+  <text x="658" y="615" class="small">event_id → control_step → video_frame → artifact</text>
+  <text x="658" y="647" class="small muted">Show placement validation and task success separately.</text>
+  <text x="658" y="678" class="small muted">No robot reachability claim from a force-only demo.</text>
+</svg>
