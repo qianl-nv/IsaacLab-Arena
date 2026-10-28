@@ -94,6 +94,30 @@ def test_graph_spec_parses_default_physics_backend():
     assert spec.default_physics_backend is PhysicsBackend.NEWTON
 
 
+@pytest.mark.parametrize("task_number, subtask_count", [(1, 4), (2, 7), (3, 2)])
+def test_workbench_tasks_include_shared_scene(task_number, subtask_count):
+    path = Path(__file__).resolve().parents[2] / "isaaclab_arena_environments/workbench_cleanup"
+    spec = ArenaEnvGraphSpec.from_yaml(path / f"task_{task_number}.yaml")
+    assert spec.embodiment.registry_name == "no_embodiment"
+    assert len(spec.task.subtasks) == subtask_count
+    assert len(spec.task.desired_subtask_success_state) == subtask_count
+    assert sum(relation.kind == "clutter_on" for relation in spec.relations) == 5
+    restored = ArenaEnvGraphSpec.from_dict(spec.to_dict())
+    assert restored.task.desired_subtask_success_state == spec.task.desired_subtask_success_state
+
+
+def test_graph_rejects_wrong_final_subtask_state_count():
+    data = _minimal_env_graph_data()
+    data["task"] = {
+        "composition": "sequential",
+        "description": "two milestones",
+        "subtasks": [{"kind": "NoTask"}, {"kind": "NoTask"}],
+        "desired_subtask_success_state": [True],
+    }
+    with pytest.raises(ValidationError, match="One final state is required per subtask"):
+        ArenaEnvGraphSpec.from_dict(data)
+
+
 def test_graph_spec_round_trips_pose_params_and_env_cfg_override():
     data = _minimal_env_graph_data()
     data["embodiment"].setdefault("params", {})["initial_pose"] = {
