@@ -8,6 +8,10 @@ See [Construction and validation report](CONSTRUCTION_AND_VALIDATION.md) for the
 original prompt, measured execution time and token usage, implementation process,
 artifact links, and proposed workflow improvements.
 
+The [seven-step creation video](CREATION_VIDEO.md) shows agent actions and test
+findings, the scene/task graphs, and saved simulation views in three panels,
+including the complete final demonstration GIF.
+
 Source credits: [NVIDIA SimReady assets](https://huggingface.co/datasets/nvidia/simready-assets),
 [ForgeCAD](https://huggingface.co/datasets/ForgeCAD/simready-assets)
 (`ratchet_socket_set`, CC BY 4.0; physics adapted here), and
