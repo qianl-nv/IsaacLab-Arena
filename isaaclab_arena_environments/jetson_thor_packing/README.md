@@ -2,7 +2,7 @@
 
 An Arena task packs four accessories into the bottom layer of a cardboard carton,
 installs the removable board housing, then places the Jetson AGX Thor Developer Kit.
-The parts start scattered on a table. The demonstration uses physical forces and
+Arena samples the parts' initial positions on the table. The demonstration uses physical forces and
 torques with `NoEmbodiment`.
 
 [Watch the demonstration](../../docs/images/jetson_thor_packing/packing_demo.mp4)
@@ -46,8 +46,8 @@ separate lower compartments, tray support ledges, and a removable lined upper tr
 | Upper tray exterior | 342 × 202 × 66 mm | Designed to fit carton |
 | Board well | 257 × 126 mm | 6.90 / 6.80 mm clearance per side |
 | Tray clearance | 4 mm per side | Carton interior versus tray exterior |
-| Tray underside above carton bottom | 80 mm | Support ledges and dividers |
-| Clearance above the packed adapter | Approximately 25.7 mm | Adapter top versus tray underside |
+| Tray underside above carton bottom | 82 mm | Support ledges, 2 mm above dividers |
+| Clearance above the packed adapter | Approximately 27.7 mm | Adapter top versus tray underside |
 
 Packaging, accessory dimensions, masses, and friction are modeling assumptions.
 These assets are a photo-based reconstruction with verified simulated fit; they
@@ -62,7 +62,7 @@ There are 64 collision panels across the background and parts. Contact offsets a
 ## Scene and task
 
 - [scene.yaml](scene.yaml): shared table, carton, compartment references, six parts,
-  fixed initial placement relations, and camera configuration.
+  `on(tabletop)` placement relations, and camera configuration.
 - [task.yaml](task.yaml): six sequential subtasks, with every final subtask state
   required to remain true.
 - [tasks.py](tasks.py): `EnterHousingTask`, a small `ObjectInTask` extension used for
@@ -71,6 +71,17 @@ There are 64 collision panels across the background and parts. Contact offsets a
   checks. This prevents crediting a board already packed before the tray is installed.
 - [force_demo.py](force_demo.py): reuses the workbench demonstration's force controller,
   stepping, viewport capture, and boundary logging; supplies this packing sequence.
+
+Only the tabletop carries `is_anchor`. The six movable objects have no explicit
+`initial_pose`; Arena's `on` relation determines their height and keeps their footprints
+on the table. The default 5 cm edge margin and collision checks separate the parts
+and keep them outside the fixed carton's footprint. The carton and compartment
+references retain their authored background poses and act as passive obstacles.
+Objects remain upright, with randomized horizontal placement.
+
+`resolve_on_reset: true` samples a validated layout from Arena's placement pool on reset.
+`allow_best_loss_fallbacks: false` rejects layouts that fail the native `on_relation`
+or `no_overlap` checks. Set `--placement-seed` to reproduce the layout sequence.
 
 | Step | Atomic task | Start | End |
 | --- | --- | --- | --- |
@@ -92,9 +103,12 @@ requirements and are expected to be false at completion.
 - [Geometry report](../../artifacts/jetson_thor_packing/geometry_validation.json):
   independently exported collision panels have no interpenetration at designed resting
   poses, using a 10 micrometre tolerance. It also measures board dimensions and clearances.
-- [Behavioral validation](../../artifacts/jetson_thor_packing/validation/task_1/validation.json):
-  the full force-driven sequence plus wrong-compartment, ordering, removal/replacement,
-  and reset checks.
+- Behavioral validation for three distinct sampled layouts:
+  [episode 1](../../artifacts/jetson_thor_packing/on_placement_validation_fixed/episode_000/task_1/validation.json),
+  [episode 2](../../artifacts/jetson_thor_packing/on_placement_validation_fixed/episode_001/task_1/validation.json),
+  [episode 3](../../artifacts/jetson_thor_packing/on_placement_validation_fixed/episode_002/task_1/validation.json).
+  Each passes native `on_relation` and `no_overlap` validation, the full force-driven
+  sequence, and wrong-compartment, ordering, removal/replacement, and reset checks.
 - [Recorded-run report](../../artifacts/jetson_thor_packing/demo/task_1/validation.json):
   native Arena termination, subtask completion, current predicates, final poses,
   velocities, and boundary events.
@@ -108,6 +122,13 @@ bounded PD wrenches with gravity compensation; every object is released before i
 settled placement is accepted. No object poses are directly written during packing.
 Reset uses Arena's ordinary reset path. This establishes force-based solvability;
 robot grasping and reachability are outside this demonstration.
+
+Testing multiple reset layouts exposed an intermittent tray-support problem:
+the compartment dividers were flush with the carton ledges and could carry almost
+all the tray's weight. In the [failed run](../../artifacts/jetson_thor_packing/on_placement_contact_failure.json),
+the tray was contained but its carton contact force was below the required 0.01 N.
+Raising the carton ledges by 2 mm makes them support the tray consistently. The
+success predicate is unchanged; all three layouts passed after rebuilding the assets.
 
 Media are copied into `docs/images/jetson_thor_packing/`. The MP4 is 1280 × 720 at
 20 fps; its last frame is held for four seconds to make the success caption readable.
@@ -130,7 +151,7 @@ Discover this checkout's running container and run Arena as the host user:
 ```bash
 ARENA_CONTAINER=$(docker ps --filter "volume=$(git rev-parse --show-toplevel)" --format '{{.Names}}' | head -1)
 docker exec "$ARENA_CONTAINER" su $(id -un) -c \
-  'cd /workspaces/isaaclab_arena && DISPLAY=:1 ./submodules/IsaacLab/isaaclab.sh -p isaaclab_arena_environments/jetson_thor_packing/force_demo.py --no-record --negative-checks --output artifacts/jetson_thor_packing/validation'
+  'cd /workspaces/isaaclab_arena && ./submodules/IsaacLab/isaaclab.sh -p isaaclab_arena_environments/jetson_thor_packing/force_demo.py --visualizer none --no-record --negative-checks --episodes 3 --output artifacts/jetson_thor_packing/on_placement_validation_fixed'
 docker exec "$ARENA_CONTAINER" su $(id -un) -c \
   'cd /workspaces/isaaclab_arena && DISPLAY=:1 ./submodules/IsaacLab/isaaclab.sh -p isaaclab_arena_environments/jetson_thor_packing/force_demo.py'
 docker exec "$ARENA_CONTAINER" su $(id -un) -c \
@@ -139,7 +160,11 @@ python3 isaaclab_arena_environments/jetson_thor_packing/publish_demo.py
 ```
 
 `--inspect` captures the initial scene without packing. `--no-record` skips viewport
-capture. Generated models and runtime artifacts remain outside the source package.
+capture. `--placement-seed 42` selects another reproducible layout sequence, and
+`--episodes 3` exercises three reset layouts, writing each episode to its own directory.
+The wrong-compartment check returns the USB cable to its sampled starting pose.
+Reports include the sampled poses and Arena's placement-validator results.
+Generated models and runtime artifacts remain outside the source package.
 
 ## Process notes
 
@@ -150,7 +175,7 @@ Arena APIs used: `ArenaEnvGraphSpec`, `ArenaEnvBuilder`, `ObjectReference`,
 `ArenaWorld`, and the native termination manager. Blender MCP supplied
 `get_scene_info` and `execute_blender_code`; USD export and rendering ran inside Blender.
 
-Both the behavioral validation and the final recorded run report `success: true`,
+All three behavioral episodes and the final recorded run report `success: true`,
 `arena_success_termination: [true]`, six completed subtasks, and no active external
 force holds. All seven behavioral checks passed: initial state rejection, wrong
 compartment rejection, rejection of a board packed before subtask activation,
@@ -170,10 +195,10 @@ The five most time-consuming phases, approximately ranked from the session, were
 
 These are proposed additions, not commands currently supplied by Arena.
 
-Execution time through final artifact validation: **35 min 10 sec**
+Original construction time through artifact validation: **35 min 10 sec**
 (2026-10-26T18:50:06.715Z to 2026-10-26T19:25:16.963906+00:00); approval wait: **0 seconds**.
 At that checkpoint, the session counter reports **7,132,754 total tokens**:
 7,070,225 input, including 6,951,040 cached input,
 and 62,529 output. These API totals count reused context on each call;
-cached input is a subset of input. They exclude subsequent bookkeeping and this turn's
-final answer. See [execution accounting](../../artifacts/jetson_thor_packing/execution_accounting.json).
+cached input is a subset of input. They exclude subsequent bookkeeping and follow-up
+work. See [execution accounting](../../artifacts/jetson_thor_packing/execution_accounting.json).

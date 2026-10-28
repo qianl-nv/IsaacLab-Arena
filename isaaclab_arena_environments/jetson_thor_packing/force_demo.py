@@ -59,21 +59,29 @@ class ThorPackingDemo(ForceDemo):
 
     def check_wrong_compartment(self):
         """A cable touching a different receptacle must not satisfy its own task."""
+        T_W_start = self.env.arena_world.get_pose_w("usb_cable")[0].tolist()
         self.place("usb_cable", [-0.12, 0.0, 0.009])
         criterion = self.env.cfg.task_progress.success_criteria[2]
         entered = criterion.predicate_sequence[0](self.env).any().item()
         assert not entered, "USB cable in the AC bay incorrectly passed containment"
         self.move("usb_cable", [0, 0.11, 1.02], seconds=1.0)
-        self.move("usb_cable", [0.16, -0.24, 1.02], seconds=1.4)
-        self.move("usb_cable", [0.16, -0.24, 0.755], seconds=1.5)
+        self.move("usb_cable", [*T_W_start[:2], 1.02], seconds=1.4, orientation=T_W_start[3:])
+        self.move("usb_cable", [*T_W_start[:2], T_W_start[2] + 0.003], seconds=1.5)
         self.release("usb_cable")
         self.step(180)
         return {"wrong_compartment_rejected": True}
 
     def run(self):
         try:
+            from isaaclab_arena.relations.placement_events import get_reset_placement_results
+
+            placement = get_reset_placement_results(self.env)[0]
+            assert placement.success, "Initial layout must pass Arena placement validation"
+            placement_checks = placement.validation_results.validation_results
+            print("PLACEMENT_VALIDATION", json.dumps(placement_checks), flush=True)
+            initial_poses = {name: self.env.arena_world.get_pose_w(name).tolist() for name, _, _ in PLACEMENTS}
             if self.viewport is not None:
-                self.env.sim.set_camera_view(eye=[0.18, -0.36, 2.35], target=[0.0, 0.0, 0.82])
+                self.env.sim.set_camera_view(eye=[0.18, -0.36, 2.85], target=[0.0, 0.0, 0.82])
             self.step(240)
             assert not self.task_success(), "Scattered initial state must not pass"
             checks = {"initial_state_rejected": True}
@@ -131,6 +139,9 @@ class ThorPackingDemo(ForceDemo):
             report = {
                 "mode": "scripted_physics_forces",
                 "robot": None,
+                "placement_seed": self.args.placement_seed,
+                "initial_poses": initial_poses,
+                "initial_placement_checks": placement_checks,
                 "success": self.task_success(),
                 "arena_success_termination": success_term,
                 "subtasks": self.env.progress_tracker.get_subtask_completion().tolist(),
@@ -155,6 +166,19 @@ class ThorPackingDemo(ForceDemo):
                 report["checks"]["reset_clears_success"] = True
             (self.out / "validation.json").write_text(json.dumps(report, indent=2))
             print("TASK_SUCCESS", json.dumps(report), flush=True)
+        except Exception:
+            failure = {
+                "current_predicates": self._criterion_status(),
+                "poses": {name: self.env.arena_world.get_pose_w(name).tolist() for name, _, _ in PLACEMENTS},
+                "contacts": {
+                    name: sensor.data.force_matrix_w.torch.tolist()
+                    for name, sensor in self.env.scene.sensors.items()
+                    if name.startswith("contact_sensor_")
+                },
+            }
+            (self.out / "failure.json").write_text(json.dumps(failure, indent=2))
+            print("TASK_FAILURE", json.dumps(failure), flush=True)
+            raise
         finally:
             if self.writer is not None:
                 self.writer.close()
@@ -167,8 +191,11 @@ def main():
     parser.add_argument("--no-record", action="store_true")
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--negative-checks", action="store_true")
+    parser.add_argument("--placement-seed", type=int, default=17)
+    parser.add_argument("--episodes", type=int, default=1)
     parser.set_defaults(device="cpu", visualizer=["kit"], task=1)
     args = parser.parse_args()
+    assert args.episodes > 0, "Episode count must be positive"
     with SimulationAppContext(args):
         from isaaclab_arena.environment_spec.arena_env_graph_spec import ArenaEnvGraphSpec
         from isaaclab_arena.environments.arena_env_builder import ArenaEnvBuilder
@@ -181,15 +208,21 @@ def main():
                 device="cpu",
                 num_envs=1,
                 disable_fabric=False,
-                placement_seed=17,
+                placement_seed=args.placement_seed,
             ),
         )
         cfg, kwargs = builder.build_env_cfg()
         cfg.sim.enable_scene_query_support = True
         env = builder.make_registered(cfg, kwargs)
         try:
-            env.reset()
-            ThorPackingDemo(env.unwrapped, args).run()
+            from copy import copy
+
+            for episode in range(args.episodes):
+                episode_args = copy(args)
+                if args.episodes > 1:
+                    episode_args.output = args.output / f"episode_{episode:03d}"
+                env.reset()
+                ThorPackingDemo(env.unwrapped, episode_args).run()
         finally:
             env.close()
 

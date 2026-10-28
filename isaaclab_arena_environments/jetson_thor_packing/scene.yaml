@@ -14,38 +14,26 @@ objects:
   registry_name: thor_packing_part
   params:
     asset_name: thor_board
-    initial_pose:
-      position_xyz: [-0.39, -0.17, 0.752]
 - id: board_tray
   registry_name: thor_packing_part
   params:
     asset_name: board_tray
-    initial_pose:
-      position_xyz: [-0.39, 0.16, 0.752]
 - id: ac_cable_us
   registry_name: thor_packing_part
   params:
     asset_name: ac_cable_us
-    initial_pose:
-      position_xyz: [-0.10, -0.23, 0.752]
 - id: ac_cable_eu
   registry_name: thor_packing_part
   params:
     asset_name: ac_cable_eu
-    initial_pose:
-      position_xyz: [0.005, -0.22, 0.752]
 - id: usb_cable
   registry_name: thor_packing_part
   params:
     asset_name: usb_cable
-    initial_pose:
-      position_xyz: [0.16, -0.24, 0.752]
 - id: power_supply
   registry_name: thor_packing_part
   params:
     asset_name: power_supply
-    initial_pose:
-      position_xyz: [0.46, -0.14, 0.752]
 object_references:
 - id: tabletop
   parent_id: packing_table
@@ -69,23 +57,19 @@ object_references:
   object_type: rigid
 relations:
 - {kind: is_anchor, subject: tabletop}
-- {kind: is_anchor, subject: carton}
-- {kind: is_anchor, subject: ac_bay}
-- {kind: is_anchor, subject: usb_bay}
-- {kind: is_anchor, subject: power_bay}
-- {kind: is_anchor, subject: thor_board}
-- {kind: is_anchor, subject: board_tray}
-- {kind: is_anchor, subject: ac_cable_us}
-- {kind: is_anchor, subject: ac_cable_eu}
-- {kind: is_anchor, subject: usb_cable}
-- {kind: is_anchor, subject: power_supply}
+- {kind: 'on', subject: thor_board, reference: tabletop}
+- {kind: 'on', subject: board_tray, reference: tabletop}
+- {kind: 'on', subject: ac_cable_us, reference: tabletop}
+- {kind: 'on', subject: ac_cable_eu, reference: tabletop}
+- {kind: 'on', subject: usb_cable, reference: tabletop}
+- {kind: 'on', subject: power_supply, reference: tabletop}
 placer_params:
   random_yaw_init: false
-  resolve_on_reset: false
-  min_unique_layouts_per_env: 1
+  resolve_on_reset: true
+  allow_best_loss_fallbacks: false
 env_cfg_override:
   viewer:
-    eye: [0.18, -0.36, 2.35]
+    eye: [0.18, -0.36, 2.85]
     lookat: [0.0, 0.0, 0.82]
   sim:
     dt: 0.008333333333333333

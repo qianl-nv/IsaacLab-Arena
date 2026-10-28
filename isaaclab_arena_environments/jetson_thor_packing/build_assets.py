@@ -167,9 +167,9 @@ def build():
         box(carton, "Side_wall", (x, 0, 0.082), (0.005, 0.22, 0.156), kraft)
     for y in (-0.1075, 0.1075):
         box(carton, "End_wall", (0, y, 0.082), (0.35, 0.005, 0.156), kraft)
-    # Tray lands on these ledges, above every accessory, not on the accessories themselves.
+    # Ledges stand 2 mm above the dividers so the carton reliably supports the tray.
     for x in (-0.17, 0.17):
-        box(carton, "Tray_ledge", (x, 0, 0.077), (0.01, 0.202, 0.006), edge)
+        box(carton, "Tray_ledge", (x, 0, 0.079), (0.01, 0.202, 0.006), edge)
     lid = root("OpenLid")
     lid.parent = background
     lid.location = (0.12, 0.221, 0.91)
@@ -333,7 +333,7 @@ def build():
                 "carton_external": [0.36, 0.22, 0.16],
                 "tray_external": [0.342, 0.202, 0.066],
                 "board_well": [0.257, 0.126, 0.061],
-                "tray_floor_bottom_in_carton": 0.080,
+                "tray_floor_bottom_in_carton": 0.082,
                 "dimension_sources": {
                     "board": "NVIDIA published mechanical dimensions",
                     "packaging_and_accessories": "photo-based estimates with explicit clearances",
