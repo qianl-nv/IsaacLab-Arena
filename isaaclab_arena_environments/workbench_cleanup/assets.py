@@ -208,9 +208,17 @@ class CleanupSocketSet(SimReadyUsdObject, Openable):
             (0.30, 0.14, 0.028),
             kinematic=False,
         )
+        # Give the source's three handle bars contact geometry for physical grasp attempts.
+        from pxr import PhysxSchema
+
+        for prim in Usd.PrimRange(base):
+            if prim.GetName().startswith("handle_") and prim.HasAPI(UsdPhysics.CollisionAPI):
+                UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Set(True)
+                contact = PhysxSchema.PhysxCollisionAPI.Apply(prim)
+                contact.CreateContactOffsetAttr(0.001)
+                contact.CreateRestOffsetAttr(0.0)
         super().__init__(
             usd_path=_save(stage, "socket_set.usda"),
-            object_type=self.object_type,
             openable_joint_name="case_lid",
             **kwargs,
         )
@@ -241,7 +249,6 @@ class CleanupOscilloscope(SimReadyUsdObject, Pressable):
                 drive.CreateDampingAttr(0.015)
         super().__init__(
             usd_path=_save(stage, "oscilloscope.usda"),
-            object_type=self.object_type,
             pressable_joint_name="joint_button_01_joint_00",
             **kwargs,
         )
@@ -287,7 +294,7 @@ class CleanupPowerPlug(Object):
 
     def __init__(self, **kwargs):
         from isaaclab.sim import RigidBodyPropertiesCfg
-        from pxr import Gf, Usd, UsdGeom, UsdPhysics
+        from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics
 
         stage = Usd.Stage.CreateInMemory()
         UsdGeom.SetStageMetersPerUnit(stage, 1.0)
@@ -308,11 +315,16 @@ class CleanupPowerPlug(Object):
             cube.CreateDisplayColorAttr([color])
             if name == "Grip":
                 UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+                contact = PhysxSchema.PhysxCollisionAPI.Apply(cube.GetPrim())
+                contact.CreateContactOffsetAttr(0.001)
+                contact.CreateRestOffsetAttr(0.0)
         super().__init__(
-            name=self.registry_name,
+            name=kwargs.pop("name", self.registry_name),
             usd_path=_save(stage, "plug.usda"),
             object_type=self.object_type,
-            spawn_cfg_addon={"rigid_props": RigidBodyPropertiesCfg(disable_gravity=True, linear_damping=4.0)},
+            spawn_cfg_addon={
+                "rigid_props": RigidBodyPropertiesCfg(disable_gravity=True, linear_damping=4.0, angular_damping=4.0)
+            },
             **kwargs,
         )
 
@@ -327,14 +339,20 @@ class CleanupOutlet(SimReadyUsdObject):
 
     def __init__(self, usd_path: str, **kwargs):
         stage, source = _source_stage(usd_path, "Outlet")
-        from pxr import Usd, UsdPhysics
+        from pxr import PhysxSchema, Usd, UsdGeom, UsdPhysics
 
         for prim in Usd.PrimRange(source):
+            if prim.IsA(UsdGeom.Mesh) and prim.HasAPI(UsdPhysics.CollisionAPI):
+                # Keep a small collision margin around the socket and its opened cap.
+                UsdPhysics.MeshCollisionAPI.Apply(prim).CreateApproximationAttr("convexHull")
+                contact = PhysxSchema.PhysxCollisionAPI.Apply(prim)
+                contact.CreateContactOffsetAttr(0.001)
+                contact.CreateRestOffsetAttr(0.0)
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 drive = UsdPhysics.DriveAPI.Apply(prim, "angular")
                 drive.CreateTargetPositionAttr(-90.0)
                 drive.CreateStiffnessAttr(1.0)
                 drive.CreateDampingAttr(0.1)
         _fix_base(stage, source, "/Asset/Outlet/Geometry/socket_01_obj_00")
-        super().__init__(usd_path=_save(stage, "outlet.usda"), object_type=self.object_type, **kwargs)
+        super().__init__(usd_path=_save(stage, "outlet.usda"), **kwargs)
         self.object_cfg.init_state.joint_pos = {"joint_cap_01_joint_00": -1.57}

@@ -4,37 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 env_name: workbench_cleanup_task_1
-external_yaml: scene.yaml
-task:
-  composition: sequential
-  description: Close the socket set, open the top-left drawer, put the set inside,
-    then close the drawer.
-  desired_subtask_success_state:
-  - true
-  - null
-  - true
-  - true
-  subtasks:
-  - kind: CloseDoorTask
-    params:
-      openable_object: socket_set
-      closedness_threshold: 0.05
-      reset_openness: 0.85
-  - kind: OpenDoorTask
-    params:
-      openable_object: left_drawers
-      openness_threshold: 0.85
-      reset_openness: 0.0
-  - kind: ClosedCaseInDrawerTask
-    params:
-      object: socket_set
-      target: top_left_drawer
-      consecutive_success_steps: 10
-      minimum_contained_fraction: 0.98
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 0.1
-  - kind: CloseDoorTask
-    params:
-      openable_object: left_drawers
-      closedness_threshold: 0.05
-      reset_openness: 0.0
+external_yaml:
+- scene.yaml
+- operator.yaml
+- task_1_logic.yaml

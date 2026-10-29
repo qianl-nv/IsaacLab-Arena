@@ -3,9 +3,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-embodiment:
-  id: operator
-  registry_name: no_embodiment
 background:
   id: workbench
   registry_name: cleanup_workbench

@@ -1,0 +1,17 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+env_name: workbench_cleanup_droid_task_2
+external_yaml:
+- scene.yaml
+- droid.yaml
+- task_2_logic.yaml
+embodiment:
+  params:
+    stand_height_m: 0.75
+    initial_joint_pose: [0.2700416253, -1.1306603835, -1.2264445760, -2.0466528644, 0.4612384067, 2.4126109783, 0.1148007374, 0, 0, 0, 0, 0, 0]
+    initial_pose:
+      position_xyz: [0.50, -0.20, 0.75]
+      rotation_xyzw: [0, 0, 1, 0]

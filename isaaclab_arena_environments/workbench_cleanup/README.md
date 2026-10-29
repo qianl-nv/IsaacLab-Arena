@@ -2,7 +2,15 @@
 
 `scene.yaml` is a shared scene include. Load `task_1.yaml`, `task_2.yaml`, or
 `task_3.yaml` with `ArenaEnvGraphSpec.from_yaml`; each defines a sequential task
-using the same scene. The embodiment is `no_embodiment`.
+using the same scene. These original entry points use `no_embodiment` from
+`operator.yaml`. The `droid_task_1.yaml`, `droid_task_2.yaml`, and
+`droid_task_3.yaml` entry points add DROID and reuse exactly the same scene and
+task definitions through `task_N_logic.yaml`.
+
+See [DROID validation](DROID_VALIDATION.md) for the IK controller, action-level
+feasibility results, videos, and remaining failures. Only Task 3 currently has a
+successful complete robot recording; the original force-demo results below are
+separate from robot validation.
 
 Source credits: [NVIDIA SimReady assets](https://huggingface.co/datasets/nvidia/simready-assets),
 [ForgeCAD](https://huggingface.co/datasets/ForgeCAD/simready-assets)

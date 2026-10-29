@@ -1,0 +1,89 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+task:
+  composition: sequential
+  description: Bring the overhead bin onto the table, pack all five tools, then return
+    the loaded bin to the top rack.
+  desired_subtask_success_state:
+  - null
+  - true
+  - true
+  - true
+  - true
+  - true
+  - true
+  subtasks:
+  - kind: GoalPoseTask
+    params:
+      object: overhead_bin
+      target_x_range:
+      - -0.12
+      - 0.12
+      target_y_range:
+      - 0.18
+      - 0.28
+      target_z_range:
+      - 0.668
+      - 0.69
+      target_orientation_xyzw:
+      - 0
+      - 0
+      - 0
+      - 1
+      target_orientation_tolerance_rad: 0.15
+  - kind: ToolInBinTask
+    params:
+      object: slotted_screwdriver
+      target: overhead_bin
+      consecutive_success_steps: 10
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.1
+  - kind: ToolInBinTask
+    params:
+      object: torx_screwdriver
+      target: overhead_bin
+      consecutive_success_steps: 10
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.1
+  - kind: ToolInBinTask
+    params:
+      object: phillips_screwdriver
+      target: overhead_bin
+      consecutive_success_steps: 10
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.1
+  - kind: ToolInBinTask
+    params:
+      object: combination_wrench
+      target: overhead_bin
+      consecutive_success_steps: 10
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.1
+  - kind: ToolInBinTask
+    params:
+      object: small_wrench
+      target: overhead_bin
+      consecutive_success_steps: 10
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.2
+  - kind: GoalPoseTask
+    params:
+      object: overhead_bin
+      target_x_range:
+      - -0.15
+      - 0.03
+      target_y_range:
+      - 0.28
+      - 0.4
+      target_z_range:
+      - 1.201
+      - 1.221
+      target_orientation_xyzw:
+      - 0
+      - 0
+      - 0
+      - 1
+      target_orientation_tolerance_rad: 0.15

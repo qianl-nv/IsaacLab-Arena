@@ -1,0 +1,19 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+embodiment:
+  id: droid
+  registry_name: droid_abs_joint_pos
+  params:
+    stand_footprint_xy_m: [0.32, 0.32]
+    placement_bbox_stand_only: true
+env_cfg_override:
+  actions:
+    gripper_action:
+      _target_: isaaclab.envs.mdp.actions.actions_cfg.JointPositionActionCfg
+      asset_name: robot
+      joint_names: [finger_joint]
+      scale: 0.7853981633974483
+      use_default_offset: false

@@ -4,21 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 env_name: workbench_cleanup_task_3
-external_yaml: scene.yaml
-task:
-  composition: sequential
-  description: Switch the oscilloscope off, then withdraw its power plug from the
-    outlet.
-  desired_subtask_success_state:
-  - true
-  - true
-  subtasks:
-  - kind: PressButtonTask
-    params:
-      pressable_object: oscilloscope
-      pressedness_threshold: 0.8
-      reset_pressedness: 1.0
-  - kind: UnplugTask
-    params:
-      plug: power_plug
-      outlet: outlet
+external_yaml:
+- scene.yaml
+- operator.yaml
+- task_3_logic.yaml

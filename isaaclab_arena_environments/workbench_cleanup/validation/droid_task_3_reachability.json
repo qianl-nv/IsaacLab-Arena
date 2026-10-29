@@ -1,0 +1,80 @@
+[
+  {
+    "action": "press_power_button",
+    "target_xyz": [
+      0.018,
+      -0.643,
+      0.696
+    ],
+    "target_euler_xyz_deg": [
+      0,
+      50,
+      180
+    ],
+    "ik_reachable": true,
+    "position_error_m": 1.1804633916462203e-07,
+    "rotation_error_rad": 4.5634649415311806e-07,
+    "arm_joints_rad": [
+      0.9813763001996771,
+      0.6550006054158802,
+      -0.5591452681872091,
+      -2.117159485580637,
+      -2.777334242346151,
+      2.986299960381693,
+      -2.8962549140408274
+    ],
+    "collision_and_grasp_validation": "Requires physical rollout; not checked by IK"
+  },
+  {
+    "action": "grasp_plug",
+    "target_xyz": [
+      -0.132,
+      -0.7,
+      0.888
+    ],
+    "target_euler_xyz_deg": [
+      -90,
+      0,
+      180
+    ],
+    "ik_reachable": true,
+    "position_error_m": 7.008332596983214e-08,
+    "rotation_error_rad": 1.070066225872389e-07,
+    "arm_joints_rad": [
+      0.3421334403410861,
+      0.5095475782375671,
+      0.1509998493545979,
+      -2.1388135552491137,
+      -2.622796267034481,
+      1.977519049269147,
+      1.266138769243854
+    ],
+    "collision_and_grasp_validation": "Requires physical rollout; not checked by IK"
+  },
+  {
+    "action": "withdraw_plug",
+    "target_xyz": [
+      0.04,
+      -0.7,
+      0.888
+    ],
+    "target_euler_xyz_deg": [
+      -90,
+      0,
+      180
+    ],
+    "ik_reachable": true,
+    "position_error_m": 2.455038086519269e-08,
+    "rotation_error_rad": 5.038054638716756e-08,
+    "arm_joints_rad": [
+      0.4506686295859183,
+      0.2541399142405476,
+      0.28028603934230967,
+      -2.6169557776781827,
+      -2.4093494332112657,
+      1.734675818787865,
+      1.3325083599818688
+    ],
+    "collision_and_grasp_validation": "Requires physical rollout; not checked by IK"
+  }
+]
