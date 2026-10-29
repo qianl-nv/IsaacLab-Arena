@@ -1,0 +1,25 @@
+Use the repository's author-environment skill to validate and repair:
+
+isaaclab_arena_environments/kitchen_bench/kitchen_bench_lightwheel_open_microwave.yaml
+
+The environment's placement relations were corrupted. Diagnose the resulting placement, collision,
+or reachability problem and make the task usable again.
+
+Constraints:
+- You may edit only relation parameters or add relation entries inside the `relations:` section of
+  that YAML.
+- Do not modify Python, documentation, skills, another YAML, or any other repository file.
+- Do not use git, web search, remote repositories, prior sessions, or information outside this
+  workspace.
+- Put logs and screenshots under `/results`, not in the repository.
+- Use only commands and capabilities available in this workspace and container.
+- Do not run OpenPI, another policy, or a policy evaluation. An external harness performs the fixed
+  five-episode policy acceptance after this timed session.
+- Validate the repair using bounded environment construction, placement checks, reset or direct
+  stepping, and diagnostic visualization as appropriate.
+- Save useful intermediate debug screenshots under `/results/images`. The equal-access helper
+  `/experiment/capture-kit.sh <output.png>` captures the current Kit display.
+
+Return the final response in the required JSON schema. Include the relation changes, validation
+commands and outcomes, failed attempts, and absolute paths to debug images. Do not estimate token
+counts, model calls, tool calls, or wall time; the experiment harness measures those independently.
