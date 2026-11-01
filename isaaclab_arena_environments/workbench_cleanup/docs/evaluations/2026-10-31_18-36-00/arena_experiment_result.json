@@ -1,0 +1,18 @@
+{
+  "runs": {
+    "workbench_cleanup_smoke": {
+      "environment": {
+        "name": "workbench_cleanup_physx",
+        "definition": "isaaclab_arena_environments/workbench_cleanup/workbench_cleanup_physx.yaml"
+      },
+      "policy_variant": "zero_action",
+      "status": "completed",
+      "rebuilds": [
+        {
+          "index": 0,
+          "episodes": []
+        }
+      ]
+    }
+  }
+}

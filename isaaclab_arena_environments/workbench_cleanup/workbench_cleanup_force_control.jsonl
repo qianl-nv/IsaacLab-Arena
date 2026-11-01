@@ -1,0 +1,51 @@
+{"action":"setup_joint","name":"cabinet","joint_name":"joint_part_01_joint_00","effort_limit":100.0}
+{"action":"mark","index":0,"boundary":"start","title":"Open the top drawer"}
+{"action":"joint","name":"cabinet","joint_name":"joint_part_01_joint_00","normalized_goal":0.98,"seconds":3.0,"gain":600.0,"damping":50.0,"limit":100.0}
+{"action":"check","index":0}
+{"action":"mark","index":0,"boundary":"end","title":"Top drawer is open"}
+{"action":"mark","index":1,"boundary":"start","title":"Put slotted_screwdriver into the top drawer"}
+{"action":"lift","name":"slotted_screwdriver","height":1.2,"seconds":2.0,"minimum_stiffness":40.0}
+{"action":"move","name":"slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,-0.24,0.4],"orientation":[0,0,0,1],"seconds":3.0,"minimum_stiffness":40.0}
+{"action":"move","name":"slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,-0.24,-0.03],"seconds":2.5,"minimum_stiffness":40.0}
+{"action":"release","name":"slotted_screwdriver"}
+{"action":"wait","steps":240}
+{"action":"check","index":1}
+{"action":"mark","index":1,"boundary":"end","title":"slotted_screwdriver is contained and supported"}
+{"action":"mark","index":2,"boundary":"start","title":"Put torx_screwdriver into the top drawer"}
+{"action":"lift","name":"torx_screwdriver","height":1.2,"seconds":2.0,"minimum_stiffness":40.0}
+{"action":"move","name":"torx_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,-0.12,0.4],"orientation":[0,0,0,1],"seconds":3.0,"minimum_stiffness":40.0}
+{"action":"move","name":"torx_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,-0.12,-0.03],"seconds":2.5,"minimum_stiffness":40.0}
+{"action":"release","name":"torx_screwdriver"}
+{"action":"wait","steps":240}
+{"action":"check","index":2}
+{"action":"mark","index":2,"boundary":"end","title":"torx_screwdriver is contained and supported"}
+{"action":"mark","index":3,"boundary":"start","title":"Put phillips_screwdriver into the top drawer"}
+{"action":"lift","name":"phillips_screwdriver","height":1.2,"seconds":2.0,"minimum_stiffness":40.0}
+{"action":"move","name":"phillips_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0,0.4],"orientation":[0,0,0,1],"seconds":3.0,"minimum_stiffness":40.0}
+{"action":"move","name":"phillips_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0,-0.03],"seconds":2.5,"minimum_stiffness":40.0}
+{"action":"release","name":"phillips_screwdriver"}
+{"action":"wait","steps":240}
+{"action":"check","index":3}
+{"action":"mark","index":3,"boundary":"end","title":"phillips_screwdriver is contained and supported"}
+{"action":"mark","index":4,"boundary":"start","title":"Put wrench_1 into the top drawer"}
+{"action":"lift","name":"wrench_1","height":1.2,"seconds":2.0,"minimum_stiffness":40.0}
+{"action":"move","name":"wrench_1","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0.12,0.4],"orientation":[0,0,0,1],"seconds":3.0,"minimum_stiffness":40.0}
+{"action":"move","name":"wrench_1","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0.12,-0.03],"seconds":2.5,"minimum_stiffness":40.0}
+{"action":"release","name":"wrench_1"}
+{"action":"wait","steps":240}
+{"action":"check","index":4}
+{"action":"mark","index":4,"boundary":"end","title":"wrench_1 is contained and supported"}
+{"action":"mark","index":5,"boundary":"start","title":"Put wrench_2 into the top drawer"}
+{"action":"lift","name":"wrench_2","height":1.2,"seconds":2.0,"minimum_stiffness":40.0}
+{"action":"move","name":"wrench_2","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0.24,0.4],"orientation":[0,0,0,1],"seconds":3.0,"minimum_stiffness":40.0}
+{"action":"move","name":"wrench_2","reference":"top_drawer","reference_point":"aabb_center","offset":[0.06,0.24,-0.03],"seconds":2.5,"minimum_stiffness":40.0}
+{"action":"release","name":"wrench_2"}
+{"action":"wait","steps":240}
+{"action":"check","index":5}
+{"action":"mark","index":5,"boundary":"end","title":"wrench_2 is contained and supported"}
+{"action":"mark","index":6,"boundary":"start","title":"Close the loaded top drawer"}
+{"action":"joint","name":"cabinet","joint_name":"joint_part_01_joint_00","normalized_goal":0.0,"seconds":4.0,"gain":600.0,"damping":50.0,"limit":100.0}
+{"action":"wait_final"}
+{"action":"mark","index":6,"boundary":"end","title":"All five tools remain inside the closed drawer"}
+{"action":"inspect"}
+{"action":"finish"}

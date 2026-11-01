@@ -453,6 +453,16 @@ def test_graph_spec_rejects_invalid_data():
             lambda data: data["task"].update({"composition": "parallel"}),
             "composition 'parallel' requires at least two atomic tasks",
         ),
+        (
+            "atomic task with final subtask states",
+            lambda data: data["task"].update({"desired_subtask_success_state": [True]}),
+            "Final subtask states require a composite task",
+        ),
+        (
+            "final subtask state count mismatch",
+            lambda data: data["task"].update({"composition": "parallel", "desired_subtask_success_state": []}),
+            "Final subtask states must match the number of subtasks",
+        ),
     ]
 
     for label, mutate, error_match in cases:

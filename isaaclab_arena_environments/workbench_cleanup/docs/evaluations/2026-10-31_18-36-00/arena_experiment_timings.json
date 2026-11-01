@@ -1,0 +1,72 @@
+{
+  "totals": [
+    {
+      "name": "step",
+      "count": 120,
+      "total_ms": 7451.230497099459,
+      "min_ms": 56.86969496309757,
+      "max_ms": 98.5287269577384,
+      "mean_ms": 62.093587475828826
+    },
+    {
+      "name": "step/env_step",
+      "count": 120,
+      "total_ms": 7418.144659139216,
+      "min_ms": 56.720142252743244,
+      "max_ms": 98.25099259614944,
+      "mean_ms": 61.81787215949347
+    },
+    {
+      "name": "step/policy_inference",
+      "count": 120,
+      "total_ms": 6.6681671887636185,
+      "min_ms": 0.03985501825809479,
+      "max_ms": 0.1444416120648384,
+      "mean_ms": 0.05556805990636349
+    }
+  ],
+  "runs": [
+    {
+      "run_name": "workbench_cleanup_smoke",
+      "type": "timing",
+      "name": "step/policy_inference",
+      "app_name": "experiment_runner",
+      "count": 120,
+      "mean_ms": 0.05556805990636349,
+      "total_ms": 6.6681671887636185,
+      "min_ms": 0.03985501825809479,
+      "max_ms": 0.1444416120648384,
+      "p10_ms": 0.04384201020002365,
+      "p50_ms": 0.052959658205509186,
+      "p90_ms": 0.070902518928051
+    },
+    {
+      "run_name": "workbench_cleanup_smoke",
+      "type": "timing",
+      "name": "step/env_step",
+      "app_name": "experiment_runner",
+      "count": 120,
+      "mean_ms": 61.81787215949347,
+      "total_ms": 7418.144659139216,
+      "min_ms": 56.720142252743244,
+      "max_ms": 98.25099259614944,
+      "p10_ms": 57.41245858371258,
+      "p50_ms": 60.8597444370389,
+      "p90_ms": 66.28603767603636
+    },
+    {
+      "run_name": "workbench_cleanup_smoke",
+      "type": "timing",
+      "name": "step",
+      "app_name": "experiment_runner",
+      "count": 120,
+      "mean_ms": 62.093587475828826,
+      "total_ms": 7451.230497099459,
+      "min_ms": 56.86969496309757,
+      "max_ms": 98.5287269577384,
+      "p10_ms": 57.74123687297106,
+      "p50_ms": 61.200786381959915,
+      "p90_ms": 66.61137100309134
+    }
+  ]
+}

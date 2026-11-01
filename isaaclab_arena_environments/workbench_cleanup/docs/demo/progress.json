@@ -1,0 +1,226 @@
+[
+  {
+    "subtask": 0,
+    "boundary": "start",
+    "title": "Open the top drawer",
+    "simulation_time_s": 2.0,
+    "completion": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "00_start.png"
+  },
+  {
+    "subtask": 0,
+    "boundary": "end",
+    "title": "Top drawer is open",
+    "simulation_time_s": 5.75,
+    "completion": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "00_end.png"
+  },
+  {
+    "subtask": 1,
+    "boundary": "start",
+    "title": "Put slotted_screwdriver into the top drawer",
+    "simulation_time_s": 5.75,
+    "completion": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "01_start.png"
+  },
+  {
+    "subtask": 1,
+    "boundary": "end",
+    "title": "slotted_screwdriver is contained and supported",
+    "simulation_time_s": 16.75,
+    "completion": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "01_end.png"
+  },
+  {
+    "subtask": 2,
+    "boundary": "start",
+    "title": "Put torx_screwdriver into the top drawer",
+    "simulation_time_s": 16.75,
+    "completion": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "02_start.png"
+  },
+  {
+    "subtask": 2,
+    "boundary": "end",
+    "title": "torx_screwdriver is contained and supported",
+    "simulation_time_s": 27.75,
+    "completion": [
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "02_end.png"
+  },
+  {
+    "subtask": 3,
+    "boundary": "start",
+    "title": "Put phillips_screwdriver into the top drawer",
+    "simulation_time_s": 27.75,
+    "completion": [
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "03_start.png"
+  },
+  {
+    "subtask": 3,
+    "boundary": "end",
+    "title": "phillips_screwdriver is contained and supported",
+    "simulation_time_s": 38.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "viewport": "03_end.png"
+  },
+  {
+    "subtask": 4,
+    "boundary": "start",
+    "title": "Put wrench_1 into the top drawer",
+    "simulation_time_s": 38.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "viewport": "04_start.png"
+  },
+  {
+    "subtask": 4,
+    "boundary": "end",
+    "title": "wrench_1 is contained and supported",
+    "simulation_time_s": 49.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "viewport": "04_end.png"
+  },
+  {
+    "subtask": 5,
+    "boundary": "start",
+    "title": "Put wrench_2 into the top drawer",
+    "simulation_time_s": 49.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "viewport": "05_start.png"
+  },
+  {
+    "subtask": 5,
+    "boundary": "end",
+    "title": "wrench_2 is contained and supported",
+    "simulation_time_s": 60.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "viewport": "05_end.png"
+  },
+  {
+    "subtask": 6,
+    "boundary": "start",
+    "title": "Close the loaded top drawer",
+    "simulation_time_s": 60.75,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "viewport": "06_start.png"
+  },
+  {
+    "subtask": 6,
+    "boundary": "end",
+    "title": "All five tools remain inside the closed drawer",
+    "simulation_time_s": 65.8,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "viewport": "06_end.png"
+  }
+]

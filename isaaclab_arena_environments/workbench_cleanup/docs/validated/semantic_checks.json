@@ -1,0 +1,249 @@
+[
+  {
+    "case": "closed_empty_drawer",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 2.0
+  },
+  {
+    "case": "after_subtask_0",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 5.75
+  },
+  {
+    "case": "after_subtask_1",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 16.75
+  },
+  {
+    "case": "after_subtask_2",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 27.75
+  },
+  {
+    "case": "after_subtask_3",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 38.75
+  },
+  {
+    "case": "after_subtask_4",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 49.75
+  },
+  {
+    "case": "after_subtask_5",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    ],
+    "simulation_time_s": 60.75
+  },
+  {
+    "case": "after_subtask_6",
+    "expected_success": true,
+    "actual_success": [
+      true
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "simulation_time_s": 65.8
+  },
+  {
+    "case": "reopened_after_success",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "simulation_time_s": 70.55
+  },
+  {
+    "case": "closed_with_previously_completed_tool_removed",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "simulation_time_s": 79.8
+  },
+  {
+    "case": "tool_hovering_inside_drawer",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "simulation_time_s": 90.05
+  },
+  {
+    "case": "restored_all_tools_and_closed",
+    "expected_success": true,
+    "actual_success": [
+      true
+    ],
+    "subtasks": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "simulation_time_s": 100.6
+  },
+  {
+    "case": "reset_clears_previous_episode",
+    "expected_success": false,
+    "actual_success": [
+      false
+    ],
+    "subtasks": [
+      [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ],
+    "simulation_time_s": 102.6
+  }
+]

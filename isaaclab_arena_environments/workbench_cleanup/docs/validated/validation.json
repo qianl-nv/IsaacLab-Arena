@@ -1,0 +1,375 @@
+{
+  "mode": "force_control_recipe",
+  "success": [
+    true
+  ],
+  "subtasks": [
+    [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  ],
+  "current_predicates": {
+    "subtask_0/open_door": [
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "subtask_1/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_2/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_3/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_4/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_5/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_6/close_door": [
+      [
+        true
+      ]
+    ]
+  },
+  "video_frames": 0,
+  "final_poses": {
+    "cabinet": [
+      [
+        0.0,
+        -1.2000000476837158,
+        0.0007016658782958984,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "toolbox": [
+      [
+        0.10000000149011612,
+        -1.2000000476837158,
+        0.9309999942779541,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "slotted_screwdriver": [
+      [
+        0.07515491545200348,
+        -1.4424182176589966,
+        0.7455843091011047,
+        -0.011252162978053093,
+        -0.0499989315867424,
+        -0.004072453361004591,
+        -0.998677670955658
+      ]
+    ],
+    "torx_screwdriver": [
+      [
+        0.07526984065771103,
+        -1.3200631141662598,
+        0.7455549836158752,
+        -0.008575517684221268,
+        -0.04470672830939293,
+        -0.0007378116715699434,
+        -0.9989630579948425
+      ]
+    ],
+    "phillips_screwdriver": [
+      [
+        0.0755126029253006,
+        -1.2014793157577515,
+        0.7456884384155273,
+        -0.06642007827758789,
+        0.04680277034640312,
+        0.001885401550680399,
+        0.9966917037963867
+      ]
+    ],
+    "wrench_1": [
+      [
+        0.07484787702560425,
+        -1.0799797773361206,
+        0.7468984127044678,
+        0.00016540549404453486,
+        0.003188254777342081,
+        -0.00013069449050817639,
+        0.9999949336051941
+      ]
+    ],
+    "wrench_2": [
+      [
+        0.07484902441501617,
+        -0.9600057005882263,
+        0.7468984127044678,
+        -9.596399468136951e-05,
+        -0.0031865269411355257,
+        8.848401193972677e-05,
+        -0.9999949932098389
+      ]
+    ]
+  },
+  "final_joints": {
+    "cabinet": {
+      "joint_part_02_joint_00": 0.0,
+      "joint_part_01_joint_00": 4.788407892419855e-08
+    },
+    "toolbox": {
+      "joint_body_01_joint_00": -2.809980630874634,
+      "joint_lock_02_joint_00": -1.570796012878418,
+      "joint_lock_01_joint_00": -1.5707963705062866
+    }
+  },
+  "events": [
+    {
+      "subtask": 0,
+      "boundary": "start",
+      "title": "Open the top drawer",
+      "simulation_time_s": 2.0,
+      "completion": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 0,
+      "boundary": "end",
+      "title": "Top drawer is open",
+      "simulation_time_s": 5.75,
+      "completion": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 1,
+      "boundary": "start",
+      "title": "Put slotted_screwdriver into the top drawer",
+      "simulation_time_s": 5.75,
+      "completion": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 1,
+      "boundary": "end",
+      "title": "slotted_screwdriver is contained and supported",
+      "simulation_time_s": 16.75,
+      "completion": [
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 2,
+      "boundary": "start",
+      "title": "Put torx_screwdriver into the top drawer",
+      "simulation_time_s": 16.75,
+      "completion": [
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 2,
+      "boundary": "end",
+      "title": "torx_screwdriver is contained and supported",
+      "simulation_time_s": 27.75,
+      "completion": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 3,
+      "boundary": "start",
+      "title": "Put phillips_screwdriver into the top drawer",
+      "simulation_time_s": 27.75,
+      "completion": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 3,
+      "boundary": "end",
+      "title": "phillips_screwdriver is contained and supported",
+      "simulation_time_s": 38.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 4,
+      "boundary": "start",
+      "title": "Put wrench_1 into the top drawer",
+      "simulation_time_s": 38.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 4,
+      "boundary": "end",
+      "title": "wrench_1 is contained and supported",
+      "simulation_time_s": 49.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 5,
+      "boundary": "start",
+      "title": "Put wrench_2 into the top drawer",
+      "simulation_time_s": 49.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 5,
+      "boundary": "end",
+      "title": "wrench_2 is contained and supported",
+      "simulation_time_s": 60.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "subtask": 6,
+      "boundary": "start",
+      "title": "Close the loaded top drawer",
+      "simulation_time_s": 60.75,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "subtask": 6,
+      "boundary": "end",
+      "title": "All five tools remain inside the closed drawer",
+      "simulation_time_s": 65.8,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}

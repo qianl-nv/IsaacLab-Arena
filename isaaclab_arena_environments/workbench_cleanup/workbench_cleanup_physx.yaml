@@ -1,0 +1,200 @@
+# Copyright (c) 2026, The Isaac Lab Arena Project Developers (https://github.com/isaac-sim/IsaacLab-Arena/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# NVIDIA SimReady Central assets (CC-BY-4.0), pinned to one dataset revision.
+# +X faces the operator; -Y is the operator's left.
+env_name: workbench_cleanup_physx
+default_physics_backend: physx
+embodiment:
+  id: operator
+  registry_name: no_embodiment
+background:
+  id: workbench
+  registry_name: simready_usd_background
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/furniture_workbench_standard_e01/simready_usd/sm_furniture_workbench_standard_e01_01.usd
+    object_min_z: 0.0
+    static_collision_only: true
+    # Original tabletop top is z=0.6683 m; the backboard reaches 1.3841 m.
+    # These aligned reference surfaces preserve the original mesh/colliders.
+    reference_colliders:
+      Worktop:
+        position_xyz: [0.0, 0.0, 0.6543]
+        size_xyz: [0.50, 1.48, 0.028]
+      ToolRegion:
+        position_xyz: [0.0, 0.0, 0.6543]
+        size_xyz: [0.48, 0.64, 0.028]
+objects:
+- id: floor
+  registry_name: ground_plane
+- id: cabinet
+  registry_name: simready_usd_openable_articulation
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/fixture_cabinet_b01/simready_usd/sm_fixture_cabinet_b01_01.usd
+    fixed_base_body_path: Geometry/body_01_obj_00
+    openable_joint_name: joint_part_01_joint_00
+    initial_pose:
+      position_xyz: [0.0, -1.20, 0.0]
+    initial_joint_positions:
+      joint_part_01_joint_00: 0.0
+      joint_part_02_joint_00: 0.0
+- id: oscilloscope
+  registry_name: simready_usd_background
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/testingTool_oscilloscope_a01/simready_usd/sm_testingTool_oscilloscope_a01_01.usd
+    object_min_z: 0.0
+    static_collision_only: true
+    initial_pose:
+      position_xyz: [0.0, -0.53, 0.6683]
+- id: toolbox
+  registry_name: simready_usd_articulation
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/storage_toolbox_carry_hardCase_c01/simready_usd/sm_storage_toolbox_carry_hardCase_c01_01.usd
+    articulation_root_prim_path: .
+    fixed_base_body_path: Geometry/base_01_obj_00
+    initial_pose:
+      position_xyz: [0.10, -1.20, 0.931]
+    initial_joint_positions:
+      joint_body_01_joint_00: -2.80
+      joint_lock_01_joint_00: -1.55
+      joint_lock_02_joint_00: -1.55
+- id: slotted_screwdriver
+  registry_name: simready_usd_object
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_slotted_55mm_a01/simready_usd/sm_handTool_screwdriver_slotted_55mm_a01_01.usd
+    spawn_cfg_addon: &tool_physics
+      make_uninstanceable: true
+      # Stable small-tool contact; retain the original collider mesh and visuals.
+      collision_props:
+        contact_offset: 0.001
+        rest_offset: 0.0
+        mesh_collision_property:
+          mesh_approximation_name: convexHull
+      rigid_props:
+        linear_damping: 0.1
+        angular_damping: 5.0
+- id: torx_screwdriver
+  registry_name: simready_usd_object
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_torx_t10_a01/simready_usd/sm_handTool_screwdriver_torx_t10_a01_01.usd
+    spawn_cfg_addon: *tool_physics
+- id: phillips_screwdriver
+  registry_name: simready_usd_object
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_screwdriver_phillips_ph2_a01/simready_usd/sm_handTool_screwdriver_phillips_ph2_a01_01.usd
+    spawn_cfg_addon: *tool_physics
+- id: wrench_1
+  registry_name: simready_usd_object
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_wrench_combination_a01/simready_usd/sm_handTool_wrench_combination_a01_01.usd
+    spawn_cfg_addon: *tool_physics
+- id: wrench_2
+  registry_name: simready_usd_object
+  params:
+    usd_path: https://huggingface.co/datasets/nvidia/simready-assets/resolve/653d91e182011f357cf1644013cc94ddf194d349/handTool_wrench_combination_a01/simready_usd/sm_handTool_wrench_combination_a01_01.usd
+    spawn_cfg_addon: *tool_physics
+object_references:
+- id: worktop
+  parent_id: workbench
+  prim_path: Worktop
+  object_type: base
+- id: tool_region
+  parent_id: workbench
+  prim_path: ToolRegion
+  object_type: base
+- id: cabinet_top
+  parent_id: cabinet
+  prim_path: Geometry/body_01_obj_00
+  object_type: base
+- id: top_drawer
+  parent_id: cabinet
+  prim_path: Geometry/part_01_obj_00
+  object_type: base
+relations:
+- {kind: is_anchor, subject: worktop}
+- {kind: is_anchor, subject: tool_region}
+- {kind: is_anchor, subject: cabinet}
+- {kind: is_anchor, subject: cabinet_top}
+- {kind: is_anchor, subject: oscilloscope}
+- {kind: is_anchor, subject: toolbox}
+- kind: clutter_on
+  subject: slotted_screwdriver
+  reference: tool_region
+  params: {spread: 0.8, gap_m: 0.012, clearance_m: 0.015, random_yaw: true}
+- kind: clutter_on
+  subject: torx_screwdriver
+  reference: tool_region
+  params: {spread: 0.8, gap_m: 0.012, clearance_m: 0.015, random_yaw: true}
+- kind: clutter_on
+  subject: phillips_screwdriver
+  reference: tool_region
+  params: {spread: 0.8, gap_m: 0.012, clearance_m: 0.015, random_yaw: true}
+- kind: clutter_on
+  subject: wrench_1
+  reference: tool_region
+  params: {spread: 0.8, gap_m: 0.012, clearance_m: 0.015, random_yaw: true}
+- kind: clutter_on
+  subject: wrench_2
+  reference: tool_region
+  params: {spread: 0.8, gap_m: 0.012, clearance_m: 0.015, random_yaw: true}
+task:
+  composition: sequential
+  description: Open the cabinet's top drawer, put the slotted screwdriver, Torx screwdriver, Phillips screwdriver, and two wrenches into it one by one, then close the drawer.
+  desired_subtask_success_state: [null, true, true, true, true, true, true]
+  subtasks:
+  - kind: OpenDoorTask
+    params:
+      openable_object: cabinet
+      openness_threshold: 0.85
+      reset_openness: 0.0
+      episode_length_s: 30.0
+  - kind: ObjectInTask
+    params: &placement
+      object: slotted_screwdriver
+      target: top_drawer
+      consecutive_success_steps: 15
+      linear_velocity_threshold: 0.03
+      angular_velocity_threshold: 0.15
+      minimum_contained_fraction: 1.0
+      contact_force_threshold: 0.01
+      episode_length_s: 45.0
+  - kind: ObjectInTask
+    params:
+      <<: *placement
+      object: torx_screwdriver
+  - kind: ObjectInTask
+    params:
+      <<: *placement
+      object: phillips_screwdriver
+  - kind: ObjectInTask
+    params:
+      <<: *placement
+      object: wrench_1
+  - kind: ObjectInTask
+    params:
+      <<: *placement
+      object: wrench_2
+  - kind: CloseDoorTask
+    params:
+      openable_object: cabinet
+      closedness_threshold: 0.03
+      # Both door tasks agree that every episode starts CLOSED.
+      reset_openness: 0.0
+      episode_length_s: 30.0
+placer_params:
+  placement_seed: 7
+  random_yaw_init: false
+  min_unique_layouts_per_env: 1
+  resolve_on_reset: false
+  max_placement_attempts: 3
+  allow_best_loss_fallbacks: false
+  solver_params:
+    clearance_m: 0.002
+    max_iters: 300
+    lr: 0.001
+env_cfg_override:
+  viewer:
+    eye: [2.6, -3.0, 2.2]
+    lookat: [0.0, -0.55, 0.65]

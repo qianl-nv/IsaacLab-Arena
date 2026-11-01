@@ -45,6 +45,9 @@ def _test_arena_env_graph_conversion_builds_sequential_pick_and_place_task(simul
     assert all(subtask.destination_location.name == "bowl_ycb_robolab" for subtask in arena_env.task.subtasks)
     assert all(subtask.background_scene.name == "maple_table_robolab" for subtask in arena_env.task.subtasks)
 
+    spec.task.desired_subtask_success_state = [None, True]
+    assert spec.to_arena_env().task.desired_subtask_success_state == [None, True]
+
     return True
 
 
