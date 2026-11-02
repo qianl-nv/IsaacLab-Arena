@@ -1,0 +1,5 @@
+USD PRIM TREE:
+Geometry (base)
+  screwdriver_01_obj_00 (rigid bbox_center_m=[0.0450497,4.8615e-07,0.016325] bbox_size_m=[0.190629,0.0339447,0.0323949] rigid_body(enabled=true,kinematic=false,mass_kg=None,density_kg_m3=None,disable_gravity=None,linear_damping=None,angular_damping=None))
+    screwdriver_01_mesh_00 (base instance(instance=true,proxy=false,instanceable=true,prototype=/__Prototype_3))
+      screwdriver_01_mesh_00 (base bbox_center_m=[0.0450497,4.8615e-07,0.016325] bbox_size_m=[0.190629,0.0339447,0.0323949] collider(type=Mesh,enabled=true,rigid_body_owner=Geometry/screwdriver_01_obj_00,approximation=sdf,contact_offset_m=None,rest_offset_m=None) instance(instance=false,proxy=true,instanceable=false,prototype=/__Prototype_3/screwdriver_01_mesh_00))

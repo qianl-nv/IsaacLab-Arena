@@ -1,0 +1,396 @@
+[
+  {
+    "relative_path": "Geometry",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": null,
+    "joint": null,
+    "collider": null,
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": false,
+      "instanceable": false,
+      "prototype_path": null
+    }
+  },
+  {
+    "relative_path": "Geometry/box_01_obj_00",
+    "object_type": "rigid",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.006485417485237122,
+        2.8759241104125977e-06,
+        0.08712217956781387
+      ],
+      "size_m": [
+        0.30685776472091675,
+        0.5305977165699005,
+        0.17413942515850067
+      ]
+    },
+    "joint": null,
+    "collider": null,
+    "rigid_body": {
+      "enabled": true,
+      "kinematic": false,
+      "mass_kg": 3.0,
+      "density_kg_m3": null,
+      "center_of_mass": [
+        0.021909233182668686,
+        3.879973883158527e-05,
+        0.09224675595760345
+      ],
+      "diagonal_inertia": [
+        0.0638696700334549,
+        0.04300650209188461,
+        0.0868755578994751
+      ],
+      "disable_gravity": null,
+      "linear_damping": null,
+      "angular_damping": null
+    },
+    "instance": {
+      "instance": true,
+      "instance_proxy": false,
+      "instanceable": true,
+      "prototype_path": "/__Prototype_8"
+    }
+  },
+  {
+    "relative_path": "Geometry/box_01_obj_00/box_01_mesh_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.006485417485237122,
+        2.8759241104125977e-06,
+        0.08712217956781387
+      ],
+      "size_m": [
+        0.30685776472091675,
+        0.5305977165699005,
+        0.17413942515850067
+      ]
+    },
+    "joint": null,
+    "collider": {
+      "type_name": "Mesh",
+      "enabled": true,
+      "rigid_body_owner_path": "Geometry/box_01_obj_00",
+      "approximation": "sdf",
+      "contact_offset_m": null,
+      "rest_offset_m": null
+    },
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": true,
+      "instanceable": false,
+      "prototype_path": "/__Prototype_8/box_01_mesh_00"
+    }
+  },
+  {
+    "relative_path": "Geometry/hand_01_obj_00",
+    "object_type": "rigid",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.004235766827804599,
+        -2.4513159696537556e-09,
+        0.23922684784804688
+      ],
+      "size_m": [
+        0.02167932689189911,
+        0.16949477791786194,
+        0.07975006103515625
+      ]
+    },
+    "joint": null,
+    "collider": null,
+    "rigid_body": {
+      "enabled": true,
+      "kinematic": false,
+      "mass_kg": null,
+      "density_kg_m3": null,
+      "center_of_mass": null,
+      "diagonal_inertia": null,
+      "disable_gravity": null,
+      "linear_damping": null,
+      "angular_damping": null
+    },
+    "instance": {
+      "instance": true,
+      "instance_proxy": false,
+      "instanceable": true,
+      "prototype_path": "/__Prototype_2"
+    }
+  },
+  {
+    "relative_path": "Geometry/hand_01_obj_00/hand_01_mesh_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.004235766827804599,
+        -2.4513159696537556e-09,
+        0.23922684784804688
+      ],
+      "size_m": [
+        0.02167932689189911,
+        0.16949477791786194,
+        0.07975006103515625
+      ]
+    },
+    "joint": null,
+    "collider": {
+      "type_name": "Mesh",
+      "enabled": true,
+      "rigid_body_owner_path": "Geometry/hand_01_obj_00",
+      "approximation": "sdf",
+      "contact_offset_m": null,
+      "rest_offset_m": null
+    },
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": true,
+      "instanceable": false,
+      "prototype_path": "/__Prototype_2/hand_01_mesh_00"
+    }
+  },
+  {
+    "relative_path": "Geometry/lock_01_obj_00",
+    "object_type": "rigid",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        0.1412672698165863,
+        -1.607575228490532e-08,
+        0.14802825827252541
+      ],
+      "size_m": [
+        0.02490931749343872,
+        0.3820379674434662,
+        0.056447140872478485
+      ]
+    },
+    "joint": null,
+    "collider": null,
+    "rigid_body": {
+      "enabled": true,
+      "kinematic": false,
+      "mass_kg": null,
+      "density_kg_m3": null,
+      "center_of_mass": null,
+      "diagonal_inertia": null,
+      "disable_gravity": null,
+      "linear_damping": null,
+      "angular_damping": null
+    },
+    "instance": {
+      "instance": true,
+      "instance_proxy": false,
+      "instanceable": true,
+      "prototype_path": "/__Prototype_4"
+    }
+  },
+  {
+    "relative_path": "Geometry/lock_01_obj_00/lock_01_mesh_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        0.1412672698165863,
+        -1.607575228490532e-08,
+        0.14802825827252541
+      ],
+      "size_m": [
+        0.02490931749343872,
+        0.3820379674434662,
+        0.056447140872478485
+      ]
+    },
+    "joint": null,
+    "collider": {
+      "type_name": "Mesh",
+      "enabled": true,
+      "rigid_body_owner_path": "Geometry/lock_01_obj_00",
+      "approximation": "sdf",
+      "contact_offset_m": null,
+      "rest_offset_m": null
+    },
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": true,
+      "instanceable": false,
+      "prototype_path": "/__Prototype_4/lock_01_mesh_00"
+    }
+  },
+  {
+    "relative_path": "Geometry/top_01_obj_00",
+    "object_type": "rigid",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.005021624259874735,
+        4.467439085331648e-09,
+        0.18304853883210526
+      ],
+      "size_m": [
+        0.30977509915828705,
+        0.530603438615799,
+        0.07902993261814117
+      ]
+    },
+    "joint": null,
+    "collider": null,
+    "rigid_body": {
+      "enabled": true,
+      "kinematic": false,
+      "mass_kg": 0.5,
+      "density_kg_m3": null,
+      "center_of_mass": [
+        0.15937548875808716,
+        -8.301991556436406e-07,
+        0.028953194618225098
+      ],
+      "diagonal_inertia": [
+        0.004735455848276615,
+        0.003269929438829422,
+        0.007721771951764822
+      ],
+      "disable_gravity": null,
+      "linear_damping": null,
+      "angular_damping": null
+    },
+    "instance": {
+      "instance": true,
+      "instance_proxy": false,
+      "instanceable": true,
+      "prototype_path": "/__Prototype_6"
+    }
+  },
+  {
+    "relative_path": "Geometry/top_01_obj_00/top_01_mesh_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": {
+      "center_m": [
+        -0.005021624259874735,
+        4.467439085331648e-09,
+        0.18304853883210526
+      ],
+      "size_m": [
+        0.30977509915828705,
+        0.530603438615799,
+        0.07902993261814117
+      ]
+    },
+    "joint": null,
+    "collider": {
+      "type_name": "Mesh",
+      "enabled": true,
+      "rigid_body_owner_path": "Geometry/top_01_obj_00",
+      "approximation": "sdf",
+      "contact_offset_m": null,
+      "rest_offset_m": null
+    },
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": true,
+      "instanceable": false,
+      "prototype_path": "/__Prototype_6/top_01_mesh_00"
+    }
+  },
+  {
+    "relative_path": "Joints",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": null,
+    "joint": null,
+    "collider": null,
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": false,
+      "instanceable": false,
+      "prototype_path": null
+    }
+  },
+  {
+    "relative_path": "Joints/joint_hand_01_joint_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": null,
+    "joint": {
+      "type_name": "PhysicsRevoluteJoint",
+      "enabled": true,
+      "body_0_path": "Geometry/top_01_obj_00",
+      "body_1_path": "Geometry/hand_01_obj_00",
+      "axis": "Y",
+      "lower_limit": -90.0,
+      "upper_limit": 0.0,
+      "limit_unit": "degrees"
+    },
+    "collider": null,
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": false,
+      "instanceable": false,
+      "prototype_path": null
+    }
+  },
+  {
+    "relative_path": "Joints/joint_lock_01_joint_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": null,
+    "joint": {
+      "type_name": "PhysicsRevoluteJoint",
+      "enabled": true,
+      "body_0_path": "Geometry/top_01_obj_00",
+      "body_1_path": "Geometry/lock_01_obj_00",
+      "axis": "Y",
+      "lower_limit": -90.0,
+      "upper_limit": 14.100000381469727,
+      "limit_unit": "degrees"
+    },
+    "collider": null,
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": false,
+      "instanceable": false,
+      "prototype_path": null
+    }
+  },
+  {
+    "relative_path": "Joints/joint_top_01_joint_00",
+    "object_type": "base",
+    "joint_names": [],
+    "bounding_box_root": null,
+    "joint": {
+      "type_name": "PhysicsRevoluteJoint",
+      "enabled": true,
+      "body_0_path": "Geometry/box_01_obj_00",
+      "body_1_path": "Geometry/top_01_obj_00",
+      "axis": "Y",
+      "lower_limit": -90.0,
+      "upper_limit": 0.0,
+      "limit_unit": "degrees"
+    },
+    "collider": null,
+    "rigid_body": null,
+    "instance": {
+      "instance": false,
+      "instance_proxy": false,
+      "instanceable": false,
+      "prototype_path": null
+    }
+  }
+]

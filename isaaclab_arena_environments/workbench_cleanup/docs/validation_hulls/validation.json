@@ -1,0 +1,1173 @@
+{
+  "mode": "force_control_recipe",
+  "success": [
+    true
+  ],
+  "video_frames": 0,
+  "state": {
+    "simulation_step": 7304,
+    "simulation_time_s": 60.86666666666667,
+    "active_subtask": {
+      "index": 6,
+      "title": "Cleanup complete"
+    },
+    "poses": {
+      "cabinet": [
+        [
+          0.0,
+          -1.100000023841858,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "toolbox": [
+        [
+          0.06000000238418579,
+          -1.100000023841858,
+          0.6693999767303467,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "slotted_screwdriver": [
+        [
+          -0.014082737267017365,
+          -1.2599620819091797,
+          0.5356898307800293,
+          0.011664669029414654,
+          0.04990444704890251,
+          -0.004161497112363577,
+          0.9986772537231445
+        ]
+      ],
+      "torx_screwdriver": [
+        [
+          0.003074146807193756,
+          -1.1799733638763428,
+          0.5356603264808655,
+          0.008634574711322784,
+          0.04469960927963257,
+          0.0004458491748664528,
+          0.9989630579948425
+        ]
+      ],
+      "phillips_screwdriver": [
+        [
+          -0.013074534945189953,
+          -1.1006665229797363,
+          0.5357940196990967,
+          -0.06626839935779572,
+          0.04702256992459297,
+          -0.0014076705556362867,
+          0.9966922998428345
+        ]
+      ],
+      "wrench": [
+        [
+          0.026877712458372116,
+          -1.0198748111724854,
+          0.5370039939880371,
+          0.0001511780865257606,
+          0.003189785871654749,
+          0.0005351820145733654,
+          0.9999948143959045
+        ]
+      ],
+      "second_slotted_screwdriver": [
+        [
+          -0.014080831781029701,
+          -0.9399822950363159,
+          0.5356898307800293,
+          0.01166212186217308,
+          0.04990373179316521,
+          -0.004160639829933643,
+          0.9986773729324341
+        ]
+      ]
+    },
+    "velocities": {
+      "cabinet": {
+        "linear_w": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "angular_w": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "toolbox": {
+        "linear_w": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "angular_w": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "slotted_screwdriver": {
+        "linear_w": [
+          [
+            -1.589752355357632e-05,
+            4.430970875546336e-05,
+            -0.00032247003400698304
+          ]
+        ],
+        "angular_w": [
+          [
+            -0.0352756604552269,
+            0.0010282729053869843,
+            0.003255806863307953
+          ]
+        ]
+      },
+      "torx_screwdriver": {
+        "linear_w": [
+          [
+            -2.390946974628605e-05,
+            6.855817628093064e-05,
+            -0.00014318416651804
+          ]
+        ],
+        "angular_w": [
+          [
+            -0.03825267776846886,
+            -0.0019079308258369565,
+            0.0023224307224154472
+          ]
+        ]
+      },
+      "phillips_screwdriver": {
+        "linear_w": [
+          [
+            -2.9703187465202063e-05,
+            2.64385889749974e-05,
+            -0.00026513630291447043
+          ]
+        ],
+        "angular_w": [
+          [
+            0.034924063831567764,
+            -0.0026919979136437178,
+            -0.003693378297612071
+          ]
+        ]
+      },
+      "wrench": {
+        "linear_w": [
+          [
+            -1.3566816051024944e-05,
+            8.429999525105814e-07,
+            -3.475636560779094e-07
+          ]
+        ],
+        "angular_w": [
+          [
+            -7.672396168345585e-05,
+            3.874118920066394e-05,
+            1.1372634617146105e-05
+          ]
+        ]
+      },
+      "second_slotted_screwdriver": {
+        "linear_w": [
+          [
+            3.123405258520506e-05,
+            2.3373608200927265e-05,
+            -0.00034184337710030377
+          ]
+        ],
+        "angular_w": [
+          [
+            -0.020964564755558968,
+            0.006997802294790745,
+            0.0020194747485220432
+          ]
+        ]
+      }
+    },
+    "joints": {
+      "cabinet": {
+        "joint_part_02_joint_00": {
+          "position": 0.0,
+          "velocity": 0.0
+        },
+        "joint_part_01_joint_00": {
+          "position": 3.652497682082867e-08,
+          "velocity": 3.2044567888078745e-06
+        }
+      },
+      "toolbox": {
+        "joint_top_01_joint_00": {
+          "position": -1.570796251296997,
+          "velocity": -1.3293623979393487e-09
+        },
+        "joint_hand_01_joint_00": {
+          "position": -1.5704960823059082,
+          "velocity": 0.01368811633437872
+        },
+        "joint_lock_01_joint_00": {
+          "position": -0.9999953508377075,
+          "velocity": 9.464391769142821e-05
+        }
+      }
+    },
+    "contact_sensors": {
+      "contact_sensor_slotted_screwdriver_in_top_drawer": {
+        "prim_path": "/World/envs/env_[^/]+/slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+        "filter_prim_paths_expr": [
+          "/World/envs/env_[^/]+/cabinet/Geometry/part_01_obj_00",
+          "/World/envs/env_[^/]+/torx_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/phillips_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/wrench/Geometry/wrench_01_obj_00",
+          "/World/envs/env_[^/]+/second_slotted_screwdriver/Geometry/screwdriver_01_obj_00"
+        ],
+        "net_forces_w": [
+          [
+            [
+              -0.00011505228758323938,
+              5.310107098921435e-06,
+              0.5742342472076416
+            ]
+          ]
+        ],
+        "force_matrix_w": [
+          [
+            [
+              [
+                -0.00011505228758323938,
+                5.310107098921435e-06,
+                0.5742342472076416
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ]
+            ]
+          ]
+        ]
+      },
+      "contact_sensor_torx_screwdriver_in_top_drawer": {
+        "prim_path": "/World/envs/env_[^/]+/torx_screwdriver/Geometry/screwdriver_01_obj_00",
+        "filter_prim_paths_expr": [
+          "/World/envs/env_[^/]+/cabinet/Geometry/part_01_obj_00",
+          "/World/envs/env_[^/]+/slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/phillips_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/wrench/Geometry/wrench_01_obj_00",
+          "/World/envs/env_[^/]+/second_slotted_screwdriver/Geometry/screwdriver_01_obj_00"
+        ],
+        "net_forces_w": [
+          [
+            [
+              -9.778962703421712e-05,
+              8.954845725384075e-06,
+              0.492665559053421
+            ]
+          ]
+        ],
+        "force_matrix_w": [
+          [
+            [
+              [
+                -9.778962703421712e-05,
+                8.954845725384075e-06,
+                0.492665559053421
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ]
+            ]
+          ]
+        ]
+      },
+      "contact_sensor_phillips_screwdriver_in_top_drawer": {
+        "prim_path": "/World/envs/env_[^/]+/phillips_screwdriver/Geometry/screwdriver_01_obj_00",
+        "filter_prim_paths_expr": [
+          "/World/envs/env_[^/]+/cabinet/Geometry/part_01_obj_00",
+          "/World/envs/env_[^/]+/slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/torx_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/wrench/Geometry/wrench_01_obj_00",
+          "/World/envs/env_[^/]+/second_slotted_screwdriver/Geometry/screwdriver_01_obj_00"
+        ],
+        "net_forces_w": [
+          [
+            [
+              -0.00014704931527376175,
+              0.00039488289621658623,
+              0.784485936164856
+            ]
+          ]
+        ],
+        "force_matrix_w": [
+          [
+            [
+              [
+                -0.00014704931527376175,
+                0.00039488289621658623,
+                0.784485936164856
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ]
+            ]
+          ]
+        ]
+      },
+      "contact_sensor_wrench_in_top_drawer": {
+        "prim_path": "/World/envs/env_[^/]+/wrench/Geometry/wrench_01_obj_00",
+        "filter_prim_paths_expr": [
+          "/World/envs/env_[^/]+/cabinet/Geometry/part_01_obj_00",
+          "/World/envs/env_[^/]+/slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/torx_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/phillips_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/second_slotted_screwdriver/Geometry/screwdriver_01_obj_00"
+        ],
+        "net_forces_w": [
+          [
+            [
+              -0.0013842950575053692,
+              -4.764377808896825e-05,
+              8.124777793884277
+            ]
+          ]
+        ],
+        "force_matrix_w": [
+          [
+            [
+              [
+                -0.0013842950575053692,
+                -4.764377808896825e-05,
+                8.124777793884277
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ]
+            ]
+          ]
+        ]
+      },
+      "contact_sensor_second_slotted_screwdriver_in_top_drawer": {
+        "prim_path": "/World/envs/env_[^/]+/second_slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+        "filter_prim_paths_expr": [
+          "/World/envs/env_[^/]+/cabinet/Geometry/part_01_obj_00",
+          "/World/envs/env_[^/]+/slotted_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/torx_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/phillips_screwdriver/Geometry/screwdriver_01_obj_00",
+          "/World/envs/env_[^/]+/wrench/Geometry/wrench_01_obj_00"
+        ],
+        "net_forces_w": [
+          [
+            [
+              -9.45616266108118e-05,
+              -9.971734016289702e-07,
+              0.5742086172103882
+            ]
+          ]
+        ],
+        "force_matrix_w": [
+          [
+            [
+              [
+                -9.45616266108118e-05,
+                -9.971734016289702e-07,
+                0.5742086172103882
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    "completion": [
+      [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    ],
+    "current_predicates": {
+      "subtask_0/open_door": [
+        [
+          false
+        ],
+        [
+          false
+        ]
+      ],
+      "subtask_1/object_in": [
+        [
+          true
+        ],
+        [
+          true
+        ]
+      ],
+      "subtask_2/object_in": [
+        [
+          true
+        ],
+        [
+          true
+        ]
+      ],
+      "subtask_3/object_in": [
+        [
+          true
+        ],
+        [
+          true
+        ]
+      ],
+      "subtask_4/object_in": [
+        [
+          true
+        ],
+        [
+          true
+        ]
+      ],
+      "subtask_5/object_in": [
+        [
+          true
+        ],
+        [
+          true
+        ]
+      ],
+      "subtask_6/close_door": [
+        [
+          true
+        ]
+      ]
+    },
+    "wrenches": {
+      "slotted_screwdriver": {
+        "goal": [
+          [
+            0.31546634435653687,
+            -1.2600001096725464,
+            0.5542566776275635
+          ]
+        ],
+        "velocity": [
+          [
+            5.6567045248812065e-05,
+            -0.000226955657126382,
+            -0.001278748270124197
+          ]
+        ],
+        "linear_velocity": [
+          [
+            5.6567045248812065e-05,
+            -0.000226955657126382,
+            -0.001278748270124197
+          ]
+        ],
+        "angular_velocity": [
+          [
+            1.1373795545400417e-24,
+            1.9254910166299766e-12,
+            -5.482741063467076e-26
+          ]
+        ],
+        "force": [
+          [
+            6.622693035751581e-06,
+            -2.6571651687845588e-05,
+            0.5747036933898926
+          ]
+        ],
+        "torque": [
+          [
+            3.291112708224862e-24,
+            -4.0994336621744104e-17,
+            1.2222768021377819e-27
+          ]
+        ],
+        "mass": 0.058537594974040985
+      },
+      "torx_screwdriver": {
+        "goal": [
+          [
+            0.3324636220932007,
+            -1.1800001859664917,
+            0.5542566776275635
+          ]
+        ],
+        "velocity": [
+          [
+            5.708278331439942e-05,
+            -0.00022626813733950257,
+            -0.0012787454761564732
+          ]
+        ],
+        "linear_velocity": [
+          [
+            5.708278331439942e-05,
+            -0.00022626813733950257,
+            -0.0012787454761564732
+          ]
+        ],
+        "angular_velocity": [
+          [
+            3.619115106855163e-25,
+            5.75178359801809e-13,
+            -1.8099624609390895e-26
+          ]
+        ],
+        "force": [
+          [
+            5.734014848712832e-06,
+            -2.272851997986436e-05,
+            0.4930833876132965
+          ]
+        ],
+        "torque": [
+          [
+            9.679251323504213e-25,
+            -1.2565546829699109e-17,
+            7.11447072585598e-27
+          ]
+        ],
+        "mass": 0.05022399500012398
+      },
+      "phillips_screwdriver": {
+        "goal": [
+          [
+            0.3164629638195038,
+            -1.1000001430511475,
+            0.5542566776275635
+          ]
+        ],
+        "velocity": [
+          [
+            5.605134356301278e-05,
+            -0.00022626837017014623,
+            -0.0012787040323019028
+          ]
+        ],
+        "linear_velocity": [
+          [
+            5.605134356301278e-05,
+            -0.00022626837017014623,
+            -0.0012787040323019028
+          ]
+        ],
+        "angular_velocity": [
+          [
+            -6.65269625437929e-23,
+            4.878236148364579e-10,
+            1.028192325643467e-18
+          ]
+        ],
+        "force": [
+          [
+            8.964510925579816e-06,
+            -3.618845948949456e-05,
+            0.7850998640060425
+          ]
+        ],
+        "torque": [
+          [
+            1.8995457577714773e-21,
+            4.731118789921482e-14,
+            -7.52291040313715e-21
+          ]
+        ],
+        "mass": 0.0799679234623909
+      },
+      "wrench": {
+        "goal": [
+          [
+            0.356468141078949,
+            -1.0200001001358032,
+            0.5542566776275635
+          ]
+        ],
+        "velocity": [
+          [
+            5.622307799058035e-05,
+            -0.0002283312933286652,
+            -0.0012787203304469585
+          ]
+        ],
+        "linear_velocity": [
+          [
+            5.622307799058035e-05,
+            -0.0002283312933286652,
+            -0.0012787203304469585
+          ]
+        ],
+        "angular_velocity": [
+          [
+            -1.7218576787697031e-22,
+            4.1141132167688e-10,
+            2.529964732223996e-19
+          ]
+        ],
+        "force": [
+          [
+            9.31324902921915e-05,
+            -0.0003782212734222412,
+            8.131124496459961
+          ]
+        ],
+        "torque": [
+          [
+            2.6753536479132386e-20,
+            6.384344008319998e-13,
+            -2.9356711025340843e-20
+          ]
+        ],
+        "mass": 0.8282119631767273
+      },
+      "second_slotted_screwdriver": {
+        "goal": [
+          [
+            0.3154612183570862,
+            -0.9400001168251038,
+            0.5542566776275635
+          ]
+        ],
+        "velocity": [
+          [
+            5.708278331439942e-05,
+            -0.00011279070895398036,
+            -0.001278748270124197
+          ]
+        ],
+        "linear_velocity": [
+          [
+            5.708278331439942e-05,
+            -0.00011279070895398036,
+            -0.001278748270124197
+          ]
+        ],
+        "angular_velocity": [
+          [
+            -4.5237145409725324e-26,
+            3.248722634224127e-13,
+            1.7396355112386363e-27
+          ]
+        ],
+        "force": [
+          [
+            6.683178071398288e-06,
+            -1.320442243013531e-05,
+            0.5747036933898926
+          ]
+        ],
+        "torque": [
+          [
+            -1.1824416560289815e-24,
+            -2.992194178757059e-17,
+            -4.304968611965596e-28
+          ]
+        ],
+        "mass": 0.058537594974040985
+      }
+    }
+  },
+  "subtasks": [
+    [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  ],
+  "current_predicates": {
+    "subtask_0/open_door": [
+      [
+        false
+      ],
+      [
+        false
+      ]
+    ],
+    "subtask_1/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_2/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_3/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_4/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_5/object_in": [
+      [
+        true
+      ],
+      [
+        true
+      ]
+    ],
+    "subtask_6/close_door": [
+      [
+        true
+      ]
+    ]
+  },
+  "final_poses": {
+    "cabinet": [
+      [
+        0.0,
+        -1.100000023841858,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "toolbox": [
+      [
+        0.06000000238418579,
+        -1.100000023841858,
+        0.6693999767303467,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "slotted_screwdriver": [
+      [
+        -0.014082737267017365,
+        -1.2599620819091797,
+        0.5356898307800293,
+        0.011664669029414654,
+        0.04990444704890251,
+        -0.004161497112363577,
+        0.9986772537231445
+      ]
+    ],
+    "torx_screwdriver": [
+      [
+        0.003074146807193756,
+        -1.1799733638763428,
+        0.5356603264808655,
+        0.008634574711322784,
+        0.04469960927963257,
+        0.0004458491748664528,
+        0.9989630579948425
+      ]
+    ],
+    "phillips_screwdriver": [
+      [
+        -0.013074534945189953,
+        -1.1006665229797363,
+        0.5357940196990967,
+        -0.06626839935779572,
+        0.04702256992459297,
+        -0.0014076705556362867,
+        0.9966922998428345
+      ]
+    ],
+    "wrench": [
+      [
+        0.026877712458372116,
+        -1.0198748111724854,
+        0.5370039939880371,
+        0.0001511780865257606,
+        0.003189785871654749,
+        0.0005351820145733654,
+        0.9999948143959045
+      ]
+    ],
+    "second_slotted_screwdriver": [
+      [
+        -0.014080831781029701,
+        -0.9399822950363159,
+        0.5356898307800293,
+        0.01166212186217308,
+        0.04990373179316521,
+        -0.004160639829933643,
+        0.9986773729324341
+      ]
+    ]
+  },
+  "final_joints": {
+    "cabinet": {
+      "joint_part_02_joint_00": 0.0,
+      "joint_part_01_joint_00": 3.652497682082867e-08
+    },
+    "toolbox": {
+      "joint_top_01_joint_00": -1.570796251296997,
+      "joint_hand_01_joint_00": -1.5704960823059082,
+      "joint_lock_01_joint_00": -0.9999953508377075
+    }
+  },
+  "final_joint_state": {
+    "cabinet": {
+      "joint_part_02_joint_00": {
+        "position": 0.0,
+        "velocity": 0.0
+      },
+      "joint_part_01_joint_00": {
+        "position": 3.652497682082867e-08,
+        "velocity": 3.2044567888078745e-06
+      }
+    },
+    "toolbox": {
+      "joint_top_01_joint_00": {
+        "position": -1.570796251296997,
+        "velocity": -1.3293623979393487e-09
+      },
+      "joint_hand_01_joint_00": {
+        "position": -1.5704960823059082,
+        "velocity": 0.01368811633437872
+      },
+      "joint_lock_01_joint_00": {
+        "position": -0.9999953508377075,
+        "velocity": 9.464391769142821e-05
+      }
+    }
+  },
+  "events": [
+    {
+      "subtask": 0,
+      "boundary": "start",
+      "title": "Open the top drawer",
+      "simulation_time_s": 4.0,
+      "completion": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 0,
+      "boundary": "end",
+      "title": "Top drawer open",
+      "simulation_time_s": 7.75,
+      "completion": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 1,
+      "boundary": "start",
+      "title": "Put the slotted screwdriver in the drawer",
+      "simulation_time_s": 7.75,
+      "completion": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 1,
+      "boundary": "end",
+      "title": "Slotted screwdriver placed",
+      "simulation_time_s": 17.333333333333332,
+      "completion": [
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 2,
+      "boundary": "start",
+      "title": "Put the Torx screwdriver in the drawer",
+      "simulation_time_s": 17.333333333333332,
+      "completion": [
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 2,
+      "boundary": "end",
+      "title": "Torx screwdriver placed",
+      "simulation_time_s": 26.933333333333334,
+      "completion": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 3,
+      "boundary": "start",
+      "title": "Put the Phillips screwdriver in the drawer",
+      "simulation_time_s": 26.933333333333334,
+      "completion": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 3,
+      "boundary": "end",
+      "title": "Phillips screwdriver placed",
+      "simulation_time_s": 36.53333333333333,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 4,
+      "boundary": "start",
+      "title": "Put the wrench in the drawer",
+      "simulation_time_s": 36.53333333333333,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 4,
+      "boundary": "end",
+      "title": "Wrench placed",
+      "simulation_time_s": 46.13333333333333,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 5,
+      "boundary": "start",
+      "title": "Put the second slotted screwdriver in the drawer",
+      "simulation_time_s": 46.13333333333333,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "subtask": 5,
+      "boundary": "end",
+      "title": "All five tools placed",
+      "simulation_time_s": 55.733333333333334,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "subtask": 6,
+      "boundary": "start",
+      "title": "Close the top drawer",
+      "simulation_time_s": 55.733333333333334,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "subtask": 6,
+      "boundary": "end",
+      "title": "Cleanup complete",
+      "simulation_time_s": 60.86666666666667,
+      "completion": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}

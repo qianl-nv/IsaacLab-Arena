@@ -1,0 +1,24 @@
+from pathlib import Path
+from isaaclab_arena.cli.isaaclab_arena_cli import get_isaaclab_arena_cli_parser
+from isaaclab_arena.utils.isaaclab_utils.simulation_app import SimulationAppContext
+
+parser = get_isaaclab_arena_cli_parser()
+parser.set_defaults(env_spec="isaaclab_arena_environments/workbench_cleanup/workbench_cleanup.yaml", device="cpu")
+args = parser.parse_args()
+with SimulationAppContext(args):
+    from isaaclab_arena_environments.cli import get_arena_builder_from_cli, get_isaaclab_arena_environments_cli_parser
+    from isaaclab_arena.scripts.force_control_runner import PhysicalCommandRunner
+    parser = get_isaaclab_arena_environments_cli_parser(parser)
+    args = parser.parse_args()
+    args.output = Path("outputs/workbench_cleanup/reset_inspection")
+    args.no_record = True
+    builder = get_arena_builder_from_cli(args)
+    env = builder.make_registered()
+    env.reset()
+    runner = PhysicalCommandRunner(env.unwrapped, args)
+    box = env.unwrapped.scene["toolbox"]
+    print("DEFAULT", box.data.default_joint_pos.torch.tolist(), box.data.joint_names, flush=True)
+    for steps in (0, 1, 9, 50, 180):
+        runner.step(steps)
+        print("TOOLBOX", runner.steps, box.data.joint_pos.torch.tolist(), box.data.joint_vel.torch.tolist(), flush=True)
+    env.close()

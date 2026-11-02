@@ -1,0 +1,15 @@
+import json
+from pathlib import Path
+
+from pxr import Usd
+
+from isaaclab_arena.utils.usd.rigid_bodies import apply_usd_variant_selections
+from isaaclab_arena_examples.agentic_environment_generation.review_gui.simapp.spawned_physics import _horizontal_mesh_surfaces
+
+cache = Path.home() / ".cache/huggingface/hub/datasets--nvidia--simready-assets/snapshots/653d91e182011f357cf1644013cc94ddf194d349"
+for asset in ("furniture_workbench_standard_e01", "fixture_cabinet_b01"):
+    stage = Usd.Stage.Open(str(cache / asset / "simready_usd" / f"sm_{asset}_01.usd"))
+    stage.SetEditTarget(stage.GetSessionLayer())
+    apply_usd_variant_selections(stage, {"Physics": "physics", "PhysX": "Enabled"})
+    surfaces = _horizontal_mesh_surfaces(stage.GetDefaultPrim())
+    print(asset, json.dumps(sorted(surfaces, key=lambda x: x["area_m2"], reverse=True)[:12]), flush=True)

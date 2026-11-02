@@ -1,0 +1,45 @@
+{
+  "started_at_utc": "2026-11-01T15:49:37.971Z",
+  "measured_through_utc": "2026-11-01T16:24:18.804411+00:00",
+  "wall_time_seconds": 2080.833411,
+  "token_usage": {
+    "input_tokens": 14068120,
+    "cached_input_tokens": 13863040,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 56728,
+    "reasoning_output_tokens": 20163,
+    "total_tokens": 14124848
+  },
+  "inference_calls": 89,
+  "top_level_tool_calls_by_type": {
+    "exec": 81,
+    "request_user_input_async": 1,
+    "sleep": 6
+  },
+  "nested_tool_calls_by_type": {
+    "exec_command": 120,
+    "clock__curr_time": 1,
+    "write_stdin": 23,
+    "apply_patch": 26,
+    "view_image": 5
+  },
+  "production_loc": 394,
+  "debug_loc": 195,
+  "production_files_loc": {
+    "isaaclab_arena_environments/workbench_cleanup/workbench_cleanup.yaml": 213,
+    "isaaclab_arena_environments/workbench_cleanup/workbench_cleanup_force_control.jsonl": 47,
+    "isaaclab_arena_environments/workbench_cleanup/validate_workbench_cleanup.py": 134
+  },
+  "debug_files_loc": {
+    "outputs/workbench_cleanup/inspect_reset.py": 23,
+    "outputs/workbench_cleanup/inspect_surfaces.py": 12,
+    "outputs/workbench_cleanup/capture_metrics.py": 119,
+    "outputs/workbench_cleanup/inspect_assets.py": 26,
+    "outputs/workbench_cleanup/initial.jsonl": 15
+  },
+  "cumulative_patch_loc_added": {
+    "debug": 194,
+    "production": 433
+  },
+  "method": "Unique response usage records since the user request; input tokens include cached input. Nested calls count tools.NAME invocations in exec source, expanding the three-image inspection loop. LOC counts nonblank, noncomment lines in new environment/demo/validation files and retained diagnostic scripts/recipes; generated reports and README prose are excluded. Cumulative patch additions also count replacement lines and superseded debugging edits, but exclude shell-generated content and formatter changes. Snapshot excludes subsequent model calls and the final chat response."
+}

@@ -1,0 +1,47 @@
+[WARNING] isaaclab.sh is deprecated and will be removed in Isaac Lab 3.1. Use 'uv run isaaclab' instead.
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 3090" (24 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /home/qianl/.cache/warp/1.17.0
+.......                                                                  [100%]
+=============================== warnings summary ===============================
+isaaclab_arena/tests/test_sequential_composite_task.py: 35 warnings
+  /opt/isaaclab-venv/lib/python3.12/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+7 passed, 35 warnings in 20.10s
+2026-11-01T16:03:12Z [13,820ms] [Warning] [matplotlib] mkdir -p failed for path /home/qianl/.config/matplotlib: [Errno 13] Permission denied: '/home/qianl/.config/matplotlib'
+2026-11-01T16:03:12Z [13,820ms] [Warning] [matplotlib] Matplotlib created a temporary cache directory at /tmp/matplotlib-5g_xjitb because there was an issue with the default path (/home/qianl/.config/matplotlib); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
+2026-11-01T16:03:13Z [14,943ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/embodiments/droid/droid.py:390: DeprecationWarning: RigidBodyPropertiesCfg is deprecated. Use [UsdPhysicsRigidBodyCfg(...), PhysxRigidBodyCfg(...)] instead; RigidBodyPropertiesCfg will be removed in 3.2.
+  rigid_props=sim_utils.RigidBodyPropertiesCfg(
+
+2026-11-01T16:03:13Z [14,944ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/embodiments/droid/droid.py:394: DeprecationWarning: ArticulationRootPropertiesCfg is deprecated. Use [PhysxArticulationCfg(...)] (and set fix_root_link on the spawner cfg) instead; ArticulationRootPropertiesCfg will be removed in 3.2.
+  articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+
+2026-11-01T16:03:14Z [15,904ms] [Warning] [py.warnings] /opt/isaaclab-venv/lib/python3.12/site-packages/cmeel.prefix/lib/python3.12/site-packages/hppfcl/__init__.py:3: DeprecationWarning: Please update your 'hppfcl' imports to 'coal'
+  warnings.warn(
+
+2026-11-01T16:03:14Z [16,073ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/embodiments/g1/g1.py:224: DeprecationWarning: RigidBodyPropertiesCfg is deprecated. Use [UsdPhysicsRigidBodyCfg(...), PhysxRigidBodyCfg(...)] instead; RigidBodyPropertiesCfg will be removed in 3.2.
+  rigid_props=sim_utils.RigidBodyPropertiesCfg(
+
+2026-11-01T16:03:14Z [16,074ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/embodiments/g1/g1.py:235: DeprecationWarning: ArticulationRootPropertiesCfg is deprecated. Use [PhysxArticulationCfg(...)] (and set fix_root_link on the spawner cfg) instead; ArticulationRootPropertiesCfg will be removed in 3.2.
+  articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+
+2026-11-01T16:03:15Z [16,387ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/submodules/IsaacLab/source/isaaclab/isaaclab/utils/configclass.py:518: DeprecationWarning: 'RigidBodyMaterialCfg' is deprecated and will be removed in 3.2. Use 'isaaclab_physx.sim.spawners.materials.PhysxRigidBodyMaterialCfg' for PhysX properties, or 'isaaclab.sim.spawners.materials.RigidBodyMaterialBaseCfg' for solver-common properties only.
+  f1(*args, **kwargs)
+
+2026-11-01T16:03:15Z [16,452ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/submodules/IsaacLab/source/isaaclab/isaaclab/utils/configclass.py:518: DeprecationWarning: 'RigidBodyMaterialCfg' is deprecated and will be removed in 3.2. Use 'isaaclab_physx.sim.spawners.materials.PhysxRigidBodyMaterialCfg' for PhysX properties, or 'isaaclab.sim.spawners.materials.RigidBodyMaterialBaseCfg' for solver-common properties only.
+  f1(*args, **kwargs)
+
+2026-11-01T16:03:15Z [17,156ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/assets/object_utils.py:78: DeprecationWarning: RigidBodyPropertiesCfg is deprecated. Use [UsdPhysicsRigidBodyCfg(...), PhysxRigidBodyCfg(...)] instead; RigidBodyPropertiesCfg will be removed in 3.2.
+  RIGID_BODY_PROPS_HIGH_PRECISION = sim_utils.RigidBodyPropertiesCfg(
+
+2026-11-01T16:03:15Z [17,157ms] [Warning] [py.warnings] /workspaces/isaaclab_arena/isaaclab_arena/assets/object_utils.py:92: DeprecationWarning: RigidBodyPropertiesCfg is deprecated. Use [UsdPhysicsRigidBodyCfg(...), PhysxRigidBodyCfg(...)] instead; RigidBodyPropertiesCfg will be removed in 3.2.
+  RIGID_BODY_PROPS_MEDIUM_PRECISION = sim_utils.RigidBodyPropertiesCfg(
+
+Closing persistent simulation app. Tests failed: False
+[INFO] Using Python: "/opt/isaaclab-venv/bin/python"

@@ -1,0 +1,4 @@
+USD PRIM TREE:
+Geometry (base)
+  wrench_01_obj_00 (rigid bbox_center_m=[0.00412517,-7.79098e-05,0.0088442] bbox_size_m=[0.259585,0.0459893,0.0174629] rigid_body(enabled=true,kinematic=false,mass_kg=None,density_kg_m3=None,disable_gravity=None,linear_damping=None,angular_damping=None) instance(instance=true,proxy=false,instanceable=true,prototype=/__Prototype_3))
+    wrench_01_mesh_00 (base bbox_center_m=[0.00412517,-7.79098e-05,0.0088442] bbox_size_m=[0.259585,0.0459893,0.0174629] collider(type=Mesh,enabled=true,rigid_body_owner=Geometry/wrench_01_obj_00,approximation=sdf,contact_offset_m=None,rest_offset_m=None) instance(instance=false,proxy=true,instanceable=false,prototype=/__Prototype_3/wrench_01_mesh_00))

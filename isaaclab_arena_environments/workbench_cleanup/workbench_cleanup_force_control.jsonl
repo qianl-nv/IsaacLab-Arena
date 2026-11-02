@@ -1,0 +1,47 @@
+{"action":"setup_joint","name":"cabinet","joint_name":"joint_part_01_joint_00","effort_limit":100.0,"replace_existing":true}
+{"action":"mark","index":0,"boundary":"start","title":"Open the top drawer"}
+{"action":"joint","name":"cabinet","joint_name":"joint_part_01_joint_00","normalized_goal":0.99,"seconds":3.0,"gain":300.0,"damping":40.0,"limit":80.0}
+{"action":"check","index":0}
+{"action":"mark","index":0,"boundary":"end","title":"Top drawer open"}
+{"action":"mark","index":1,"boundary":"start","title":"Put the slotted screwdriver in the drawer"}
+{"action":"move","name":"slotted_screwdriver","reference":"slotted_screwdriver","offset":[0,0,0.25],"seconds":2.0}
+{"action":"move","name":"slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.025,-0.16,0.25],"orientation":[0,0,0,1],"seconds":3.0}
+{"action":"move","name":"slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.025,-0.16,-0.03],"seconds":2.0}
+{"action":"release","name":"slotted_screwdriver"}
+{"action":"check","index":1}
+{"action":"mark","index":1,"boundary":"end","title":"Slotted screwdriver placed"}
+{"action":"mark","index":2,"boundary":"start","title":"Put the Torx screwdriver in the drawer"}
+{"action":"move","name":"torx_screwdriver","reference":"torx_screwdriver","offset":[0,0,0.25],"seconds":2.0}
+{"action":"move","name":"torx_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.008,-0.08,0.25],"orientation":[0,0,0,1],"seconds":3.0}
+{"action":"move","name":"torx_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.008,-0.08,-0.03],"seconds":2.0}
+{"action":"release","name":"torx_screwdriver"}
+{"action":"check","index":2}
+{"action":"mark","index":2,"boundary":"end","title":"Torx screwdriver placed"}
+{"action":"mark","index":3,"boundary":"start","title":"Put the Phillips screwdriver in the drawer"}
+{"action":"move","name":"phillips_screwdriver","reference":"phillips_screwdriver","offset":[0,0,0.25],"seconds":2.0}
+{"action":"move","name":"phillips_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.024,0,0.25],"orientation":[0,0,0,1],"seconds":3.0}
+{"action":"move","name":"phillips_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.024,0,-0.03],"seconds":2.0}
+{"action":"release","name":"phillips_screwdriver"}
+{"action":"check","index":3}
+{"action":"mark","index":3,"boundary":"end","title":"Phillips screwdriver placed"}
+{"action":"mark","index":4,"boundary":"start","title":"Put the wrench in the drawer"}
+{"action":"move","name":"wrench","reference":"wrench","offset":[0,0,0.25],"seconds":2.0}
+{"action":"move","name":"wrench","reference":"top_drawer","reference_point":"aabb_center","offset":[0.016,0.08,0.25],"orientation":[0,0,0,1],"seconds":3.0}
+{"action":"move","name":"wrench","reference":"top_drawer","reference_point":"aabb_center","offset":[0.016,0.08,-0.03],"seconds":2.0}
+{"action":"release","name":"wrench"}
+{"action":"check","index":4}
+{"action":"mark","index":4,"boundary":"end","title":"Wrench placed"}
+{"action":"mark","index":5,"boundary":"start","title":"Put the second slotted screwdriver in the drawer"}
+{"action":"move","name":"second_slotted_screwdriver","reference":"second_slotted_screwdriver","offset":[0,0,0.25],"seconds":2.0}
+{"action":"move","name":"second_slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.025,0.16,0.25],"orientation":[0,0,0,1],"seconds":3.0}
+{"action":"move","name":"second_slotted_screwdriver","reference":"top_drawer","reference_point":"aabb_center","offset":[-0.025,0.16,-0.03],"seconds":2.0}
+{"action":"release","name":"second_slotted_screwdriver"}
+{"action":"check","index":5}
+{"action":"mark","index":5,"boundary":"end","title":"All five tools placed"}
+{"action":"mark","index":6,"boundary":"start","title":"Close the top drawer"}
+{"action":"joint","name":"cabinet","joint_name":"joint_part_01_joint_00","normalized_goal":0.0,"seconds":4.0,"gain":300.0,"damping":40.0,"limit":80.0}
+{"action":"check","index":6}
+{"action":"wait_final"}
+{"action":"mark","index":6,"boundary":"end","title":"Cleanup complete"}
+{"action":"inspect"}
+{"action":"finish"}

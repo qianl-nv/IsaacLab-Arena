@@ -1,0 +1,125 @@
+"""Save task-scoped usage records without copying session messages or tool arguments."""
+
+import json
+import re
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+
+session = Path("/home/qianl/.codex/sessions/2026/11/01/rollout-2026-11-01T07-41-32-01a197c5-e8ae-7b60-ba69-0eebc921f556.jsonl")
+start = "2026-11-01T15:49:37.971Z"
+destination = Path("isaaclab_arena_environments/workbench_cleanup")
+records = [json.loads(line) for line in session.open()]
+events = []
+calls = Counter()
+nested_calls = Counter()
+usage = Counter()
+responses = set()
+patch_additions = Counter()
+for record in records:
+    if record["timestamp"] < start:
+        continue
+    payload = record.get("payload", {})
+    if record["type"] == "token_usage_record":
+        response_id = payload["response_id"]
+        if response_id in responses:
+            continue
+        responses.add(response_id)
+        usage.update(payload["usage"])
+        events.append({"timestamp": record["timestamp"], "type": "inference", "usage": payload["usage"]})
+    if record["type"] == "response_item" and payload.get("type") in ("function_call", "custom_tool_call"):
+        name = payload["name"]
+        calls[name] += 1
+        code = payload.get("input", "")
+        executable = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`|//[^\n]*|/\*.*?\*/', " ", code, flags=re.DOTALL)
+        nested = Counter(re.findall(r"\btools\.([a-zA-Z_][a-zA-Z_0-9]*)\s*\(", executable))
+        if code.lstrip().startswith('for (const path of [') and nested["view_image"]:
+            paths = re.search(r'for \(const path of (\[[^\]]+\])\)', payload["input"])
+            nested["view_image"] = len(json.loads(paths.group(1)))
+        nested_calls.update(nested)
+        events.append({"timestamp": record["timestamp"], "type": "tool_call", "tool": name, "nested_tools": dict(nested)})
+        for encoded_patch in re.findall(r'tools\.apply_patch\(("(?:\\.|[^"\\])*")\)', payload.get("input", "")):
+            patch = json.loads(encoded_patch)
+            category = None
+            for line in patch.splitlines():
+                if line.startswith(("*** Add File: ", "*** Update File: ")):
+                    path = line.split(": ", 1)[1]
+                    category = "debug" if "outputs/workbench_cleanup/" in path else "production"
+                    if not path.endswith((".py", ".yaml", ".jsonl")) or "authoring_log" in path:
+                        category = None
+                elif category and line.startswith("+") and line[1:].strip() and not line[1:].lstrip().startswith("#"):
+                    patch_additions[category] += 1
+
+
+def source_loc(path):
+    return sum(bool(line.strip()) and not line.lstrip().startswith("#") for line in path.read_text().splitlines())
+
+
+production_paths = [destination / "workbench_cleanup.yaml", destination / "workbench_cleanup_force_control.jsonl"]
+production_paths += list(destination.glob("validate_*.py"))
+debug_paths = list(Path("outputs/workbench_cleanup").glob("*.py"))
+debug_paths += list(Path("outputs/workbench_cleanup").glob("*.jsonl"))
+production = {str(path): source_loc(path) for path in production_paths if path.exists()}
+debug = {str(path): source_loc(path) for path in debug_paths if path.exists()}
+now = datetime.now(timezone.utc)
+report = {
+    "started_at_utc": start,
+    "measured_through_utc": now.isoformat(),
+    "wall_time_seconds": (now - datetime.fromisoformat(start.replace("Z", "+00:00"))).total_seconds(),
+    "token_usage": dict(usage),
+    "inference_calls": len(responses),
+    "top_level_tool_calls_by_type": dict(calls),
+    "nested_tool_calls_by_type": dict(nested_calls),
+    "production_loc": sum(production.values()),
+    "debug_loc": sum(debug.values()),
+    "production_files_loc": production,
+    "debug_files_loc": debug,
+    "cumulative_patch_loc_added": dict(patch_additions),
+    "method": "Unique response usage records since the user request; input tokens include cached input. Nested calls count tools.NAME invocations in exec source, expanding the three-image inspection loop. LOC counts nonblank, noncomment lines in new environment/demo/validation files and retained diagnostic scripts/recipes; generated reports and README prose are excluded. Cumulative patch additions also count replacement lines and superseded debugging edits, but exclude shell-generated content and formatter changes. Snapshot excludes subsequent model calls and the final chat response.",
+}
+(destination / "authoring_log.jsonl").write_text("".join(json.dumps(event) + "\n" for event in events))
+(destination / "authoring_metrics.json").write_text(json.dumps(report, indent=2) + "\n")
+minutes, seconds = divmod(round(report["wall_time_seconds"]), 60)
+summary = [
+    f"Measured from `{start}` through `{report['measured_through_utc']}`. These totals cover",
+    "this environment-authoring request and exclude the earlier Docker sanity test.",
+    "The snapshot excludes subsequent model calls and the final chat response.",
+    "",
+    "| Measurement | Total |",
+    "| --- | ---: |",
+    f"| Wall time | {minutes} min {seconds} s |",
+    f"| Inference calls | {len(responses):,} |",
+    f"| Input tokens, including cached context | {usage['input_tokens']:,} |",
+    f"| Cached input tokens (subset of input) | {usage['cached_input_tokens']:,} |",
+    f"| Uncached input tokens | {usage['input_tokens'] - usage['cached_input_tokens']:,} |",
+    f"| Output tokens | {usage['output_tokens']:,} |",
+    f"| Reasoning output tokens (subset of output) | {usage['reasoning_output_tokens']:,} |",
+    f"| Total input + output tokens | {usage['total_tokens']:,} |",
+    f"| Production LOC retained | {report['production_loc']:,} |",
+    f"| Debug/inspection/accounting LOC retained | {report['debug_loc']:,} |",
+    "",
+    "Token counts are summed from recorded inference usage; cached context is counted again",
+    "when reused by another inference. LOC counts nonblank, noncomment source lines, including",
+    "YAML and JSONL recipes. Production includes the environment, recipe, and reusable validator.",
+    "Debug includes temporary inspection scripts, recipes, and this accounting helper under",
+    "`outputs/workbench_cleanup/`. Generated reports and README prose are excluded.",
+    "Per-file LOC and cumulative patch additions, including replaced lines, are in",
+    "[authoring_metrics.json](authoring_metrics.json).",
+    "",
+    "| Tool-call level | Type | Calls |",
+    "| --- | --- | ---: |",
+]
+for name, count in sorted(calls.items()):
+    summary.append(f"| Orchestration | `{name}` | {count} |")
+for name, count in sorted(nested_calls.items()):
+    summary.append(f"| Nested dispatch | `{name}` | {count} |")
+summary += ["", "Orchestration and nested dispatch are separate levels; do not add them as distinct operations."]
+readme = destination / "README.md"
+updated = re.sub(
+    r"<!-- AUTHORING_METRICS_START -->.*?<!-- AUTHORING_METRICS_END -->",
+    "<!-- AUTHORING_METRICS_START -->\n" + "\n".join(summary) + "\n<!-- AUTHORING_METRICS_END -->",
+    readme.read_text(),
+    flags=re.DOTALL,
+)
+readme.write_text(updated)
+print(json.dumps(report, indent=2))

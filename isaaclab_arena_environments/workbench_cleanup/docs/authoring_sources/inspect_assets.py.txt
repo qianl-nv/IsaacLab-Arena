@@ -1,0 +1,29 @@
+import json
+import sys
+from pathlib import Path
+
+from pxr import Usd
+
+from isaaclab_arena.assets.simready_central_asset_loader import _download_central_asset_package_to_cache
+from isaaclab_arena.utils.usd.prim_tree import format_usd_prim_tree, load_stage_prim_tree, usd_prim_records_to_dicts
+from isaaclab_arena.utils.usd.rigid_bodies import apply_usd_variant_selections
+
+output = Path("outputs/workbench_cleanup/asset_inspection")
+output.mkdir(parents=True, exist_ok=True)
+revision = "653d91e182011f357cf1644013cc94ddf194d349"
+assets = [
+    "furniture_workbench_standard_e01", "fixture_cabinet_b01", "testingTool_oscilloscope_a01",
+    "handTool_screwdriver_slotted_55mm_a01", "handTool_screwdriver_torx_t10_a01",
+    "handTool_screwdriver_phillips_ph2_a01", "handTool_wrench_combination_a01",
+    "storage_toolbox_carry_hardCase_b01",
+]
+for asset in sys.argv[1:] or assets:
+    url = f"https://huggingface.co/datasets/nvidia/simready-assets/resolve/{revision}/{asset}/simready_usd/sm_{asset}_01.usd"
+    path = _download_central_asset_package_to_cache(url)
+    stage = Usd.Stage.Open(path)
+    stage.SetEditTarget(stage.GetSessionLayer())
+    apply_usd_variant_selections(stage, {"Physics": "physics", "PhysX": "Enabled"})
+    records = load_stage_prim_tree(stage, stage.GetDefaultPrim(), include_physical_root=True)
+    (output / f"{asset}.txt").write_text(format_usd_prim_tree(records))
+    (output / f"{asset}.json").write_text(json.dumps(usd_prim_records_to_dicts(records), indent=2))
+    print(asset, path, len(records), flush=True)

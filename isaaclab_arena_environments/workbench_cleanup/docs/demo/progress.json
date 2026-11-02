@@ -1,0 +1,226 @@
+[
+  {
+    "subtask": 0,
+    "boundary": "start",
+    "title": "Open the top drawer",
+    "simulation_time_s": 2.0,
+    "completion": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "00_start.png"
+  },
+  {
+    "subtask": 0,
+    "boundary": "end",
+    "title": "Top drawer open",
+    "simulation_time_s": 5.75,
+    "completion": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "00_end.png"
+  },
+  {
+    "subtask": 1,
+    "boundary": "start",
+    "title": "Put the slotted screwdriver in the drawer",
+    "simulation_time_s": 5.75,
+    "completion": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "01_start.png"
+  },
+  {
+    "subtask": 1,
+    "boundary": "end",
+    "title": "Slotted screwdriver placed",
+    "simulation_time_s": 15.333333333333334,
+    "completion": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "01_end.png"
+  },
+  {
+    "subtask": 2,
+    "boundary": "start",
+    "title": "Put the Torx screwdriver in the drawer",
+    "simulation_time_s": 15.333333333333334,
+    "completion": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "02_start.png"
+  },
+  {
+    "subtask": 2,
+    "boundary": "end",
+    "title": "Torx screwdriver placed",
+    "simulation_time_s": 24.933333333333334,
+    "completion": [
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "02_end.png"
+  },
+  {
+    "subtask": 3,
+    "boundary": "start",
+    "title": "Put the Phillips screwdriver in the drawer",
+    "simulation_time_s": 24.933333333333334,
+    "completion": [
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "viewport": "03_start.png"
+  },
+  {
+    "subtask": 3,
+    "boundary": "end",
+    "title": "Phillips screwdriver placed",
+    "simulation_time_s": 34.53333333333333,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "viewport": "03_end.png"
+  },
+  {
+    "subtask": 4,
+    "boundary": "start",
+    "title": "Put the wrench in the drawer",
+    "simulation_time_s": 34.53333333333333,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "viewport": "04_start.png"
+  },
+  {
+    "subtask": 4,
+    "boundary": "end",
+    "title": "Wrench placed",
+    "simulation_time_s": 44.13333333333333,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "viewport": "04_end.png"
+  },
+  {
+    "subtask": 5,
+    "boundary": "start",
+    "title": "Put the second slotted screwdriver in the drawer",
+    "simulation_time_s": 44.13333333333333,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "viewport": "05_start.png"
+  },
+  {
+    "subtask": 5,
+    "boundary": "end",
+    "title": "All five tools placed",
+    "simulation_time_s": 53.733333333333334,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "viewport": "05_end.png"
+  },
+  {
+    "subtask": 6,
+    "boundary": "start",
+    "title": "Close the top drawer",
+    "simulation_time_s": 53.733333333333334,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "viewport": "06_start.png"
+  },
+  {
+    "subtask": 6,
+    "boundary": "end",
+    "title": "Cleanup complete",
+    "simulation_time_s": 58.86666666666667,
+    "completion": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "viewport": "06_end.png"
+  }
+]
